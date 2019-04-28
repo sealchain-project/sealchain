@@ -9,6 +9,7 @@ module Pos.Core.Common
        , module Pos.Core.Common.Coeff
        , module Pos.Core.Common.Coin
        , module Pos.Core.Common.CoinPortion
+       , module Pos.Core.Common.GoldDollar
        , module Pos.Core.Common.Script
        , module Pos.Core.Common.SharedSeed
        , module Pos.Core.Common.SlotLeaders
@@ -28,6 +29,7 @@ import           Pos.Core.Common.ChainDifficulty
 import           Pos.Core.Common.Coeff
 import           Pos.Core.Common.Coin
 import           Pos.Core.Common.CoinPortion
+import           Pos.Core.Common.GoldDollar
 import           Pos.Core.Common.Script
 import           Pos.Core.Common.SharedSeed
 import           Pos.Core.Common.SlotLeaders

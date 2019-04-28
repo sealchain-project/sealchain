@@ -11,6 +11,7 @@ module Test.Pos.Core.Gen
         , genCoeff
         , genCoin
         , genCoinPortion
+        , genGoldDollar
         , genScript
         , genScriptVersion
         , genSharedSeed
@@ -77,8 +78,8 @@ import           Pos.Core.Common (AddrAttributes (..), AddrSpendingData (..),
                      BlockCount (..), ChainDifficulty (..), Coeff (..),
                      Coin (..), CoinPortion (..), Script (..), ScriptVersion,
                      SharedSeed (..), SlotLeaders, StakeholderId, StakesList,
-                     StakesMap, TxFeePolicy (..), TxSizeLinear (..),
-                     coinPortionDenominator, makeAddress, maxCoinVal,
+                     StakesMap, TxFeePolicy (..), TxSizeLinear (..), GoldDollar (..),
+                     coinPortionDenominator, makeAddress, maxCoinVal, maxGoldDollarVal,
                      mkMultiKeyDistr)
 import           Pos.Core.JsonLog.LogEvents (InvReqDataFlowLog (..))
 import           Pos.Core.Merkle (MerkleRoot (..), MerkleTree (..),
@@ -200,6 +201,9 @@ genCoin = Coin <$> Gen.word64 (Range.constant 0 maxCoinVal)
 genCoinPortion :: Gen CoinPortion
 genCoinPortion =
     CoinPortion <$> Gen.word64 (Range.constant 0 coinPortionDenominator)
+
+genGoldDollar :: Gen GoldDollar
+genGoldDollar = GoldDollar <$> Gen.word64 (Range.constant 0 maxGoldDollarVal)
 
 genScript :: Gen Script
 genScript = Script <$> genScriptVersion <*> gen32Bytes

@@ -24,7 +24,7 @@ import           Pos.Core.Common (AddrAttributes (..), AddrSpendingData (..),
                      BlockCount (..), ChainDifficulty (..), Coeff (..),
                      Coin (..), CoinPortion (..), ScriptVersion,
                      SharedSeed (..), StakeholderId, TxFeePolicy (..),
-                     TxSizeLinear (..))
+                     TxSizeLinear (..), GoldDollar (..))
 import           Pos.Core.Merkle (mkMerkleTree, mtRoot)
 import           Pos.Core.Slotting (EpochIndex (..), EpochOrSlot (..),
                      FlatSlotId, LocalSlotIndex (..), SlotCount (..),
@@ -189,6 +189,16 @@ golden_CoinPortion = goldenTestBi c "test/golden/CoinPortion"
 
 roundTripCoinPortionBi :: Property
 roundTripCoinPortionBi = eachOf 1000 genCoinPortion roundTripsBiBuildable
+
+--------------------------------------------------------------------------------
+-- GoldDollar
+--------------------------------------------------------------------------------
+golden_GoldDollar :: Property
+golden_GoldDollar = goldenTestBi c "test/golden/GoldDollar"
+  where c = GoldDollar 9732
+
+roundTripGoldDollarBi :: Property
+roundTripGoldDollarBi = eachOf 1000 genGoldDollar roundTripsBiBuildable
 
 --------------------------------------------------------------------------------
 -- Script
