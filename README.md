@@ -1,3 +1,7 @@
+<p align="center">
+  <img height="100" src="https://github.com/sealchain-project/sealchain/blob/develop/images/SEAL.png">
+</p>
+
 # Sealchain
 
 [![Build status](https://badge.buildkite.com/9c3141d21214ff3ea95d0a38a0e1dab59b206159d2841dee44.svg?branch=master)](https://buildkite.com/input-output-hk/cardano-sl)
