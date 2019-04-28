@@ -64,7 +64,7 @@ import qualified Data.Aeson as Aeson (FromJSON (..), FromJSONKey (..),
                      FromJSONKeyFunction (..), ToJSON (toJSON), ToJSONKey (..))
 import qualified Data.Aeson.Types as Aeson (toJSONKeyText)
 import qualified Data.ByteString as BS
-import           Data.ByteString.Base58 (Alphabet (..), bitcoinAlphabet,
+import           Data.ByteString.Base58 (Alphabet (..), rippleAlphabet,
                      decodeBase58, encodeBase58)
 import           Data.Hashable (Hashable (..))
 import           Data.SafeCopy (base, deriveSafeCopySimple)
@@ -184,10 +184,10 @@ addressDetailedF =
             ATRedeem      -> "Redeem"
             ATUnknown tag -> "Unknown#" <> Buildable.build tag
 
--- | Currently we gonna use Bitcoin alphabet for representing addresses in
+-- | Currently we gonna use Ripple alphabet for representing addresses in
 -- base58
 addrAlphabet :: Alphabet
-addrAlphabet = bitcoinAlphabet
+addrAlphabet = rippleAlphabet
 
 addrToBase58 :: Address -> ByteString
 addrToBase58 = encodeBase58 addrAlphabet . Bi.serialize'
