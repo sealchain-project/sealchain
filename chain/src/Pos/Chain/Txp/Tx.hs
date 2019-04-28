@@ -12,7 +12,6 @@ module Pos.Chain.Txp.Tx
        , TxAttributes
 
        , TxIn (..)
-       , isTxInUnknown
 
        , TxOut (..)
        , _TxOut
@@ -31,23 +30,20 @@ import           Data.Aeson (FromJSON (..), FromJSONKey (..),
                      object, withObject, (.:), (.=))
 import           Data.Aeson.TH (defaultOptions, deriveJSON)
 import           Data.Aeson.Types (toJSONKeyText)
-import qualified Data.ByteString.Lazy as LBS
 import qualified Data.List.NonEmpty as NE
 import           Data.SafeCopy (base, deriveSafeCopySimple)
 import qualified Data.Text as T
 import           Formatting (Format, bprint, build, builder, int, sformat, (%))
 import qualified Formatting.Buildable as Buildable
 import           Numeric.Natural (Natural)
-import qualified Serokell.Util.Base16 as B16
 import           Serokell.Util.Text (listJson)
 import           Serokell.Util.Verify (VerificationRes (..), verResSingleF,
                      verifyGeneric)
 
-import           Pos.Binary.Class (Bi (..), Case (..), Cons (..), Field (..),
-                     decodeKnownCborDataItem, decodeUnknownCborDataItem,
+import           Pos.Binary.Class (Bi (..), Cons (..), Field (..),
+                     decodeKnownCborDataItem,
                      deriveSimpleBi, encodeKnownCborDataItem, encodeListLen,
-                     encodeUnknownCborDataItem, enforceSize,
-                     knownCborDataItemSizeExpr, szCases)
+                     enforceSize)
 import           Pos.Core.Attributes (Attributes, areAttributesKnown,
                      unknownAttributesLength)
 import           Pos.Core.Common (Address (..), Coin (..), checkCoin, coinF,
@@ -229,7 +225,6 @@ data TxIn
       -- | TxId = Which transaction's output is used
       -- | Word32 = Index of the output in transaction's outputs
     = TxInUtxo TxId Word32
-    | TxInUnknown !Word8 !ByteString
     deriving (Eq, Ord, Generic, Show, Typeable)
 
 instance FromJSON TxIn where
@@ -249,46 +244,23 @@ instance Hashable TxIn
 instance Buildable TxIn where
     build (TxInUtxo txInHash txInIndex) =
         bprint ("TxInUtxo "%shortHashF%" #"%int) txInHash txInIndex
-    build (TxInUnknown tag bs) =
-        bprint ("TxInUnknown "%int%" "%B16.base16F) tag bs
 
 instance Bi TxIn where
     encode (TxInUtxo txInHash txInIndex) =
-        encodeListLen 2 <>
-        encode (0 :: Word8) <>
         encodeKnownCborDataItem (txInHash, txInIndex)
-    encode (TxInUnknown tag bs) =
-        encodeListLen 2 <>
-        encode tag <>
-        encodeUnknownCborDataItem (LBS.fromStrict bs)
     decode = do
-        enforceSize "TxIn" 2
-        tag <- decode @Word8
-        case tag of
-            0 -> uncurry TxInUtxo <$> decodeKnownCborDataItem
-            _ -> TxInUnknown tag  <$> decodeUnknownCborDataItem
-    encodedSizeExpr size _ = 2 + (knownCborDataItemSizeExpr $
-        szCases [ let TxInUtxo txInHash txInIndex = error "unused"
-                  in  Case "TxInUtxo" (size ((,) <$> pure txInHash <*> pure txInIndex))
-                ])
+        uncurry TxInUtxo <$> decodeKnownCborDataItem
 
 instance NFData TxIn
-
-isTxInUnknown :: TxIn -> Bool
-isTxInUnknown (TxInUnknown _ _) = True
-isTxInUnknown _                 = False
 
 txInFromText :: Text -> Either Text TxIn
 txInFromText t = case T.splitOn "_" t of
     ["TxInUtxo", h, idx]     -> TxInUtxo <$> decodeAbstractHash h <*> readEither idx
-    ["TxInUnknown", tag, bs] -> TxInUnknown <$> readEither tag <*> B16.decode bs
     _                        -> Left $ "Invalid TxIn " <> t
 
 txInToText :: TxIn -> Text
 txInToText (TxInUtxo txInHash txInIndex) =
     sformat ("TxInUtxo_"%hashHexF%"_"%int) txInHash txInIndex
-txInToText (TxInUnknown tag bs) =
-    sformat ("TxInUnknown_"%int%"_"%B16.base16F) tag bs
 
 --------------------------------------------------------------------------------
 -- TxOut

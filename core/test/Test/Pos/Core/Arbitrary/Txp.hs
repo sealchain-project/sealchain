@@ -85,9 +85,7 @@ instance Arbitrary TxInWitness where
 
 genTxIn :: Gen TxIn
 genTxIn = oneof
-    [ TxInUtxo <$> arbitrary <*> arbitrary
-    , TxInUnknown <$> choose (1, 255) <*> scale (min 150) arbitrary
-    ]
+    TxInUtxo <$> arbitrary <*> arbitrary
 
 instance Arbitrary TxIn where
     arbitrary = genTxIn

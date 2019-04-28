@@ -385,9 +385,6 @@ instance SC.SafeCopy (InDb Txp.TxIn) where
             0 -> do InDb txId <- SC.safeGet
                     w         <- SC.safeGet
                     pure (InDb (Txp.TxInUtxo txId w))
-            1 -> do w <- SC.safeGet
-                    b <- SC.safeGet
-                    pure (InDb (Txp.TxInUnknown w b))
             (n :: Word8) -> fail
                 $  "Expected one of 0,1 for TxIn tag, got: "
                 <> show n
@@ -397,10 +394,6 @@ instance SC.SafeCopy (InDb Txp.TxIn) where
             SC.safePut (0 :: Word8)
             SC.safePut (InDb txId)
             SC.safePut w
-        Txp.TxInUnknown (w :: Word8) (b :: ByteString) -> do
-            SC.safePut (1 :: Word8)
-            SC.safePut w
-            SC.safePut b
 
 instance (SC.SafeCopy (InDb a)) => SC.SafeCopy (InDb (NonEmpty a)) where
     getCopy = SC.contain $ do

@@ -28,7 +28,7 @@ import           Test.Pos.Binary.Helpers.GoldenRoundTrip (goldenTestBi,
                      roundTripsBiBuildable, roundTripsBiShow)
 import           Test.Pos.Chain.Txp.Example (exampleHashTx,
                      exampleRedeemSignature, exampleTxId, exampleTxInList,
-                     exampleTxInUnknown, exampleTxInUtxo, exampleTxOut,
+                     exampleTxInUtxo, exampleTxOut,
                      exampleTxOutList, exampleTxProof, exampleTxSig,
                      exampleTxSigData, exampleTxWitness)
 import           Test.Pos.Chain.Txp.Gen (genTx, genTxAttributes, genTxAux,
@@ -89,9 +89,6 @@ roundTripHashTx = eachOf 50 genTxHash roundTripsBiBuildable
 
 golden_TxInUtxo :: Property
 golden_TxInUtxo = goldenTestBi exampleTxInUtxo "test/golden/bi/txp/TxIn_Utxo"
-
-golden_TxInUnknown :: Property
-golden_TxInUnknown = goldenTestBi exampleTxInUnknown "test/golden/bi/txp/TxIn_Unknown"
 
 roundTripTxIn :: Property
 roundTripTxIn = eachOf 100 genTxIn roundTripsBiBuildable
@@ -238,7 +235,6 @@ sizeEstimates =
       pm = ProtocolMagic { getProtocolMagicId = ProtocolMagicId 0
                          , getRequiresNetworkMagic = RequiresNoMagic
                          }
-      knownTxIn (TxInUnknown _ _) = False
       knownTxIn _                 = True
 
       -- Explicit bounds for types, based on the generators from Gen.
