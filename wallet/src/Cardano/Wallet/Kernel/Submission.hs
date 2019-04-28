@@ -497,8 +497,7 @@ partitionSendable pendingSets xs =
             Pending.lookup tid
 
         updateFn :: [Txp.TxId] -> Txp.TxIn -> [Txp.TxId]
-        updateFn !acc (Txp.TxInUnknown _ _)   = acc
-        updateFn !acc (Txp.TxInUtxo txHash _) = txHash : acc
+        updateFn acc (Txp.TxInUtxo txHash _) = txHash : acc
 
 -- | Extends the 'Schedule' with an extra set of [ScheduleSend] and
 -- [ScheduleEvictIfNotConfirmed]. Useful to force dispatching in tests or simply as

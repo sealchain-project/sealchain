@@ -24,8 +24,7 @@ import           Pos.Chain.Txp.Toil.Failure (ToilVerFailure (..),
                      TxOutVerFailure (..), WitnessVerFailure (..))
 import           Pos.Chain.Txp.Toil.Monad (UtxoM, utxoDel, utxoGet, utxoPut)
 import           Pos.Chain.Txp.Toil.Types (TxFee (..))
-import           Pos.Chain.Txp.Tx (Tx (..), TxAttributes, TxIn (..), TxOut (..),
-                     isTxInUnknown)
+import           Pos.Chain.Txp.Tx (Tx (..), TxAttributes, TxIn (..), TxOut (..))
 import           Pos.Chain.Txp.TxAux (TxAux (..))
 import           Pos.Chain.Txp.TxOutAux (TxOutAux (..))
 import           Pos.Chain.Txp.TxWitness (TxInWitness (..), TxSigData (..),
@@ -93,33 +92,17 @@ verifyTxUtxo
     -> TxAux
     -> ExceptT ToilVerFailure UtxoM VerifyTxUtxoRes
 verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {..} witnesses) = do
-    let unknownTxInMB = find (isTxInUnknown . snd) $ zip [0..] (toList _txInputs)
-    case (vtcVerifyAllIsKnown, unknownTxInMB) of
-        (True, Just (inpId, txIn)) -> throwError $
-            ToilUnknownInput inpId txIn
-        (False, Just _) -> do
-            -- Case when at least one input isn't known
-            minimalReasonableChecks
-            resolvedInputs :: NonEmpty (Maybe (TxIn, TxOutAux)) <-
-                mapM
-                    (lift . fmap rightToMaybe . runExceptT . resolveInput)
-                    _txInputs
-            pure VerifyTxUtxoRes
-                 { vturUndo = map (fmap snd) resolvedInputs
-                 , vturFee = Nothing
-                 }
-        (_, Nothing) -> do
             -- Case when all inputs are known
-            minimalReasonableChecks
-            resolvedInputs <- filterAssetLocked =<< mapM resolveInput _txInputs
-            liftEither $ do
-                txFee <- verifySums resolvedInputs _txOutputs
-                verifyKnownInputs protocolMagic ctx resolvedInputs ta
-                when vtcVerifyAllIsKnown $ verifyAttributesAreKnown _txAttributes
-                pure VerifyTxUtxoRes
-                    { vturUndo = map (Just . snd) resolvedInputs
-                    , vturFee = Just txFee
-                    }
+    minimalReasonableChecks
+    resolvedInputs <- filterAssetLocked =<< mapM resolveInput _txInputs
+    liftEither $ do
+        txFee <- verifySums resolvedInputs _txOutputs
+        verifyKnownInputs protocolMagic ctx resolvedInputs ta
+        when vtcVerifyAllIsKnown $ verifyAttributesAreKnown _txAttributes
+        pure VerifyTxUtxoRes
+            { vturUndo = map (Just . snd) resolvedInputs
+            , vturFee = Just txFee
+            }
   where
     minimalReasonableChecks :: ExceptT ToilVerFailure UtxoM ()
     minimalReasonableChecks = liftEither $ do
@@ -269,7 +252,7 @@ verifyAttributesAreKnown attrs =
 -- outputs.
 applyTxToUtxo :: WithHash Tx -> UtxoM ()
 applyTxToUtxo (WithHash UnsafeTx {..} txid) = do
-    mapM_ utxoDel $ filter (not . isTxInUnknown) (toList _txInputs)
+    mapM_ utxoDel $ toList _txInputs
     mapM_ applyOutput . zip [0 ..] . toList . map TxOutAux $ _txOutputs
   where
     applyOutput (idx, toa) = utxoPut (TxInUtxo txid idx) toa
@@ -285,5 +268,4 @@ rollbackTxUtxo (txAux, undo) = do
     mapM_ (uncurry utxoPut) $ mapMaybe knownInputAndUndo $ toList $ NE.zip _txInputs undo
   where
     knownInputAndUndo (_,         Nothing) = Nothing
-    knownInputAndUndo (TxInUnknown _ _, _) = Nothing
     knownInputAndUndo (inp, Just u)        = Just (inp, u)

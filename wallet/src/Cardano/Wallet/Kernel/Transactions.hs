@@ -500,7 +500,6 @@ metaForNewTx time accountId txId inputs outputs allInpOurs spentInputsCoins allO
         TxInUtxo txid index ->
             let (addr, coins) = aux $ toaOut txOutAux
             in (txid, index, addr, coins)
-        TxInUnknown _ _ -> error "Tried to create TxMeta with unknown input"
 
 -- | Different wraper for @metaForNewTx@ mainly for testing Only NewPending Transactions.
 toMeta :: Core.Timestamp -> HdAccountId -> RawResolvedTx -> PartialTxMeta

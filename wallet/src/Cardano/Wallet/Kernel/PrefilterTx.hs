@@ -317,7 +317,6 @@ extendWithSummary (onlyOurInps,onlyOurOuts) utxoWithAddrId
         toAddrSummary (txIn,(txOutAux,addressId))
             = case txIn of
                 (TxInUtxo txId _) -> Just (txIn,(txOutAux,addrSummary txId))
-                (TxInUnknown _ _) -> Nothing -- NOTE: we ignore addresses with 'unknown' inputs
             where
                 addrSummary txId' = AddressSummary (txOutAddress . toaOut $ txOutAux)
                                                     addressId

@@ -28,7 +28,7 @@ import           Pos.Chain.Txp (ToilVerFailure (..), Tx (..), TxAux (..),
                      TxIn (..), TxInWitness (..), TxOut (..), TxOutAux (..),
                      TxSigData (..), TxWitness, Utxo, VTxContext (..),
                      VerifyTxUtxoRes, applyTxToUtxo, evalUtxoM, execUtxoM,
-                     isTxInUnknown, utxoGet, utxoToLookup, verifyTxUtxo)
+                     utxoGet, utxoToLookup, verifyTxUtxo)
 import           Pos.Core (checkPubKeyAddress, sumCoins)
 import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Core.NetworkMagic (makeNetworkMagic)
@@ -246,7 +246,7 @@ applyTxToUtxoGood (txIn0, txOut0) txMap txOuts =
             NE.fromList $
             (map (TxInUtxo (hash tx)) [0 ..]) `zip` toList txOuts
         -- Utxo without removed known inputs (we musn't remove unknown inputs)
-        rmvUtxo = foldr M.delete initUtxo $ NE.filter (not . isTxInUnknown) inpList
+        rmvUtxo = foldr M.delete initUtxo inpList
         -- Expected Utxo after applying of the tx
         expectedUtxo = foldr (uncurry M.insert) rmvUtxo newUtxosInputs
     in expectedUtxo == resultUtxo

@@ -93,7 +93,7 @@ import           Pos.Explorer.Web.Api (ExplorerApi, ExplorerApiRecord (..),
 import           Pos.Explorer.Web.ClientTypes (Byte, CAda (..), CAddress (..),
                      CAddressSummary (..), CAddressType (..),
                      CAddressesFilter (..), CBlockEntry (..),
-                     CBlockSummary (..), CByteString (..),
+                     CBlockSummary (..), 
                      CGenesisAddressInfo (..), CGenesisSummary (..), CHash,
                      CTxBrief (..), CTxEntry (..), CTxId (..), CTxSummary (..),
                      CUtxo (..), TxInternal (..), convertTxOutputs,
@@ -425,10 +425,6 @@ getAddressUtxoBulk nm cAddrs = do
         cuOutIndex = fromIntegral txInIndex,
         cuAddress = toCAddress . txOutAddress . toaOut $ txOutAux,
         cuCoins = mkCCoin . txOutValue . toaOut $ txOutAux
-    }
-    futxoToCUtxo ((TxInUnknown tag bs), _) = CUtxoUnknown {
-        cuTag = fromIntegral tag,
-        cuBs = CByteString bs
     }
 
 

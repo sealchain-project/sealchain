@@ -132,7 +132,6 @@ fromUtxo utxo = NE.nonEmpty $ toOutPair <$> Map.elems utxo
 
 derefIn :: Core.TxIn -> Maybe (Core.TxId, Word32)
 derefIn txIn = case txIn of
-   Core.TxInUnknown _ _  -> Nothing
    Core.TxInUtxo txId ix -> Just (txId, ix)
 
 {-------------------------------------------------------------------------------
