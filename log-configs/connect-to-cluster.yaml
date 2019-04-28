@@ -1,0 +1,22 @@
+# This template is used in scripts to connect to a running cluster.
+# In particular, it's used by exchanges, so it should be maintained carefully.
+
+rotation:
+    logLimit: 104857600 # 100MB
+    keepFiles: 100
+
+loggerTree:
+  severity: Info+
+
+  handlers:
+    - { name: "Public"
+      , filepath: "pub/node.log"
+      , logsafety: PublicLogLevel
+      , severity: Debug+
+      , backend: FileTextBE }
+    - { name: "Secret"
+      , filepath: "node"
+      , logsafety: SecretLogLevel
+      , severity: Info+
+      , backend: FileTextBE }
+

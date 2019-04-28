@@ -1,0 +1,20 @@
+steps:
+  - label: 'stack2nix'
+    command: 'scripts/check-stack2nix.sh'
+    agents:
+      system: x86_64-linux
+
+  - label: 'release.nix'
+    command: 'scripts/ci/check-hydra.sh'
+    agents:
+      system: x86_64-linux
+
+  - label: 'explorer frontend: checking generated dependencies'
+    command: "cd explorer/frontend && ./nix/generate-frontend-deps.hs --test"
+    agents:
+      system: x86_64-linux
+
+  - label: 'triggerShutdown test'
+    command: "git submodule update --init --recursive ; rm -rf test-state ; nix-shell node-ipc/shell.nix --run 'node node-ipc/server.js'"
+    agents:
+      system: x86_64-linux

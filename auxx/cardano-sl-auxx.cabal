@@ -1,0 +1,233 @@
+name:                cardano-sl-auxx
+version:             3.0.1
+synopsis:            Cardano SL - Auxx
+description:         Cardano SL - Auxx
+license:             MIT
+license-file:        LICENSE
+author:              Serokell
+maintainer:          hi@serokell.io
+copyright:           2016 IOHK
+category:            Currency
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:
+                       AuxxOptions
+                       Command
+                       Command.Help
+                       Command.BlockGen
+                       Command.Proc
+                       Command.Rollback
+                       Command.Tx
+                       Command.TyProjection
+                       Command.Update
+                       Lang
+                       Lang.Argument
+                       Lang.Command
+                       Lang.DisplayError
+                       Lang.Interpreter
+                       Lang.Lexer
+                       Lang.Name
+                       Lang.Parser
+                       Lang.Syntax
+                       Lang.Value
+                       Mode
+                       Plugin
+                       Repl
+  build-depends:
+                       QuickCheck
+                     , Earley
+                     , MonadRandom
+                     , ansi-wl-pprint
+                     , async
+                     , aeson
+                     , base
+                     , bytestring
+                     , canonical-json
+                     , cardano-sl
+                     , cardano-sl-chain
+                     , cardano-sl-chain-test
+                     , cardano-sl-client
+                     , cardano-sl-core
+                     , cardano-sl-core-test
+                     , cardano-sl-crypto
+                     , cardano-sl-db
+                     , cardano-sl-generator
+                     , cardano-sl-infra
+                     , cardano-sl-util
+                     , conduit
+                     , constraints
+                     , containers
+                     , data-default
+                     , formatting
+                     , generic-arbitrary
+                     , haskeline
+                     , lens
+                     , loc
+                     , megaparsec
+                     , mtl
+                     , neat-interpolation
+                     , optparse-applicative
+                     , parser-combinators
+                     , quickcheck-instances
+                     , random
+                     , resourcet
+                     , safe-exceptions
+                     , scientific
+                     , serokell-util >= 0.1.3.4
+                     , split
+                     , stm
+                     , text
+                     , formatting
+                     , time-units
+                     , transformers
+                     , universum >= 0.1.11
+                     , unliftio
+                     , unordered-containers
+                     , validation
+
+  default-language:    Haskell2010
+  ghc-options:        -Wall
+                      -O2
+  default-extensions:  DeriveDataTypeable
+                       DeriveGeneric
+                       GeneralizedNewtypeDeriving
+                       StandaloneDeriving
+                       FlexibleContexts
+                       FlexibleInstances
+                       MultiParamTypeClasses
+                       FunctionalDependencies
+                       DefaultSignatures
+                       NoImplicitPrelude
+                       OverloadedStrings
+                       TypeApplications
+                       TupleSections
+                       ViewPatterns
+                       LambdaCase
+                       MultiWayIf
+                       ConstraintKinds
+                       UndecidableInstances
+                       BangPatterns
+                       TemplateHaskell
+                       ScopedTypeVariables
+                       MonadFailDesugaring
+
+  build-tools: cpphs >= 1.19
+  ghc-options: -pgmP cpphs -optP --cpp
+
+  if !os(windows)
+    build-depends:     unix
+
+executable cardano-auxx
+  main-is:             Main.hs
+  build-depends:       base
+                     , cardano-sl
+                     , cardano-sl-auxx
+                     , cardano-sl-core
+                     , cardano-sl-db
+                     , cardano-sl-infra
+                     , cardano-sl-networking
+                     , cardano-sl-chain
+                     , cardano-sl-util
+                     , temporary
+                     , network-transport-tcp
+                     , safe-exceptions
+                     , universum
+                     , formatting
+  default-language:    Haskell2010
+  ghc-options:         -threaded -rtsopts
+                       -Wall
+                       -O2
+
+  -- linker speed up for linux
+  if os(linux)
+    ghc-options:       -optl-fuse-ld=gold
+    ld-options:        -fuse-ld=gold
+
+  default-extensions:   DeriveDataTypeable
+                        DeriveGeneric
+                        GeneralizedNewtypeDeriving
+                        StandaloneDeriving
+                        FlexibleContexts
+                        FlexibleInstances
+                        MultiParamTypeClasses
+                        FunctionalDependencies
+                        DefaultSignatures
+                        NoImplicitPrelude
+                        OverloadedStrings
+                        TypeApplications
+                        TupleSections
+                        ViewPatterns
+                        LambdaCase
+                        MultiWayIf
+                        ConstraintKinds
+                        UndecidableInstances
+                        BangPatterns
+                        TemplateHaskell
+                        ScopedTypeVariables
+                        MonadFailDesugaring
+
+  build-tools: cpphs >= 1.19
+  ghc-options: -pgmP cpphs -optP --cpp
+
+test-suite cardano-auxx-test
+  main-is:             Test.hs
+  other-modules:
+                       -- Standard module with some magic
+                       Spec
+
+                       -- Language
+                       Test.Auxx.Lang.ArgumentSpec
+                       Test.Auxx.Lang.LexerSpec
+                       Test.Auxx.Lang.ParserSpec
+
+  type:                exitcode-stdio-1.0
+  build-depends:
+                       QuickCheck
+                     , cardano-sl-auxx
+                     , cardano-sl-chain
+                     , cardano-sl-core
+                     , cardano-sl-crypto
+                     , hspec
+                     , universum >= 0.1.11
+  build-tool-depends: hspec-discover:hspec-discover
+  hs-source-dirs:      test
+  default-language:    Haskell2010
+  ghc-options:         -threaded
+                       -rtsopts
+                       -Wall
+
+  -- linker speed up for linux
+  if os(linux)
+    ghc-options:       -optl-fuse-ld=gold
+    ld-options:        -fuse-ld=gold
+
+  default-extensions:   DeriveDataTypeable
+                        DeriveGeneric
+                        GeneralizedNewtypeDeriving
+                        StandaloneDeriving
+                        FlexibleContexts
+                        FlexibleInstances
+                        MultiParamTypeClasses
+                        FunctionalDependencies
+                        DefaultSignatures
+                        NoImplicitPrelude
+                        OverloadedStrings
+                        TypeApplications
+                        TupleSections
+                        ViewPatterns
+                        LambdaCase
+                        MultiWayIf
+                        ConstraintKinds
+                        UndecidableInstances
+                        BangPatterns
+                        TemplateHaskell
+                        ScopedTypeVariables
+                        GADTs
+                        MonadFailDesugaring
+
+  build-tools: cpphs >= 1.19
+  ghc-options: -pgmP cpphs -optP --cpp

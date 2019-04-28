@@ -1,0 +1,61 @@
+#!/bin/sh
+
+# usage: ./stack-gui testnet
+
+# UI usage:
+#
+# Up/down arrows: navigate menus
+# Left arrow: return to higher menu level
+# Enter: activate menu items
+# 'q': return to higher menu level or (at toplevel) quit the Brick UI
+
+set -e
+set -x
+
+
+unameOut="$(uname -s)"
+case "${unameOut}" in
+    Linux*)     machine=Linux;;
+    Darwin*)    machine=Darwin;;
+    CYGWIN*)    machine=Cygwin;;
+    MINGW*)     machine=MinGw;;
+    *)          machine="UNKNOWN:${unameOut}"
+esac
+echo "We are on a ${machine} machine"
+
+if [ "${machine}" == "Darwin" ]; then
+  EXTRA_GHC_OPTIONS="--ghc-options=-optl-Wl,-dead_strip_dylibs"
+else
+  EXTRA_GHC_OPTIONS=""
+fi
+
+pushd ..
+stack build $EXTRA_GHC_OPTIONS cardano-sl-script-runner cardano-sl-node cardano-sl-tools
+export PATH=$(realpath $(stack path --local-install-root)/bin):$PATH
+popd
+
+NAME=$1
+
+case "$NAME" in
+  mainnet)
+    KEY=mainnet_full
+    ;;
+  testnet)
+    KEY=testnet_full
+    ;;
+  staging)
+    KEY=mainnet_dryrun_full
+    ;;
+  *)
+    echo "error, you must give a cluster name, '$0 testnet' for example"
+    exit 1
+    ;;
+esac
+CFG=$(realpath ../lib/configuration.yaml)
+LOGCFG=$(realpath ./log-config.yaml)
+TOPO=$(realpath ./topology-${NAME}.yaml)
+
+mkdir -pv states/test-state-${NAME}
+cd states/test-state-${NAME}
+
+SCRIPT=none testcases --configuration-file $CFG --configuration-key "$KEY" --log-console-off --db-path db --keyfile secret.key --log-config $LOGCFG --logs-prefix logs --topology $TOPO
