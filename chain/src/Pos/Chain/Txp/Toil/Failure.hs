@@ -43,6 +43,7 @@ data ToilVerFailure
     | ToilNotUnspent !TxIn -- ^ Tx input is not a known unspent input.
     -- | ToilOutGreaterThanIn inputSum outputSum
     | ToilOutGreaterThanIn !Integer !Integer
+    | ToilGDNotEqual !Integer !Integer
     | ToilInconsistentTxAux !Text
     | ToilInvalidOutput !Word32 !TxOutVerFailure
     | ToilUnknownInput !Word32 !TxIn
@@ -84,6 +85,9 @@ instance Buildable ToilVerFailure where
         bprint ("input is not a known unspent input: "%build) txId
     build (ToilOutGreaterThanIn tInputSum tOutputSum) =
         bprint ("sum of outputs is greater than sum of inputs ("%int%" < "%int%")")
+        tInputSum tOutputSum
+    build (ToilGDNotEqual tInputSum tOutputSum) =
+        bprint ("sum of outputs is not equal sum of inputs ("%int%" , "%int%")")
         tInputSum tOutputSum
     build (ToilInconsistentTxAux msg) =
         bprint ("TxAux is inconsistent: "%stext) msg
