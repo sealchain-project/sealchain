@@ -16,6 +16,9 @@ Sealchain focuses on financial asset transaction by using **Blockchain + AI tech
 
 Seal chain is **Cardano 2.0**，a financial Cardano with **multi-coin support** and **smart contract** applications.
 
+<p align="center">
+  <img height="300" src="https://github.com/sealchain-project/sealchain/blob/develop/images/Github readme1.jpg">
+</p>
 
 ##### Technical advantages of Sealchain compared to Cardano:
 
