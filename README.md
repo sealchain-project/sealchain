@@ -24,17 +24,17 @@ Seal chain is **Cardano 2.0**，a financial Cardano with **multi-coin support** 
 
 2.	Smart contract focused on security
 
-     •	Functional, non-turing complete contract language design focused on security with succinct syntax and formal verification support.
+     •	Non-turing complete safety-oriented design with succinct syntax and formal verification support.
 
-     •	Expressive, user-friendly syntax.
+     •	Expressive syntax and function definition.
 
      •	Deployed as public source code, and supports upgraded contracts.
 
-     •	Atomic execution transactions.
+     •	Atomic execution (transaction).
 
-     •	Supports single and multi-signature authentication.
+     •	Single-sig and multi-sig public-key authorization.
 
-     •	Directly support the current database system (SQL or NoSQL).
+     •	Designed for direct integration with current industrial databases (SQL or NoSQL).
 
 
 
@@ -43,7 +43,9 @@ Seal chain is **Cardano 2.0**，a financial Cardano with **multi-coin support** 
 To learn more about Sealchain, please view our [Website](https://sealchain.io) or our [Whitepaper](https://sealchain.io/whitepaper.html)
 
 ## Supported Platforms
-Supported platforms are Windows, macOS and Linux.
+Windows 
+MacOS
+Linux.
 
 ## Building Sealchain from Source Code
 
