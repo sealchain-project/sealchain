@@ -20,7 +20,7 @@ Seal chain is **Cardano 2.0**，a financial Cardano with **multi-coin support** 
   <img height="300" src="https://github.com/sealchain-project/sealchain/blob/develop/images/Github readme1.jpg">
 </p>
 
-##### Technical advantages of Sealchain compared to Cardano:
+#### Technical advantages of Sealchain compared to Cardano:
 
 1.	Extended UTXO model supports native multi-token
 
