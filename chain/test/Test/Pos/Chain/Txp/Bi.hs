@@ -27,7 +27,7 @@ import           Test.Pos.Binary.Helpers (SizeTestConfig (..), scfg, sizeTest)
 import           Test.Pos.Binary.Helpers.GoldenRoundTrip (goldenTestBi,
                      roundTripsBiBuildable, roundTripsBiShow)
 import           Test.Pos.Chain.Txp.Example (exampleHashTx,
-                     exampleRedeemSignature, exampleTxId, exampleTxInList,
+                     exampleTxId, exampleTxInList,
                      exampleTxInUtxo, exampleTxOut,
                      exampleTxOutList, exampleTxProof, exampleTxSig,
                      exampleTxSigData, exampleTxWitness)
@@ -36,7 +36,7 @@ import           Test.Pos.Chain.Txp.Gen (genTx, genTxAttributes, genTxAux,
                      genTxOut, genTxOutAux, genTxOutList, genTxPayload,
                      genTxProof, genTxSig, genTxSigData, genTxWitness)
 import           Test.Pos.Core.ExampleHelpers (examplePublicKey,
-                     exampleRedeemPublicKey, exampleSecretKey, feedPM)
+                     exampleSecretKey, feedPM)
 import           Test.Pos.Util.Golden (discoverGolden, eachOf)
 import           Test.Pos.Util.Tripping (discoverRoundTrip)
 
@@ -129,11 +129,6 @@ golden_ScriptWitness = goldenTestBi scriptWitness "test/golden/bi/txp/TxInWitnes
         scriptWitness = ScriptWitness validatorScript redeemerScript
         validatorScript = Script 47 "serialized script"
         redeemerScript = Script 47 "serialized script"
-
-golden_RedeemWitness :: Property
-golden_RedeemWitness = goldenTestBi redeemWitness "test/golden/bi/txp/TxInWitness_RedeemWitness"
-    where
-        redeemWitness = RedeemWitness exampleRedeemPublicKey exampleRedeemSignature
 
 golden_UnknownWitnessType :: Property
 golden_UnknownWitnessType = goldenTestBi unkWitType "test/golden/bi/txp/TxInWitness_UnknownWitnessType"

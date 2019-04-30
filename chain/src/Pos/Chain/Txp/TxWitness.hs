@@ -25,7 +25,7 @@ import           Pos.Binary.Class (Bi (..), Case (..), decodeKnownCborDataItem,
                      encodeUnknownCborDataItem, knownCborDataItemSizeExpr,
                      matchSize, szCases)
 import           Pos.Core.Common (Script, addressHash)
-import           Pos.Crypto (Hash, PublicKey, RedeemPublicKey, RedeemSignature,
+import           Pos.Crypto (Hash, PublicKey,
                      Signature, hash, shortHashF)
 import           Pos.Util.Util (aesonError)
 
@@ -42,8 +42,6 @@ data TxInWitness
     = PkWitness !PublicKey !TxSig
     -- ScriptWitness twValidator twRedeemer
     | ScriptWitness !Script !Script
-    -- RedeemWitness twRedeemKey twRedeemSig
-    | RedeemWitness !RedeemPublicKey !(RedeemSignature TxSigData)
     | UnknownWitnessType !Word8 !ByteString
     deriving (Eq, Show, Generic, Typeable)
 
@@ -59,11 +57,6 @@ instance ToJSON TxInWitness where
             , "validator" .= twValidator
             , "redeemer" .= twRedeemer
             ]
-        RedeemWitness twRedeemKey twRedeemSig -> object
-            [ "tag" .= ("RedeemWitness" :: Text)
-            , "redeemKey" .= twRedeemKey
-            , "redeemSig" .= twRedeemSig
-            ]
         UnknownWitnessType a b -> object
             [ "tag" .= ("UnknownWitnessType" :: Text)
             , "contents" .= [toJSON a, toJSON (JsonByteString b)]
@@ -76,15 +69,13 @@ instance FromJSON TxInWitness where
                 PkWitness <$> (o .: "key") <*> (o .: "sig")
             "ScriptWitness" ->
                 ScriptWitness <$> (o .: "validator") <*> (o .: "redeemer")
-            "RedeemWitness" ->
-                RedeemWitness <$> (o .: "redeemKey") <*> (o .: "redeemSig")
             "UnknownWitnessType" -> do
                 (o .: "contents") >>= \case
                     [a, b] -> UnknownWitnessType <$> parseJSON a <*> (getJsonByteString <$> parseJSON b)
                     _      -> aesonError $ "expected 'contents' to have two elements"
             _  ->
                 aesonError $ "expected 'tag' to be one of 'PkWitness', 'ScriptWitness', \
-                    \'RedeemWitness', 'UnknownWitnessType'"
+                    \ 'UnknownWitnessType'"
 
 instance Hashable TxInWitness
 
@@ -96,8 +87,6 @@ instance Buildable TxInWitness where
         bprint ("ScriptWitness: "%
                 "validator hash = "%shortHashF%", "%
                 "redeemer hash = "%shortHashF) (hash val) (hash red)
-    build (RedeemWitness key sig) =
-        bprint ("PkWitness: key = "%build%", sig = "%build) key sig
     build (UnknownWitnessType t bs) =
         bprint ("UnknownWitnessType "%build%" "%base16F) t bs
 
@@ -111,10 +100,6 @@ instance Bi TxInWitness where
             encodeListLen 2 <>
             encode (1 :: Word8) <>
             encodeKnownCborDataItem (val, red)
-        RedeemWitness key sig     ->
-            encodeListLen 2 <>
-            encode (2 :: Word8) <>
-            encodeKnownCborDataItem (key, sig)
         UnknownWitnessType tag bs ->
             encodeListLen 2 <>
             encode tag <>
@@ -129,9 +114,6 @@ instance Bi TxInWitness where
             1 -> do
                 matchSize len "TxInWitness.ScriptWitness" 2
                 uncurry ScriptWitness <$> decodeKnownCborDataItem
-            2 -> do
-                matchSize len "TxInWitness.RedeemWitness" 2
-                uncurry RedeemWitness <$> decodeKnownCborDataItem
             _ -> do
                 matchSize len "TxInWitness.UnknownWitnessType" 2
                 UnknownWitnessType tag <$> decodeUnknownCborDataItem
@@ -142,8 +124,6 @@ instance Bi TxInWitness where
               in  Case "PkWitness" $ size ((,) <$> pure key <*> pure sig)
             , let ScriptWitness key sig = error "unused"
               in  Case "ScriptWitness" $ size ((,) <$> pure key <*> pure sig)
-            , let RedeemWitness key sig = error "unused"
-              in  Case "RedeemWitness" $ size ((,) <$> pure key <*> pure sig)
             ])
 
 instance NFData TxInWitness

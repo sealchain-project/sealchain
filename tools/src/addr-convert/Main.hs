@@ -15,7 +15,6 @@ import           Options.Applicative.Types (readerAsk)
 import           Text.PrettyPrint.ANSI.Leijen (Doc)
 
 import           Paths_cardano_sl (version)
-import           Pos.Core (makeRedeemAddress)
 import           Pos.Core.NetworkMagic (NetworkMagic (..), makeNetworkMagic)
 import           Pos.Crypto.Configuration (ProtocolMagic (..),
                      ProtocolMagicId (..), RequiresNetworkMagic (..))

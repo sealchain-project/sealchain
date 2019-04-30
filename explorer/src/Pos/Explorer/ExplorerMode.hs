@@ -44,7 +44,7 @@ import           Pos.Util (postfixLFields)
 import           Pos.Util.Util (HasLens (..))
 import           Pos.Util.Wlog (CanLog, HasLoggerName (..), LoggerName)
 
-import           Pos.Explorer.ExtraContext (ExtraContext, ExtraContextT,
+import           Pos.Explorer.ExtraContext (ExtraContext, ,
                      HasExplorerCSLInterface, HasGenesisRedeemAddressInfo,
                      makeExtraCtx, runExtraContextT)
 import           Pos.Explorer.Socket.Holder (ConnectionsState)

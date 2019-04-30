@@ -198,7 +198,6 @@ instance Arbitrary AddrType where
         oneof
             [ pure ATPubKey
             , pure ATScript
-            , pure ATRedeem
             , ATUnknown <$> choose (3, maxBound)
             ]
 
@@ -207,7 +206,6 @@ instance Arbitrary AddrSpendingData where
         oneof
             [ PubKeyASD <$> arbitrary
             , ScriptASD <$> arbitrary
-            , RedeemASD <$> arbitrary
             -- For unknown spending data payload will be at most 120
             -- bytes long.
             , UnknownASD <$> choose (3, 255) <*> scale (min 120) arbitrary

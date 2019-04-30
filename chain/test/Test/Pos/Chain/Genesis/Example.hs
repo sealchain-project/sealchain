@@ -54,7 +54,7 @@ import           Test.Pos.Chain.Ssc.Example (exampleVssCertificatesMap)
 import           Test.Pos.Chain.Update.Example (exampleBlockVersionData0,
                      exampleBlockVersionData1, exampleBlockVersionData2)
 import           Test.Pos.Core.ExampleHelpers (exampleAddress, exampleAddress1,
-                     exampleAddress2, exampleAddress3, exampleAddress4,
+                     exampleAddress3, exampleAddress4,
                      exampleSharedSeed0, exampleSharedSeed1,
                      exampleSharedSeed2, exampleStakeholderId)
 import           Test.Pos.Crypto.Bi (getBytes)
@@ -162,26 +162,22 @@ exampleGenesisNonAvvmBalances1 =
     GenesisNonAvvmBalances {getGenesisNonAvvmBalances =
         (HM.fromList [ (exampleAddress, coin)
                      , (exampleAddress1, coin1)
-                     , (exampleAddress2, coin2)
                      ]) }
   where
     coin  = Coin {getCoin = 1234567}
     coin1 = Coin {getCoin = 1337}
-    coin2 = Coin {getCoin = 12552661871782587}
 
 exampleGenesisNonAvvmBalances2 :: GenesisNonAvvmBalances
 exampleGenesisNonAvvmBalances2 =
     GenesisNonAvvmBalances {getGenesisNonAvvmBalances =
         (HM.fromList [ (exampleAddress, coin)
                      , (exampleAddress1, coin1)
-                     , (exampleAddress2, coin2)
                      , (exampleAddress3, coin3)
                      , (exampleAddress4, coin4)
                      ]) }
   where
     coin  = Coin {getCoin = 4873920820}
     coin1 = Coin {getCoin = 8274687}
-    coin2 = Coin {getCoin = 12552661871782587}
     coin3 = Coin {getCoin = 189377823442}
     coin4 = Coin {getCoin = 4672189289312323}
 

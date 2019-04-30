@@ -305,12 +305,10 @@ initActors nm CardanoContext{..} = Actors{..}
     actorsRich  :: Map PublicKey Rich
     actorsPoor  :: Map PublicKey Poor
     actorsStake :: Map StakeholderId Stakeholder
-    actorsAvvm  :: Map RedeemPublicKey Avvm
 
     actorsRich  = Map.fromList $ map mkRich  $ gsRichSecrets       ccSecrets
     actorsPoor  = Map.fromList $ map mkPoor  $ gsPoorSecrets       ccSecrets
     actorsStake = Map.fromList $ map mkStake $ gsDlgIssuersSecrets ccSecrets
-    actorsAvvm  = Map.fromList $ map mkAvvm  $ gsFakeAvvmSeeds     ccSecrets
 
     -- Intentially not using record wildcards here so that we fail to compile
     -- when the structure of the record changes.
@@ -358,17 +356,6 @@ initActors nm CardanoContext{..} = Actors{..}
                    (error ("initActors: issuer not found"))
                    (regKpHash stkKey)
                    (unGenesisDelegation $ gdHeavyDelegation ccData)
-
-    mkAvvm :: ByteString -> (RedeemPublicKey, Avvm)
-    mkAvvm avvmSeed = (redKpPub, Avvm{..})
-      where
-        avvmKey :: RedeemKeyPair
-        avvmKey = RedeemKeyPair{..}
-
-        avvmAddr :: Address
-        avvmAddr = makeRedeemAddress nm redKpPub
-
-        Just (redKpPub, redKpSec) = redeemDeterministicKeyGen avvmSeed
 
 {-------------------------------------------------------------------------------
   In many cases the difference between rich and poor actors is not important

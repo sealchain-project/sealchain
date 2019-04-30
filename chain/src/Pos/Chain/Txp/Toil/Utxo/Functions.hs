@@ -31,13 +31,12 @@ import           Pos.Chain.Txp.TxWitness (TxInWitness (..), TxSigData (..),
                      TxWitness)
 import           Pos.Chain.Txp.Undo (TxUndo)
 import           Pos.Core (AddrType (..), Address (..), integerToCoin,
-                     isRedeemAddress, isUnknownAddressType, sumCoins)
+                     isUnknownAddressType, sumCoins)
 import           Pos.Core.Attributes (Attributes (..), areAttributesKnown)
-import           Pos.Core.Common (AddrAttributes (..), checkPubKeyAddress,
-                     checkRedeemAddress)
+import           Pos.Core.Common (AddrAttributes (..), checkPubKeyAddress)
 import           Pos.Core.NetworkMagic (NetworkMagic)
-import           Pos.Crypto (SignTag (SignRedeemTx, SignTx), WithHash (..),
-                     checkSig, hash, redeemCheckSig)
+import           Pos.Crypto (SignTag (SignTx), WithHash (..),
+                     checkSig, hash)
 import           Pos.Crypto.Configuration (ProtocolMagic)
 import           Pos.Util (liftEither)
 
@@ -175,8 +174,6 @@ verifyOutputs VTxContext {..} (TxAux UnsafeTx {..} _) =
             throwError $ ToilInvalidOutput i (TxOutUnknownAttributes addr)
         when (vtcVerifyAllIsKnown && isUnknownAddressType addr) $
             throwError $ ToilInvalidOutput i (TxOutUnknownAddressType addr)
-        when (isRedeemAddress addr) $
-            throwError $ ToilInvalidOutput i (TxOutRedeemAddressProhibited addr)
         unless (addressHasValidMagic (attrData addrAttributes)) $
             throwError $ ToilInvalidOutput i (TxOutAddressBadNetworkMagic addr)
 
@@ -220,7 +217,6 @@ verifyKnownInputs protocolMagic VTxContext {..} resolvedInputs TxAux {..} = do
         -- The existing blockchain should not have any output addresses of this
         -- witness type, so checking should just fail.
         ScriptWitness _ _            -> False
-        RedeemWitness twRedeemKey _  -> checkRedeemAddress twRedeemKey addr
         UnknownWitnessType witTag _  -> case addrType addr of
             ATUnknown addrTag -> addrTag == witTag
             _                 -> False
@@ -230,9 +226,6 @@ verifyKnownInputs protocolMagic VTxContext {..} resolvedInputs TxAux {..} = do
     checkWitness _txOutAux witness = case witness of
         PkWitness twKey twSig ->
             unless (checkSig protocolMagic SignTx twKey txSigData twSig) $
-                throwError WitnessWrongSignature
-        RedeemWitness twRedeemKey twRedeemSig ->
-            unless (redeemCheckSig protocolMagic SignRedeemTx twRedeemKey txSigData twRedeemSig) $
                 throwError WitnessWrongSignature
         ScriptWitness twValidator twRedeemer -> do
             -- The existing blockchain should not have any witnesses of this

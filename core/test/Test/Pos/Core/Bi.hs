@@ -30,14 +30,14 @@ import           Pos.Core.Slotting (EpochIndex (..), EpochOrSlot (..),
                      FlatSlotId, LocalSlotIndex (..), SlotCount (..),
                      TimeDiff (..), Timestamp (..))
 import           Pos.Crypto (AbstractHash (..), Hash, PublicKey (..),
-                     abstractHash, redeemDeterministicKeyGen)
+                     abstractHash)
 
 
 import           Test.Pos.Binary.Helpers (SizeTestConfig (..), scfg, sizeTest)
 import           Test.Pos.Binary.Helpers.GoldenRoundTrip (goldenTestBi,
                      roundTripsBiBuildable, roundTripsBiShow)
 import           Test.Pos.Core.ExampleHelpers (exampleAddrSpendingData_PubKey,
-                     exampleAddress, exampleAddress1, exampleAddress2,
+                     exampleAddress, exampleAddress1, 
                      exampleAddress3, exampleAddress4, exampleEpochIndex,
                      examplePublicKey, exampleScript, exampleSlotId,
                      exampleSlotLeaders, exampleStakeholderId,
@@ -58,9 +58,6 @@ golden_Address = goldenTestBi exampleAddress "test/golden/bi/Address0"
 golden_Address1 :: Property
 golden_Address1 = goldenTestBi exampleAddress1 "test/golden/bi/Address1"
 
-golden_Address2 :: Property
-golden_Address2 = goldenTestBi exampleAddress2 "test/golden/bi/Address2"
-
 golden_Address3 :: Property
 golden_Address3 = goldenTestBi exampleAddress3 "test/golden/bi/Address3"
 
@@ -80,12 +77,6 @@ golden_AddrSpendingData_PubKey = goldenTestBi exampleAddrSpendingData_PubKey
 golden_AddrSpendingData_Script :: Property
 golden_AddrSpendingData_Script = goldenTestBi asd "test/golden/AddrSpendingData_Script"
   where asd = ScriptASD exampleScript
-
-golden_AddrSpendingData_Redeem :: Property
-golden_AddrSpendingData_Redeem = goldenTestBi asd "test/golden/AddrSpendingData_Redeem"
-  where
-    asd = RedeemASD redeemPublicKey
-    Just redeemPublicKey = fst <$> redeemDeterministicKeyGen (getBytes 0 32)
 
 golden_AddrSpendingData_Unknown :: Property
 golden_AddrSpendingData_Unknown = goldenTestBi asd "test/golden/AddrSpendingData_Unknown"
@@ -130,9 +121,6 @@ golden_AddrType_PK = goldenTestBi ATPubKey "test/golden/AddrType_PK"
 
 golden_AddrType_S :: Property
 golden_AddrType_S = goldenTestBi ATScript "test/golden/AddrType_S"
-
-golden_AddrType_R :: Property
-golden_AddrType_R = goldenTestBi ATRedeem "test/golden/AddrType_R"
 
 golden_AddrType_U :: Property
 golden_AddrType_U = goldenTestBi (ATUnknown 57) "test/golden/AddrType_U"
@@ -421,7 +409,6 @@ sizeEstimates =
   let check :: forall a. (Show a, Bi a) => Gen a -> Property
       check g = sizeTest $ scfg { gen = g }
       pkOrRedeem (PubKeyASD _) = True
-      pkOrRedeem (RedeemASD _) = True
       pkOrRedeem _             = False
 
       -- Explicit bounds for types, based on the generators from Gen.

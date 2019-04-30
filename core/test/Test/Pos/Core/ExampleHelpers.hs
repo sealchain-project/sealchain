@@ -4,7 +4,6 @@ module Test.Pos.Core.ExampleHelpers
           exampleAddrSpendingData_PubKey
         , exampleAddress
         , exampleAddress1
-        , exampleAddress2
         , exampleAddress3
         , exampleAddress4
         , exampleAddress5
@@ -12,7 +11,6 @@ module Test.Pos.Core.ExampleHelpers
         , exampleAddress7
         , exampleAddress'
         , exampleAddress'1
-        , exampleAddress'2
         , exampleAddress'3
         , exampleAddress'4
         , exampleAddress'5
@@ -216,14 +214,6 @@ exampleAddress1 = makeAddress easd attrs
     attrs = AddrAttributes hap BootstrapEraDistr NetworkMainOrStage
     hap = Nothing
 
-exampleAddress2 :: Address
-exampleAddress2 = makeAddress easd attrs
-  where
-    easd = RedeemASD exampleRedeemPublicKey
-    attrs = AddrAttributes hap asd NetworkMainOrStage
-    hap = Just (HDAddressPayload (getBytes 15 32))
-    asd = SingleKeyDistr exampleStakeholderId
-
 exampleAddress3 :: Address
 exampleAddress3 = makeAddress easd attrs
   where
@@ -273,14 +263,6 @@ exampleAddress'1 = makeAddress' easd attrs
     [pk] = examplePublicKeys 24 1
     attrs = AddrAttributes hap BootstrapEraDistr NetworkMainOrStage
     hap = Nothing
-
-exampleAddress'2 :: Address'
-exampleAddress'2 = makeAddress' easd attrs
-  where
-    easd = RedeemASD exampleRedeemPublicKey
-    attrs = AddrAttributes hap asd NetworkMainOrStage
-    hap = Just (HDAddressPayload (getBytes 15 32))
-    asd = SingleKeyDistr exampleStakeholderId
 
 exampleAddress'3 :: Address'
 exampleAddress'3 = makeAddress' easd attrs

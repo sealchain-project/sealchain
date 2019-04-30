@@ -36,13 +36,11 @@ import           Pos.Chain.Txp.Topsort (topsortTxs)
 import           Pos.Chain.Txp.Tx (Tx (..), TxId, TxOut (..), TxValidationRules,
                      txOutAddress)
 import           Pos.Chain.Txp.TxAux (TxAux (..), checkTxAux)
-import           Pos.Chain.Txp.TxOutAux (toaOut)
 import           Pos.Chain.Txp.Undo (TxUndo, TxpUndo)
 import           Pos.Chain.Update.BlockVersionData (BlockVersionData (..),
                      isBootstrapEraBVD)
 import           Pos.Core (AddrAttributes (..), AddrStakeDistribution (..),
-                     Address, EpochIndex, addrAttributesUnwrapped,
-                     isRedeemAddress)
+                     Address, EpochIndex, addrAttributesUnwrapped)
 import           Pos.Core.Common (integerToCoin)
 import qualified Pos.Core.Common as Fee (TxFeePolicy (..),
                      calculateTxSizeLinear)
@@ -156,12 +154,6 @@ verifyAndApplyTx pm txValRules adoptedBVD lockedAssets curEpoch verifyVersions t
     lift $ applyTxToUtxo' tx
     pure vturUndo
 
-isRedeemTx :: TxUndo -> Bool
-isRedeemTx resolvedOuts = all isRedeemAddress inputAddresses
-  where
-    inputAddresses =
-        fmap (txOutAddress . toaOut) . catMaybes . toList $ resolvedOuts
-
 verifyGState ::
        BlockVersionData
     -> EpochIndex
@@ -173,7 +165,7 @@ verifyGState bvd@BlockVersionData {..} curEpoch txAux vtur = do
     let txFeeMB = vturFee vtur
     let txSize = biSize txAux
     let limit = bvdMaxTxSize
-    unless (isRedeemTx $ vturUndo vtur) $ whenJust txFeeMB $ \txFee ->
+    whenJust txFeeMB $ \txFee ->
         verifyTxFeePolicy txFee bvdTxFeePolicy txSize
     when (txSize > limit) $
         throwError $ ToilTooLargeTx txSize limit

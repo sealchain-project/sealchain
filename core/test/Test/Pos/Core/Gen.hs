@@ -97,7 +97,7 @@ import           Pos.Util.Util (leftToPanic)
 import           Serokell.Data.Memory.Units (Byte)
 
 import           Test.Pos.Crypto.Gen (genAbstractHash, genHDAddressPayload,
-                     genPublicKey, genRedeemPublicKey)
+                     genPublicKey)
 import           Test.Pos.Util.Gen (genHashMap)
 
 ----------------------------------------------------------------------------
@@ -118,7 +118,6 @@ genAddress = makeAddress <$> genAddrSpendingData <*> genAddrAttributes
 genAddrType :: Gen AddrType
 genAddrType = Gen.choice [ pure ATPubKey
                          , pure ATScript
-                         , pure ATRedeem
                          -- Values 0,1,2 are reserved, as they are used to tag
                          -- the above 3 constructors --------------+
                          --                                        |
@@ -130,7 +129,6 @@ genAddrSpendingData = Gen.choice gens
   where
     gens = [ PubKeyASD <$> genPublicKey
            , ScriptASD <$> genScript
-           , RedeemASD <$> genRedeemPublicKey
            -- Values 0,1,2 are reserved, as they are used to tag
            -- the above 3 constructors ---------------+
            --                                         |

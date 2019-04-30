@@ -3,7 +3,6 @@
 module Test.Pos.Chain.Txp.Gen
        ( genTxpConfiguration
        , genPkWitness
-       , genRedeemWitness
        , genScriptWitness
        , genTx
        , genTxAttributes
@@ -49,8 +48,7 @@ import           Test.Pos.Core.Gen (gen32Bytes, genAddress, genBytes, genCoin,
                      genEpochIndex, genMerkleRoot, genScript, genTextHash,
                      genWord32)
 import           Test.Pos.Crypto.Gen (genAbstractHash, genPublicKey,
-                     genRedeemPublicKey, genRedeemSignature, genSecretKey,
-                     genSignTag)
+                     genSecretKey, genSignTag)
 
 genTxpConfiguration :: Gen TxpConfiguration
 genTxpConfiguration = do
@@ -60,10 +58,6 @@ genTxpConfiguration = do
 
 genPkWitness :: ProtocolMagic -> Gen TxInWitness
 genPkWitness pm = PkWitness <$> genPublicKey <*> genTxSig pm
-
-genRedeemWitness :: ProtocolMagic -> Gen TxInWitness
-genRedeemWitness pm =
-    RedeemWitness <$> genRedeemPublicKey <*> genRedeemSignature pm genTxSigData
 
 genTxValidationRulesConfig :: Gen TxValidationRulesConfig
 genTxValidationRulesConfig =
@@ -138,7 +132,6 @@ genTxInWitness :: ProtocolMagic -> Gen TxInWitness
 genTxInWitness pm = Gen.choice gens
   where
     gens = [ genPkWitness pm
-           , genRedeemWitness pm
            , genScriptWitness
            , genUnknownWitnessType
            ]

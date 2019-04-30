@@ -16,7 +16,6 @@ module Pos.Core.Common.Address
        , checkAddrSpendingData
        , checkPubKeyAddress
        , checkScriptAddress
-       , checkRedeemAddress
 
        -- * Encoding
        , addrToBase58
@@ -29,7 +28,6 @@ module Pos.Core.Common.Address
        , deriveFirstHDAddress
 
        -- * Pattern-matching helpers
-       , isRedeemAddress
        , isUnknownAddressType
        , isBootstrapEraDistrAddress
 
@@ -42,7 +40,6 @@ module Pos.Core.Common.Address
        , makeRootPubKeyAddress
        , makePubKeyHdwAddress
        , makeScriptAddress
-       , makeRedeemAddress
 
        , createHDAddressNH
        , createHDAddressH
@@ -89,7 +86,7 @@ import           Pos.Crypto.HD (HDAddressPayload, HDPassphrase,
                      ShouldCheckPassphrase (..), deriveHDPassphrase,
                      deriveHDPublicKey, deriveHDSecretKey, packHDAddressAttr)
 import           Pos.Crypto.Signing (EncryptedSecretKey, PassPhrase, PublicKey,
-                     RedeemPublicKey, SecretKey, deterministicKeyGen,
+                     SecretKey, deterministicKeyGen,
                      emptyPassphrase, encToPublic, noPassEncrypt)
 import           Pos.Util.Json.Canonical ()
 import           Pos.Util.Json.Parse (tryParseString)
@@ -181,7 +178,6 @@ addressDetailedF =
         \case
             ATPubKey      -> "PubKey"
             ATScript      -> "Script"
-            ATRedeem      -> "Redeem"
             ATUnknown tag -> "Unknown#" <> Buildable.build tag
 
 -- | Currently we gonna use Ripple alphabet for representing addresses in
@@ -302,17 +298,6 @@ makeScriptAddress nm stakeholder scr = makeAddress spendingData attrs
                            , aaNetworkMagic = nm
                            , ..}
 
--- | A function for making an address from 'RedeemPublicKey'.
-makeRedeemAddress :: NetworkMagic -> RedeemPublicKey -> Address
-makeRedeemAddress nm key = makeAddress spendingData attrs
-  where
-    spendingData = RedeemASD key
-    attrs =
-        AddrAttributes { aaStakeDistribution = BootstrapEraDistr
-                       , aaPkDerivationPath = Nothing
-                       , aaNetworkMagic = nm
-                       }
-
 -- | Create address from secret key in hardened way.
 createHDAddressH
     :: NetworkMagic
@@ -364,10 +349,6 @@ checkPubKeyAddress pk = checkAddrSpendingData (PubKeyASD pk)
 checkScriptAddress :: Script -> Address -> Bool
 checkScriptAddress script = checkAddrSpendingData (ScriptASD script)
 
--- | Check if given 'Address' is created from given 'RedeemPublicKey'
-checkRedeemAddress :: RedeemPublicKey -> Address -> Bool
-checkRedeemAddress rpk = checkAddrSpendingData (RedeemASD rpk)
-
 ----------------------------------------------------------------------------
 -- Utils
 ----------------------------------------------------------------------------
@@ -404,13 +385,6 @@ deriveFirstHDAddress nm ibea passphrase wsKey =
 ----------------------------------------------------------------------------
 -- Pattern-matching helpers
 ----------------------------------------------------------------------------
-
--- | Check whether an 'Address' is redeem address.
-isRedeemAddress :: Address -> Bool
-isRedeemAddress Address {..} =
-    case addrType of
-        ATRedeem -> True
-        _        -> False
 
 isUnknownAddressType :: Address -> Bool
 isUnknownAddressType Address {..} =

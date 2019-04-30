@@ -8,7 +8,6 @@ module Pos.Client.Txp.Network
        ( TxMode
        , prepareMTx
        , prepareUnsignedTx
-       , prepareRedemptionTx
        , submitTxRaw
        , sendTxOuts
        ) where
@@ -21,16 +20,14 @@ import           Pos.Chain.Genesis as Genesis (Config (..))
 import           Pos.Chain.Txp (Tx, TxAux (..), TxId, TxMsgContents (..),
                      TxOut (..), TxOutAux (..), txaF)
 import           Pos.Client.Txp.Addresses (MonadAddresses (..))
-import           Pos.Client.Txp.Balances (MonadBalances (..), getOwnUtxo)
+import           Pos.Client.Txp.Balances (MonadBalances (..))
 import           Pos.Client.Txp.History (MonadTxHistory (..))
 import           Pos.Client.Txp.Util (InputSelectionPolicy,
                      PendingAddresses (..), TxCreateMode, TxError (..),
-                     createMTx, createRedemptionTx, createUnsignedTx)
+                     createMTx, createUnsignedTx)
 import           Pos.Communication.Types (InvOrDataTK)
-import           Pos.Core (Address, Coin, makeRedeemAddress, mkCoin,
-                     unsafeAddCoin)
-import           Pos.Core.NetworkMagic (makeNetworkMagic)
-import           Pos.Crypto (RedeemSecretKey, SafeSigner, hash, redeemToPublic)
+import           Pos.Core (Address)
+import           Pos.Crypto (SafeSigner, hash)
 import           Pos.Infra.Communication.Protocol (OutSpecs)
 import           Pos.Infra.Communication.Specs (createOutSpecs)
 import           Pos.Infra.Diffusion.Types (Diffusion (sendTx))
@@ -76,26 +73,6 @@ prepareUnsignedTx
 prepareUnsignedTx genesisConfig pendingAddrs inputSelectionPolicy addrs outputs changeAddress = do
     utxo <- getOwnUtxos (configGenesisData genesisConfig) (toList addrs)
     createUnsignedTx genesisConfig pendingAddrs inputSelectionPolicy utxo outputs changeAddress
-
--- | Construct redemption Tx using redemption secret key and a output address
-prepareRedemptionTx
-    :: TxMode ctx m
-    => Genesis.Config
-    -> RedeemSecretKey
-    -> Address
-    -> m (TxAux, Address, Coin)
-prepareRedemptionTx genesisConfig rsk output = do
-    let nm = makeNetworkMagic $ configProtocolMagic genesisConfig
-    let redeemAddress = makeRedeemAddress nm $ redeemToPublic rsk
-    utxo <- getOwnUtxo (configGenesisData genesisConfig) redeemAddress
-    let addCoin c = unsafeAddCoin c . txOutValue . toaOut
-        redeemBalance = foldl' addCoin (mkCoin 0) utxo
-        txOuts = one $
-            TxOutAux {toaOut = TxOut output redeemBalance}
-    when (redeemBalance == mkCoin 0) $ throwM RedemptionDepleted
-    txAux <- eitherToThrow
-        =<< createRedemptionTx (configProtocolMagic genesisConfig) utxo rsk txOuts
-    pure (txAux, redeemAddress, redeemBalance)
 
 -- | Send the ready-to-use transaction
 submitTxRaw

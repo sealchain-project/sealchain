@@ -6,9 +6,9 @@ import           Hedgehog (Property)
 import qualified Hedgehog as H
 
 import           Test.Pos.Core.ExampleHelpers (exampleAddress, exampleAddress',
-                     exampleAddress'1, exampleAddress'2, exampleAddress'3,
+                     exampleAddress'1, exampleAddress'3,
                      exampleAddress'4, exampleAddress'5, exampleAddress'6,
-                     exampleAddress'7, exampleAddress1, exampleAddress2,
+                     exampleAddress'7, exampleAddress1,
                      exampleAddress3, exampleAddress4, exampleAddress5,
                      exampleAddress6, exampleAddress7)
 import           Test.Pos.Util.Golden (discoverGolden, goldenTestSafeCopy,
@@ -33,12 +33,6 @@ golden_Address1 =
     goldenTestSafeCopyDec
         exampleAddress1
         "test/golden/safecopy/Address1_Legacy_NoNetworkMagic"
-
-golden_Address2 :: Property
-golden_Address2 =
-    goldenTestSafeCopyDec
-        exampleAddress2
-        "test/golden/safecopy/Address2_Legacy_NoNetworkMagic"
 
 golden_Address3 :: Property
 golden_Address3 =
@@ -89,12 +83,6 @@ golden_Address'1 =
     goldenTestSafeCopyDec
         exampleAddress'1
         "test/golden/safecopy/Address'1_Legacy_NoNetworkMagic"
-
-golden_Address'2 :: Property
-golden_Address'2 =
-    goldenTestSafeCopyDec
-        exampleAddress'2
-        "test/golden/safecopy/Address'2_Legacy_NoNetworkMagic"
 
 golden_Address'3 :: Property
 golden_Address'3 =

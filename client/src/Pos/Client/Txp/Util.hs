@@ -23,12 +23,10 @@ module Pos.Client.Txp.Util
        , makePubKeyTx
        , makeMPubKeyTx
        , makeMPubKeyTxAddrs
-       , makeRedemptionTx
        , createGenericTx
        , createTx
        , createMTx
        , createUnsignedTx
-       , createRedemptionTx
 
        -- * Fees logic
        , txToLinearFee
@@ -72,13 +70,13 @@ import           Pos.Chain.Update (bvdTxFeePolicy)
 import           Pos.Client.Txp.Addresses (MonadAddresses (..))
 import           Pos.Core (Address, Coin, SlotCount, TxFeePolicy (..),
                      TxSizeLinear (..), calculateTxSizeLinear, coinToInteger,
-                     integerToCoin, isRedeemAddress, mkCoin, sumCoins,
+                     integerToCoin, mkCoin, sumCoins,
                      txSizeLinearMinValue, unsafeIntegerToCoin, unsafeSubCoin)
 import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Core.NetworkMagic (NetworkMagic, makeNetworkMagic)
-import           Pos.Crypto (ProtocolMagic, RedeemSecretKey, SafeSigner,
-                     SignTag (SignRedeemTx, SignTx), deterministicKeyGen,
-                     fakeSigner, hash, redeemSign, redeemToPublic, safeSign,
+import           Pos.Crypto (ProtocolMagic, SafeSigner,
+                     SignTag (SignTx), deterministicKeyGen,
+                     fakeSigner, hash, safeSign,
                      safeToPublic)
 import           Pos.DB (MonadGState, gsAdoptedBVData)
 import           Pos.Infra.Util.LogSafe (SecureLog, buildUnsecure)
@@ -302,18 +300,6 @@ makePubKeyTx
 makePubKeyTx pm ss txInputs txOutputs = either absurd identity $
     makeMPubKeyTx pm (\_ -> Right ss) (map ((), ) txInputs) txOutputs
 
-makeRedemptionTx
-    :: ProtocolMagic
-    -> RedeemSecretKey
-    -> TxInputs
-    -> TxOutputs
-    -> TxAux
-makeRedemptionTx pm rsk txInputs txOutputs = either absurd identity $
-    makeAbstractTx mkWit (map ((), ) txInputs) txOutputs
-  where rpk = redeemToPublic rsk
-        mkWit _ sigData =
-            Right $ RedeemWitness rpk (redeemSign pm SignRedeemTx rsk sigData)
-
 -- | Helper for summing values of `TxOutAux`s
 sumTxOutCoins :: NonEmpty TxOutAux -> Integer
 sumTxOutCoins = sumCoins . map (txOutValue . toaOut)
@@ -464,8 +450,6 @@ prepareTxRawWithPicker
     -> TxFee
     -> TxCreator m TxRaw
 prepareTxRawWithPicker inputPicker utxo outputs (TxFee fee) = do
-    mapM_ (checkIsNotRedeemAddr . txOutAddress . toaOut) outputs
-
     totalMoney <- sumTxOuts outputs
     when (totalMoney == mkCoin 0) $
         throwError $ GeneralTxError "Attempted to send 0 money"
@@ -488,9 +472,6 @@ prepareTxRawWithPicker inputPicker utxo outputs (TxFee fee) = do
     sumTxOuts = either (throwError . GeneralTxError) pure .
         integerToCoin . sumTxOutCoins
     formTxInputs (inp, TxOutAux txOut) = (txOut, inp)
-    checkIsNotRedeemAddr outAddr =
-        when (isRedeemAddress outAddr) $
-            throwError $ OutputIsRedeem outAddr
 
 prepareTxRaw
     :: Monad m
@@ -657,23 +638,6 @@ createUnsignedTx genesisConfig pendingTx selectionPolicy utxo outputs changeAddr
                                                      changeAddress
         let tx = makeUnsignedAbstractTx inps outs
         pure (tx, map fst inps)
-
--- | Make a transaction for retrieving money from redemption address
-createRedemptionTx
-    :: TxCreateMode m
-    => ProtocolMagic
-    -> Utxo
-    -> RedeemSecretKey
-    -> TxOutputs
-    -> m (Either TxError TxAux)
-createRedemptionTx pm utxo rsk outputs =
-    runTxCreator whetherGroupedInputs $ do
-        TxRaw {..} <- prepareTxRaw mempty utxo outputs (TxFee $ mkCoin 0)
-        let bareInputs = snd <$> trInputs
-        pure $ makeRedemptionTx pm rsk bareInputs trOutputs
-  where
-    -- always spend redeem address fully
-    whetherGroupedInputs = OptimizeForSecurity
 
 -----------------------------------------------------------------------------
 -- Fees logic

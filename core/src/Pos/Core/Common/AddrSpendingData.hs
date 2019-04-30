@@ -13,7 +13,7 @@ import qualified Formatting.Buildable as Buildable
 
 import           Pos.Binary.Class (Bi (..), Case (..), szCases)
 import qualified Pos.Binary.Class as Bi
-import           Pos.Crypto.Signing (PublicKey, RedeemPublicKey)
+import           Pos.Crypto.Signing (PublicKey)
 
 import           Pos.Core.Common.Script
 
@@ -24,9 +24,6 @@ data AddrSpendingData
     -- ^ Funds can be spent by revealing a 'PublicKey' and providing a
     -- valid signature.
     | ScriptASD !Script
-    -- ^ Funds can be spent by revealing a 'Script' and providing a
-    -- redeemer 'Script'.
-    | RedeemASD !RedeemPublicKey
     -- ^ Funds can be spent by revealing a 'RedeemPublicKey' and providing a
     -- valid signature.
     | UnknownASD !Word8 !ByteString
@@ -40,7 +37,6 @@ instance Buildable AddrSpendingData where
         \case
             PubKeyASD pk -> bprint ("PubKeyASD " %build) pk
             ScriptASD script -> bprint ("ScriptASD "%build) script
-            RedeemASD rpk -> bprint ("RedeemASD "%build) rpk
             UnknownASD tag _ -> bprint ("UnknownASD with tag "%int) tag
 
 instance NFData AddrSpendingData
@@ -75,7 +71,6 @@ instance Bi AddrSpendingData where
         \case
             PubKeyASD pk -> encode (w8 0, pk)
             ScriptASD script -> encode (w8 1, script)
-            RedeemASD redeemPK -> encode (w8 2, redeemPK)
             UnknownASD tag payload ->
                 -- `encodeListLen 2` is semantically equivalent to encode (x,y)
                 -- but we need to "unroll" it in order to apply CBOR's tag 24 to `payload`.
@@ -87,7 +82,6 @@ instance Bi AddrSpendingData where
         decode @Word8 >>= \case
             0 -> PubKeyASD <$> decode
             1 -> ScriptASD <$> decode
-            2 -> RedeemASD <$> decode
             tag -> UnknownASD tag <$> Bi.decodeUnknownCborDataItem
 
     encodedSizeExpr size _ = szCases
@@ -95,8 +89,6 @@ instance Bi AddrSpendingData where
           in  Case "PubKeyASD" $ size ((,) <$> pure (w8 0) <*> pure pk)
         , let ScriptASD script = error "unused"
           in  Case "ScriptASD" $ size ((,) <$> pure (w8 1) <*> pure script)
-        , let RedeemASD redeemPK = error "unused"
-          in  Case "RedeemASD" $ size ((,) <$> pure (w8 2) <*> pure redeemPK)
         ]
 
 -- | Type of an address. It corresponds to constructors of
@@ -105,7 +97,6 @@ instance Bi AddrSpendingData where
 data AddrType
     = ATPubKey
     | ATScript
-    | ATRedeem
     | ATUnknown !Word8
     deriving (Eq, Ord, Generic, Typeable, Show)
 
@@ -116,13 +107,11 @@ instance Bi AddrType where
         encode @Word8 . \case
             ATPubKey -> 0
             ATScript -> 1
-            ATRedeem -> 2
             ATUnknown tag -> tag
     decode =
         decode @Word8 <&> \case
             0 -> ATPubKey
             1 -> ATScript
-            2 -> ATRedeem
             tag -> ATUnknown tag
     encodedSizeExpr size _ = encodedSizeExpr size (Proxy @Word8)
 
@@ -132,7 +121,6 @@ addrSpendingDataToType =
     \case
         PubKeyASD {} -> ATPubKey
         ScriptASD {} -> ATScript
-        RedeemASD {} -> ATRedeem
         UnknownASD tag _ -> ATUnknown tag
 
 

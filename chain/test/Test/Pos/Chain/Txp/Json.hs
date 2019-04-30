@@ -21,7 +21,7 @@ import           Pos.Core.Slotting (EpochIndex (..))
 import           Test.Pos.Chain.Txp.Gen (genTxValidationRulesConfig,
                      genTxpConfiguration)
 import           Test.Pos.Core.ExampleHelpers (exampleAddress, exampleAddress1,
-                     exampleAddress2, exampleAddress3, exampleAddress4)
+                     exampleAddress3, exampleAddress4)
 import           Test.Pos.Util.Golden (discoverGolden, goldenTestJSONPretty,
                      goldenTestYaml, goldenValueEquiv)
 import           Test.Pos.Util.Tripping (discoverRoundTrip,
@@ -116,7 +116,7 @@ exampleTxpConfiguration0 = TxpConfiguration 99 talsa
 exampleTxpConfiguration1 :: TxpConfiguration
 exampleTxpConfiguration1 = TxpConfiguration 9 talsa
   where
-    talsa = S.fromList [exampleAddress1, exampleAddress2, exampleAddress3]
+    talsa = S.fromList [exampleAddress1, exampleAddress3]
 
 exampleTxpConfiguration2 :: TxpConfiguration
 exampleTxpConfiguration2 = TxpConfiguration 700 talsa

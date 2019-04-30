@@ -6,12 +6,6 @@ module Pos.Explorer.ExtraContext
     ( ExtraContext (..)
     , ExtraContextT
     , runExtraContextT
-    , makeExtraCtx
-
-    , HasGenesisRedeemAddressInfo (..)
-    , GenesisRedeemAddressInfo
-    -- * Genesis address info
-
     , HasExplorerCSLInterface (..)
     , ExplorerMockableMode (..)
     , makeMockExtraCtx
@@ -21,22 +15,15 @@ module Pos.Explorer.ExtraContext
 
 import           Universum
 
-import qualified Data.Vector as V
 import qualified Ether
 
 import           Data.Default (Default (..), def)
 import           Pos.Chain.Block (Block, Blund, HeaderHash)
-import qualified Pos.DB.Block as DB
 import           Pos.DB.Class (MonadDBRead)
-import           Pos.Explorer.DB (Epoch, Page, getEpochBlocks, getEpochPages,
-                     getPageBlocks)
+import           Pos.Explorer.DB (Epoch, Page)
 
-import           Pos.Chain.Genesis as Genesis (Config (..), GenesisHash)
-import           Pos.Chain.Txp (genesisUtxo, utxoToAddressCoinPairs)
-import           Pos.Core (Address, Coin, EpochIndex, SlotId (..), SlotLeaders,
-                     Timestamp, isRedeemAddress)
-import           Pos.DB.Lrc (getLeadersForEpoch)
-import           Pos.Infra.Slotting (MonadSlotsData, getSlotStart)
+import           Pos.Core (EpochIndex, SlotId (..), SlotLeaders, Timestamp)
+import           Pos.Infra.Slotting (MonadSlotsData)
 
 
 -------------------------------------------------------------------------------------
@@ -49,41 +36,15 @@ runExtraContextT :: ExtraContext -> ExtraContextT m a -> m a
 runExtraContextT = flip Ether.runReaderT
 
 data ExtraContext = ExtraContext
-    { ecAddressCoinPairs     :: !GenesisRedeemAddressInfo
-    , ecExplorerMockableMode :: !ExplorerMockableMode
+    {  ecExplorerMockableMode :: !ExplorerMockableMode
     }
-
-makeExtraCtx :: Genesis.Config -> ExtraContext
-makeExtraCtx genesisConfig =
-    let addressCoinPairs =
-            utxoToAddressCoinPairs $ genesisUtxo $ configGenesisData genesisConfig
-        redeemOnly = filter (isRedeemAddress . fst) addressCoinPairs
-    in ExtraContext
-        { ecAddressCoinPairs     = V.fromList redeemOnly
-        , ecExplorerMockableMode = prodMode $ configGenesisHash genesisConfig
-        }
 
 -- | For mocking we mostly need to replace just the external CSL functions.
 makeMockExtraCtx :: ExplorerMockableMode -> ExtraContext
 makeMockExtraCtx explorerMockMode =
     ExtraContext
-        { ecAddressCoinPairs = V.empty
-        , ecExplorerMockableMode = explorerMockMode
+        {  ecExplorerMockableMode = explorerMockMode
         }
-
--------------------------------------------------------------------------------------
--- Genesis redeem address info
--------------------------------------------------------------------------------------
-
-type GenesisRedeemAddressInfo = V.Vector (Address, Coin)
-
-class HasGenesisRedeemAddressInfo m where
-    getGenesisRedeemAddressInfo :: m GenesisRedeemAddressInfo
-
-instance Monad m => HasGenesisRedeemAddressInfo (ExtraContextT m) where
-    getGenesisRedeemAddressInfo = do
-        extraCtx <- Ether.ask @ExtraContext
-        pure $ ecAddressCoinPairs extraCtx
 
 -------------------------------------------------------------------------------------
 -- Explorer mock mode
@@ -109,17 +70,6 @@ data ExplorerMockableMode = ExplorerMockableMode
           :: forall m. MonadDBRead m => Epoch -> m (Maybe Page)
     }
 
--- | This is what we use in production when we run Explorer.
-prodMode :: GenesisHash -> ExplorerMockableMode
-prodMode genesisHash = ExplorerMockableMode {
-      emmGetTipBlock            = DB.getTipBlock genesisHash,
-      emmGetPageBlocks          = getPageBlocks,
-      emmGetBlundFromHH         = DB.getBlund genesisHash,
-      emmGetSlotStart           = getSlotStart,
-      emmGetLeadersFromEpoch    = getLeadersForEpoch,
-      emmGetEpochBlocks         = getEpochBlocks,
-      emmGetEpochPages          = getEpochPages
-    }
 
 -- | So we can just reuse the default instance and change individial functions.
 -- On one side, it removes the compile error(s) for having all functions implemented.

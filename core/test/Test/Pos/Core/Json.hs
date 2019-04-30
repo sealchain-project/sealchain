@@ -8,7 +8,7 @@ import qualified Hedgehog as H
 import           Pos.Core.JsonLog.LogEvents (InvReqDataFlowLog (..))
 
 import           Test.Pos.Core.ExampleHelpers (exampleAddress, exampleAddress1,
-                     exampleAddress2, exampleAddress3, exampleAddress4,
+                     exampleAddress3, exampleAddress4,
                      feedEpochSlots)
 import           Test.Pos.Core.Gen (genAddress, genByte, genCoin,
                      genCoinPortion, genEpochIndex, genEpochOrSlot,
@@ -35,12 +35,6 @@ golden_Address1 =
     goldenTestJSON
         exampleAddress1
         "test/golden/json/Address1"
-
-golden_Address2 :: Property
-golden_Address2 =
-    goldenTestJSON
-        exampleAddress2
-        "test/golden/json/Address2"
 
 golden_Address3 :: Property
 golden_Address3 =
