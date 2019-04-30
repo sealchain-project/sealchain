@@ -175,8 +175,8 @@ genTxPayload genesisConfig txpConfig = do
         -- have usecases where we switch to reward era.
         let utxoAddresses = map (makePubKeyAddressBoot nm . toPublic) $ HM.elems secrets
             utxoAddrsN = HM.size secrets
-        let adder hm TxOutAux { toaOut = TxOut {..} } =
-                HM.insertWith (+) txOutAddress (coinToInteger txOutValue) hm
+        let adder hm (TxOutAux txOut) =
+                HM.insertWith (+) (txOutAddress txOut) (coinToInteger $ txOutValue txOut) hm -- use TxOut only in generator
             utxoBalances = foldl' adder mempty utxo
             hasMoney addr = fromMaybe 0 (HM.lookup addr utxoBalances) > 0
             addrsWithMoney = filter hasMoney utxoAddresses
