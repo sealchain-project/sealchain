@@ -28,7 +28,6 @@ module Pos.Client.Txp.Util
        , createTx
        , createMTx
        , createUnsignedTx
-       , createRedemptionTx
 
        -- * Fees logic
        , txToLinearFee
@@ -67,13 +66,16 @@ import           Pos.Binary (biSize)
 import           Pos.Chain.Genesis as Genesis (Config (..), configEpochSlots)
 import           Pos.Chain.Txp (Tx (..), TxAux (..), TxFee (..), TxIn (..),
                      TxInWitness (..), TxOut (..), TxOutAux (..),
-                     TxSigData (..), Utxo)
+                     TxSigData (..), Utxo,
+                     isOriginTxOut, originUtxo,
+                     isGDTxOut, gdUtxo)
 import           Pos.Chain.Update (bvdTxFeePolicy)
-import           Pos.Client.Txp.Addresses (MonadAddresses (..))
+import           Pos.Client.Txp.Addresses
+import           Pos.Client.Txp.Currency
 import           Pos.Core (Address, Coin, SlotCount, TxFeePolicy (..),
-                     TxSizeLinear (..), calculateTxSizeLinear, coinToInteger,
-                     integerToCoin, isRedeemAddress, mkCoin, sumCoins,
-                     txSizeLinearMinValue, unsafeIntegerToCoin, unsafeSubCoin)
+                     TxSizeLinear (..), GoldDollar (..), calculateTxSizeLinear, 
+                     coinToInteger, integerToCoin, isRedeemAddress, mkCoin,
+                     txSizeLinearMinValue, mkGoldDollar)
 import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Core.NetworkMagic (NetworkMagic, makeNetworkMagic)
 import           Pos.Crypto (ProtocolMagic, RedeemSecretKey, SafeSigner,
@@ -104,19 +106,19 @@ instance Buildable TxWithSpendings where
         bprint ("("%build%", "%listJson%")") txAux neTxOut
 
 -- This datatype corresponds to raw transaction.
-data TxRaw = TxRaw
+data TxRaw c = TxRaw
     { trInputs         :: !(TxOwnedInputs TxOut)
     -- ^ Selected inputs from Utxo
-    , trOutputs        :: !TxOutputs
+    , trOutputs        :: ![TxOutAux]
     -- ^ Output addresses of tx (without remaining output)
-    , trRemainingMoney :: !Coin
+    , trRemainingMoney :: !c
     -- ^ Remaining money
     } deriving (Show)
 
 data TxError =
-      NotEnoughMoney !Coin
+      NotEnoughMoney
       -- ^ Parameter: how much more money is needed
-    | NotEnoughAllowedMoney !Coin
+    | NotEnoughAllowedMoney
       -- ^ Parameter: how much more money is needed and which available input addresses
       -- are present in output addresses set
     | FailedToStabilize
@@ -148,11 +150,11 @@ isNotEnoughMoneyTxError = \case
 instance Exception TxError
 
 instance Buildable TxError where
-    build (NotEnoughMoney coin) =
-        bprint ("Transaction creation error: not enough money, need "%build%" more") coin
-    build (NotEnoughAllowedMoney coin) =
+    build NotEnoughMoney =
+        bprint ("Transaction creation error: not enough money")
+    build NotEnoughAllowedMoney =
         bprint ("Transaction creation error: not enough money on addresses which are not included \
-                \in output addresses set, need "%build%" more") coin
+                \in output addresses set")
     build FailedToStabilize =
         "Transaction creation error: failed to stabilize fee"
     build (OutputIsRedeem addr) =
@@ -224,19 +226,19 @@ type TxCreateMode m
 -- | Generic function to create an unsigned transaction, given desired inputs and outputs
 makeUnsignedAbstractTx
     :: TxOwnedInputs owner
-    -> TxOutputs
+    -> [TxOutAux]
     -> Tx
 makeUnsignedAbstractTx txInputs outputs = tx
   where
     tx = UnsafeTx (map snd txInputs) txOutputs txAttributes
-    txOutputs = map toaOut outputs
+    txOutputs = NE.fromList $ map toaOut outputs -- TODO xl fix here after refactor Tx
     txAttributes = mkAttributes ()
 
 -- | Generic function to create a transaction, given desired inputs,
 -- outputs and a way to construct witness from signature data
 makeAbstractTx :: (owner -> TxSigData -> Either e TxInWitness)
                -> TxOwnedInputs owner
-               -> TxOutputs
+               -> [TxOutAux]
                -> Either e TxAux
 makeAbstractTx mkWit txInputs outputs = do
     let tx = makeUnsignedAbstractTx txInputs outputs
@@ -274,7 +276,7 @@ makeMPubKeyTx
     :: ProtocolMagic
     -> (owner -> Either e SafeSigner)
     -> TxOwnedInputs owner
-    -> TxOutputs
+    -> [TxOutAux]
     -> Either e TxAux
 makeMPubKeyTx pm getSs = makeAbstractTx mkWit
   where mkWit addr sigData =
@@ -286,18 +288,18 @@ makeMPubKeyTxAddrs
     :: ProtocolMagic
     -> (Address -> Either e SafeSigner)
     -> TxOwnedInputs TxOut
-    -> TxOutputs
+    -> [TxOutAux]
     -> Either e TxAux
 makeMPubKeyTxAddrs pm hdwSigners = makeMPubKeyTx pm getSigner
   where
-    getSigner (TxOut addr _) = hdwSigners addr
+    getSigner txOut = hdwSigners $ txOutAddress txOut
 
 -- | Makes a transaction which use P2PKH addresses as a source
 makePubKeyTx
     :: ProtocolMagic
     -> SafeSigner
     -> TxInputs
-    -> TxOutputs
+    -> [TxOutAux]
     -> TxAux
 makePubKeyTx pm ss txInputs txOutputs = either absurd identity $
     makeMPubKeyTx pm (\_ -> Right ss) (map ((), ) txInputs) txOutputs
@@ -309,14 +311,15 @@ makeRedemptionTx
     -> TxOutputs
     -> TxAux
 makeRedemptionTx pm rsk txInputs txOutputs = either absurd identity $
-    makeAbstractTx mkWit (map ((), ) txInputs) txOutputs
+    makeAbstractTx mkWit (map ((), ) txInputs) (NE.toList txOutputs)
   where rpk = redeemToPublic rsk
         mkWit _ sigData =
             Right $ RedeemWitness rpk (redeemSign pm SignRedeemTx rsk sigData)
 
 -- | Helper for summing values of `TxOutAux`s
-sumTxOutCoins :: NonEmpty TxOutAux -> Integer
-sumTxOutCoins = sumCoins . map (txOutValue . toaOut)
+sumTxOutMoneys :: (Container toas, Element toas ~ TxOutAux, Currency c)  
+               => MoneyGetter c -> toas -> Integer
+sumTxOutMoneys getter = sumMoneys . map (getter . toaOut) . toList
 
 integerToFee :: MonadError TxError m => Integer -> m TxFee
 integerToFee =
@@ -327,8 +330,13 @@ integerToFee =
 fixedToFee :: (MonadError TxError m, HasResolution a) => Fixed a -> m TxFee
 fixedToFee = integerToFee . ceiling
 
+-- | get money out of TxOut
+type MoneyGetter c = TxOut -> c
+-- | Wrapper of Utxo contains specialize currency
+data QualifiedUtxo c = UnsafeQualifiedUtxo !Utxo (MoneyGetter c)
+
 type FlatUtxo = [(TxIn, TxOutAux)]
-type InputPickingWay = Utxo -> TxOutputs -> Coin -> Either TxError FlatUtxo
+type InputPickingWay c = QualifiedUtxo c -> [TxOutAux] -> c -> Either TxError FlatUtxo
 
 -- TODO [CSM-526] Scatter on submodules
 
@@ -336,21 +344,21 @@ type InputPickingWay = Utxo -> TxOutputs -> Coin -> Either TxError FlatUtxo
 -- Simple inputs picking
 -------------------------------------------------------------------------
 
-data InputPickerState = InputPickerState
-    { _ipsMoneyLeft        :: !Coin
+data InputPickerState c = InputPickerState
+    { _ipsMoneyLeft        :: !c
     , _ipsAvailableOutputs :: !FlatUtxo
     }
 
 makeLenses ''InputPickerState
 
-type InputPicker = StateT InputPickerState (Either TxError)
+type InputPicker c = StateT (InputPickerState c) (Either TxError)
 
-plainInputPicker :: PendingAddresses -> InputPickingWay
-plainInputPicker (PendingAddresses pendingAddrs) utxo _outputs moneyToSpent =
+plainInputPicker :: forall c.(Currency c) => PendingAddresses -> InputPickingWay c 
+plainInputPicker (PendingAddresses pendingAddrs) (UnsafeQualifiedUtxo utxo getter) _outputs moneyToSpent =
     evalStateT (pickInputs []) (InputPickerState moneyToSpent sortedUnspent)
   where
     onlyConfirmedInputs :: Set.Set Address -> (TxIn, TxOutAux) -> Bool
-    onlyConfirmedInputs addrs (_, (TxOutAux (TxOut addr _))) = not (addr `Set.member` addrs)
+    onlyConfirmedInputs addrs (_, (TxOutAux{..})) = not ((txOutAddress toaOut) `Set.member` addrs)
     --
     -- NOTE (adinapoli, kantp) Under certain circumstances, it's still possible for the `confirmed` set
     -- to be exhausted and for the utxo to be picked from the `unconfirmed`, effectively allowing for the
@@ -370,19 +378,19 @@ plainInputPicker (PendingAddresses pendingAddrs) utxo _outputs moneyToSpent =
     (confirmed, unconfirmed) =
       -- Give precedence to "confirmed" addresses.
       partition (onlyConfirmedInputs pendingAddrs)
-                (sortOn (Down . txOutValue . toaOut . snd) (M.toList utxo))
+                (sortOn (Down . getter . toaOut . snd) (M.toList utxo))
 
-    pickInputs :: FlatUtxo -> InputPicker FlatUtxo
+    pickInputs :: FlatUtxo -> InputPicker c FlatUtxo
     pickInputs inps = do
         moneyLeft <- use ipsMoneyLeft
-        if moneyLeft == mkCoin 0
+        if moneyLeft == mkMoney 0
             then return inps
             else do
             mNextOut <- fmap fst . uncons <$> use ipsAvailableOutputs
             case mNextOut of
-                Nothing -> throwError $ NotEnoughMoney moneyLeft
-                Just inp@(_, (TxOutAux (TxOut {..}))) -> do
-                    ipsMoneyLeft .= unsafeSubCoin moneyLeft (min txOutValue moneyLeft)
+                Nothing -> throwError NotEnoughMoney
+                Just inp@(_, (TxOutAux txOut)) -> do
+                    ipsMoneyLeft .= unsafeSubMoney moneyLeft (min (getter txOut) moneyLeft)
                     ipsAvailableOutputs %= tail
                     pickInputs (inp : inps)
 
@@ -392,60 +400,60 @@ plainInputPicker (PendingAddresses pendingAddrs) utxo _outputs moneyToSpent =
 
 -- | Group of unspent transaction outputs which belongs
 -- to one address
-data UtxoGroup = UtxoGroup
+data UtxoGroup c = UtxoGroup
     { ugAddr       :: !Address
-    , ugTotalMoney :: !Coin
+    , ugTotalMoney :: !c
     , ugUtxo       :: !(NonEmpty (TxIn, TxOutAux))
     } deriving (Show)
 
 -- | Group unspent outputs by addresses
-groupUtxo :: Utxo -> [UtxoGroup]
-groupUtxo utxo =
+groupUtxo :: Currency c => Utxo -> MoneyGetter c -> [UtxoGroup c]
+groupUtxo utxo getter =
     map mkUtxoGroup preUtxoGroups
   where
     futxo = M.toList utxo
     preUtxoGroups = NE.groupAllWith (txOutAddress . toaOut . snd) futxo
     mkUtxoGroup ugUtxo@(sample :| _) =
         let ugAddr = txOutAddress . toaOut . snd $ sample
-            ugTotalMoney = unsafeIntegerToCoin . sumTxOutCoins $
+            ugTotalMoney = unsafeIntegerToMoney . sumTxOutMoneys getter $
                 map snd ugUtxo
         in UtxoGroup {..}
 
-data GroupedInputPickerState = GroupedInputPickerState
-    { _gipsMoneyLeft             :: !Coin
-    , _gipsAvailableOutputGroups :: ![UtxoGroup]
+data GroupedInputPickerState c = GroupedInputPickerState
+    { _gipsMoneyLeft             :: !c
+    , _gipsAvailableOutputGroups :: ![UtxoGroup c]
     }
 
 makeLenses ''GroupedInputPickerState
 
-type GroupedInputPicker = StateT GroupedInputPickerState (Either TxError)
+type GroupedInputPicker c = StateT (GroupedInputPickerState c) (Either TxError)
 
-groupedInputPicker :: InputPickingWay
-groupedInputPicker utxo outputs moneyToSpent =
+groupedInputPicker :: forall c.Currency c => InputPickingWay c
+groupedInputPicker (UnsafeQualifiedUtxo utxo getter) outputs moneyToSpent =
     evalStateT (pickInputs []) (GroupedInputPickerState moneyToSpent sortedGroups)
   where
-    gUtxo = groupUtxo utxo
+    gUtxo = groupUtxo utxo getter
     outputAddrsSet = foldl' (flip HS.insert) mempty $
         map (txOutAddress . toaOut) outputs
     isOutputAddr = flip HS.member outputAddrsSet
     sortedGroups = sortOn (Down . ugTotalMoney) $
         filter (not . isOutputAddr . ugAddr) gUtxo
     disallowedInputGroups = filter (isOutputAddr . ugAddr) gUtxo
-    disallowedMoney = sumCoins $ map ugTotalMoney disallowedInputGroups
+    disallowedMoney = sumMoneys $ map ugTotalMoney disallowedInputGroups
 
-    pickInputs :: FlatUtxo -> GroupedInputPicker FlatUtxo
+    pickInputs :: FlatUtxo -> GroupedInputPicker c FlatUtxo
     pickInputs inps = do
         moneyLeft <- use gipsMoneyLeft
-        if moneyLeft == mkCoin 0
+        if moneyLeft == mkMoney 0
             then return inps
             else do
                 mNextOutGroup <- fmap fst . uncons <$> use gipsAvailableOutputGroups
                 case mNextOutGroup of
-                    Nothing -> if disallowedMoney >= coinToInteger moneyLeft
-                        then throwError $ NotEnoughAllowedMoney moneyLeft
-                        else throwError $ NotEnoughMoney moneyLeft
+                    Nothing -> if disallowedMoney >= moneyToInteger moneyLeft
+                        then throwError $ NotEnoughAllowedMoney
+                        else throwError NotEnoughMoney
                     Just UtxoGroup {..} -> do
-                        gipsMoneyLeft .= unsafeSubCoin moneyLeft (min ugTotalMoney moneyLeft)
+                        gipsMoneyLeft .= unsafeSubMoney moneyLeft (min ugTotalMoney moneyLeft)
                         gipsAvailableOutputGroups %= tail
                         pickInputs (toList ugUtxo ++ inps)
 
@@ -457,48 +465,48 @@ groupedInputPicker utxo outputs moneyToSpent =
 -- prepare correct inputs and outputs for transaction
 -- (and tell how much to send to remaining address)
 prepareTxRawWithPicker
-    :: Monad m
-    => InputPickingWay
-    -> Utxo
-    -> TxOutputs
-    -> TxFee
-    -> TxCreator m TxRaw
-prepareTxRawWithPicker inputPicker utxo outputs (TxFee fee) = do
+    :: (Monad m, Currency c)
+    => InputPickingWay c
+    -> QualifiedUtxo c
+    -> [TxOutAux]
+    -> c
+    -> TxCreator m (TxRaw c)
+prepareTxRawWithPicker inputPicker qutxo@(UnsafeQualifiedUtxo _ getter) outputs fee = do
     mapM_ (checkIsNotRedeemAddr . txOutAddress . toaOut) outputs
 
     totalMoney <- sumTxOuts outputs
-    when (totalMoney == mkCoin 0) $
-        throwError $ GeneralTxError "Attempted to send 0 money"
-
-    moneyToSpent <- case integerToCoin (sumCoins [totalMoney, fee]) of
+    moneyToSpent <- case integerToMoney (sumMoneys [totalMoney, fee]) of
         -- we don't care about exact number if user desires all money in the world
-        Left _  -> throwError $ NotEnoughMoney maxBound
+        Left _  -> throwError NotEnoughMoney
         Right c -> pure c
 
-    futxo <- either throwError pure $ inputPicker utxo outputs moneyToSpent
+    when (moneyToSpent == mkMoney 0) $
+        throwError $ GeneralTxError "Attempted to send 0 money"
+
+    futxo <- either throwError pure $ inputPicker qutxo outputs moneyToSpent
     case nonEmpty futxo of
         Nothing       -> throwError $ GeneralTxError "Failed to prepare inputs!"
         Just inputsNE -> do
-            totalTxAmount <- sumTxOuts $ map snd inputsNE
+            totalTxAmount <- sumTxOuts $ map snd $ NE.toList inputsNE
             let trInputs = map formTxInputs inputsNE
-                trRemainingMoney = totalTxAmount `unsafeSubCoin` moneyToSpent
+                trRemainingMoney = totalTxAmount `unsafeSubMoney` moneyToSpent
             let trOutputs = outputs
             pure TxRaw {..}
   where
     sumTxOuts = either (throwError . GeneralTxError) pure .
-        integerToCoin . sumTxOutCoins
+        integerToMoney . sumTxOutMoneys getter
     formTxInputs (inp, TxOutAux txOut) = (txOut, inp)
     checkIsNotRedeemAddr outAddr =
         when (isRedeemAddress outAddr) $
             throwError $ OutputIsRedeem outAddr
 
 prepareTxRaw
-    :: Monad m
+    :: (Monad m, Currency c)
     => PendingAddresses
-    -> Utxo
-    -> TxOutputs
-    -> TxFee
-    -> TxCreator m TxRaw
+    -> QualifiedUtxo c
+    -> [TxOutAux]
+    -> c
+    -> TxCreator m (TxRaw c)
 prepareTxRaw pendingTx utxo outputs fee = do
     inputSelectionPolicy <- view tcdInputSelectionPolicy
     let inputPicker =
@@ -513,19 +521,19 @@ mkOutputsWithRem
     => NetworkMagic
     -> SlotCount
     -> AddrData m
-    -> TxRaw
-    -> TxCreator m TxOutputs
+    -> (TxRaw Coin)
+    -> TxCreator m [TxOutAux]
 mkOutputsWithRem nm epochSlots addrData TxRaw {..}
     | trRemainingMoney == mkCoin 0 = pure trOutputs
     | otherwise = do
         changeAddr <- lift . lift $ getNewAddress nm epochSlots addrData
         let txOut = TxOut changeAddr trRemainingMoney
-        pure $ TxOutAux txOut :| toList trOutputs
+        pure $ TxOutAux txOut : trOutputs
 
 mkOutputsWithRemForUnsignedTx
-    :: TxRaw
+    :: (TxRaw Coin)
     -> Address
-    -> TxOutputs
+    -> [TxOutAux]
 mkOutputsWithRemForUnsignedTx TxRaw {..} changeAddress
     | trRemainingMoney == mkCoin 0 = trOutputs
     | otherwise =
@@ -533,7 +541,7 @@ mkOutputsWithRemForUnsignedTx TxRaw {..} changeAddress
         -- It is assumed that 'changeAddress' was created (as usual HD-address)
         -- by external wallet and stored in the corresponding wallet.
         let txOutForChange = TxOut changeAddress trRemainingMoney
-        in TxOutAux txOutForChange :| toList trOutputs
+        in TxOutAux txOutForChange : trOutputs
 
 prepareInpsOuts
     :: TxCreateMode m
@@ -542,9 +550,10 @@ prepareInpsOuts
     -> Utxo
     -> TxOutputs
     -> AddrData m
-    -> TxCreator m (TxOwnedInputs TxOut, TxOutputs)
+    -> TxCreator m (TxOwnedInputs TxOut, [TxOutAux])
 prepareInpsOuts genesisConfig pendingTx utxo outputs addrData = do
-    txRaw@TxRaw {..} <- prepareTxWithFee genesisConfig pendingTx utxo outputs
+    (gdInps, gdOuts) <- prepareGDInpsOutsIfNeeded genesisConfig pendingTx utxo outputs Nothing (Just addrData)
+    txRaw@TxRaw {..} <- prepareTxWithFee genesisConfig pendingTx utxo outputs gdInps gdOuts
     let nm = makeNetworkMagic $ configProtocolMagic genesisConfig
     outputsWithRem <-
         mkOutputsWithRem nm (configEpochSlots genesisConfig) addrData txRaw
@@ -559,15 +568,16 @@ prepareInpsOutsForUnsignedTx
     -> Address
     -> TxCreator m (TxOwnedInputs TxOut, TxOutputs)
 prepareInpsOutsForUnsignedTx genesisConfig pendingTx utxo outputs changeAddress = do
-    txRaw@TxRaw {..} <- prepareTxWithFee genesisConfig pendingTx utxo outputs
+    (gdInps, gdOuts) <- prepareGDInpsOutsIfNeeded genesisConfig pendingTx utxo outputs (Just changeAddress) Nothing
+    txRaw@TxRaw {..} <- prepareTxWithFee genesisConfig pendingTx utxo outputs gdInps gdOuts
     let outputsWithRem = mkOutputsWithRemForUnsignedTx txRaw changeAddress
-    pure (trInputs, outputsWithRem)
+    pure (trInputs, NE.fromList outputsWithRem)
 
 createGenericTx
     :: TxCreateMode m
     => Genesis.Config
     -> PendingAddresses
-    -> (TxOwnedInputs TxOut -> TxOutputs -> Either TxError TxAux)
+    -> (TxOwnedInputs TxOut -> [TxOutAux] -> Either TxError TxAux)
     -> InputSelectionPolicy
     -> Utxo
     -> TxOutputs
@@ -583,7 +593,7 @@ createGenericTxSingle
     :: TxCreateMode m
     => Genesis.Config
     -> PendingAddresses
-    -> (TxInputs -> TxOutputs -> Either TxError TxAux)
+    -> (TxInputs -> [TxOutAux] -> Either TxError TxAux)
     -> InputSelectionPolicy
     -> Utxo
     -> TxOutputs
@@ -655,25 +665,8 @@ createUnsignedTx genesisConfig pendingTx selectionPolicy utxo outputs changeAddr
                                                      utxo
                                                      outputs
                                                      changeAddress
-        let tx = makeUnsignedAbstractTx inps outs
+        let tx = makeUnsignedAbstractTx inps (NE.toList outs)
         pure (tx, map fst inps)
-
--- | Make a transaction for retrieving money from redemption address
-createRedemptionTx
-    :: TxCreateMode m
-    => ProtocolMagic
-    -> Utxo
-    -> RedeemSecretKey
-    -> TxOutputs
-    -> m (Either TxError TxAux)
-createRedemptionTx pm utxo rsk outputs =
-    runTxCreator whetherGroupedInputs $ do
-        TxRaw {..} <- prepareTxRaw mempty utxo outputs (TxFee $ mkCoin 0)
-        let bareInputs = snd <$> trInputs
-        pure $ makeRedemptionTx pm rsk bareInputs trOutputs
-  where
-    -- always spend redeem address fully
-    whetherGroupedInputs = OptimizeForSecurity
 
 -----------------------------------------------------------------------------
 -- Fees logic
@@ -697,24 +690,30 @@ prepareTxWithFee
     -> PendingAddresses
     -> Utxo
     -> TxOutputs
-    -> TxCreator m TxRaw
-prepareTxWithFee genesisConfig pendingTx utxo outputs =
+    -> [(TxOut, TxIn)]
+    -> [TxOutAux]
+    -> TxCreator m (TxRaw Coin)
+prepareTxWithFee genesisConfig pendingTx utxo outputs gdInps gdOuts =
     withLinearFeePolicy $ \linearPolicy ->
-        stabilizeTxFee genesisConfig pendingTx linearPolicy utxo outputs
+        stabilizeTxFee genesisConfig pendingTx linearPolicy oriUtxo oriOuts gdInps gdOuts
+  where
+    oriUtxo = UnsafeQualifiedUtxo (originUtxo utxo) txOutValue
+    oriOuts = NE.filter (isOriginTxOut . toaOut) outputs
 
 -- | Compute, how much fees we should pay to send money to given
 -- outputs
 computeTxFee
-    :: MonadAddresses m
+    :: (MonadAddresses m, MonadGState m)
     => Genesis.Config
     -> PendingAddresses
     -> Utxo
     -> TxOutputs
     -> TxCreator m TxFee
 computeTxFee genesisConfig pendingTx utxo outputs = do
-    TxRaw {..} <- prepareTxWithFee genesisConfig pendingTx utxo outputs
-    let outAmount = sumTxOutCoins trOutputs
-        inAmount = sumCoins $ map (txOutValue . fst) trInputs
+    (gdInps, gdOuts) <- prepareGDInpsOutsIfNeeded genesisConfig pendingTx utxo outputs Nothing Nothing
+    TxRaw {..} <- prepareTxWithFee genesisConfig pendingTx utxo outputs gdInps gdOuts
+    let outAmount = sumTxOutMoneys txOutValue $ filter (isOriginTxOut . toaOut) trOutputs
+        inAmount = sumTxOutMoneys txOutValue $ map (TxOutAux . fst) $ NE.filter (isOriginTxOut . fst) trInputs
         remaining = coinToInteger trRemainingMoney
     integerToFee $ inAmount - outAmount - remaining
 
@@ -763,15 +762,16 @@ computeTxFee genesisConfig pendingTx utxo outputs = do
 -- valid).
 -- To possibly find better solutions we iterate for several times more.
 stabilizeTxFee
-    :: forall m
-     . MonadAddresses m
+    :: forall m. MonadAddresses m
     => Genesis.Config
     -> PendingAddresses
     -> TxSizeLinear
-    -> Utxo
-    -> TxOutputs
-    -> TxCreator m TxRaw
-stabilizeTxFee genesisConfig pendingTx linearPolicy utxo outputs = do
+    -> QualifiedUtxo Coin
+    -> [TxOutAux]
+    -> [(TxOut, TxIn)]
+    -> [TxOutAux]
+    -> TxCreator m (TxRaw Coin)
+stabilizeTxFee genesisConfig pendingTx linearPolicy qutxo@(UnsafeQualifiedUtxo utxo _) outputs gdInps gdOuts = do
     minFee <- fixedToFee (txSizeLinearMinValue linearPolicy)
     mtx <- stabilizeTxFeeDo (False, firstStageAttempts) minFee
     case mtx of
@@ -783,14 +783,19 @@ stabilizeTxFee genesisConfig pendingTx linearPolicy utxo outputs = do
 
     stabilizeTxFeeDo :: (Bool, Int)
                      -> TxFee
-                     -> TxCreator m $ Maybe (S.ArgMin TxFee TxRaw)
+                     -> TxCreator m $ Maybe (S.ArgMin TxFee (TxRaw Coin))
     stabilizeTxFeeDo (_, 0) _ = pure Nothing
-    stabilizeTxFeeDo (isSecondStage, attempt) expectedFee = do
-        txRaw <- prepareTxRaw pendingTx utxo outputs expectedFee
+    stabilizeTxFeeDo (isSecondStage, attempt) expectedFee@(TxFee fee) = do
+        TxRaw{..} <- prepareTxRaw pendingTx qutxo outputs fee
+        let realInputs = NE.fromList $ gdInps <> (NE.toList trInputs)
+        let realOutputs = gdOuts <> trOutputs
+        let txRaw = TxRaw realInputs realOutputs trRemainingMoney
+
         let pm = configProtocolMagic genesisConfig
             nm = makeNetworkMagic pm
         fakeChangeAddr <- lift . lift $ getFakeChangeAddress nm $ configEpochSlots
             genesisConfig
+
         txMinFee <- txToLinearFee linearPolicy $ createFakeTxFromRawTx
             pm
             fakeChangeAddr
@@ -816,14 +821,14 @@ txToLinearFee linearPolicy =
 
 -- | Function is used to calculate intermediate fee amounts
 -- when forming a transaction
-createFakeTxFromRawTx :: ProtocolMagic -> Address -> TxRaw -> TxAux
+createFakeTxFromRawTx :: ProtocolMagic -> Address -> (TxRaw Coin) -> TxAux
 createFakeTxFromRawTx pm fakeAddr TxRaw{..} =
     let fakeOutMB
             | trRemainingMoney == mkCoin 0 = Nothing
             | otherwise =
                 Just $
                 TxOutAux (TxOut fakeAddr trRemainingMoney)
-        txOutsWithRem = maybe trOutputs (\remTx -> remTx :| toList trOutputs) fakeOutMB
+        txOutsWithRem = maybe trOutputs (\remTx -> remTx : trOutputs) fakeOutMB
 
         -- We create fake signers instead of safe signers,
         -- because safe signer requires passphrase
@@ -836,3 +841,42 @@ createFakeTxFromRawTx pm fakeAddr TxRaw{..} =
            (\_ -> Right $ fakeSigner fakeSK)
            trInputs
            txOutsWithRem
+
+prepareGDInpsOutsIfNeeded
+    :: TxCreateMode m
+    => Genesis.Config
+    -> PendingAddresses
+    -> Utxo
+    -> TxOutputs
+    -> Maybe Address
+    -> Maybe (AddrData m)
+    -> TxCreator m ([(TxOut, TxIn)], [TxOutAux])
+prepareGDInpsOutsIfNeeded genesisConfig pendingTx utxo outputs changeAddrM addrDataM
+    | (length gdOuts) == 0 = pure ([], [])
+    | otherwise = do
+        txRaw@TxRaw {..} <- prepareTxRaw pendingTx gdQUtxo gdOuts (mkGoldDollar 0)
+        outputsWithRem <- mkGDOutputsWithRem nm epochSlots changeAddrM addrDataM txRaw
+        pure (NE.toList trInputs, outputsWithRem)
+  where 
+    nm = makeNetworkMagic $ configProtocolMagic genesisConfig
+    epochSlots = configEpochSlots genesisConfig
+    gdQUtxo = UnsafeQualifiedUtxo (gdUtxo utxo) txOutGD
+    gdOuts = NE.filter (isGDTxOut . toaOut) outputs
+
+mkGDOutputsWithRem
+    :: TxCreateMode m
+    => NetworkMagic
+    -> SlotCount
+    -> Maybe Address
+    -> Maybe (AddrData m)
+    -> (TxRaw GoldDollar)
+    -> TxCreator m [TxOutAux]
+mkGDOutputsWithRem nm epochSlots changeAddrM addrDataM TxRaw {..}
+    | trRemainingMoney == mkGoldDollar 0 = pure trOutputs
+    | otherwise = do
+        newAddr <- case addrDataM of
+            Just addrData -> lift . lift $ getNewAddress nm epochSlots addrData
+            Nothing       -> lift . lift $ getFakeChangeAddress nm epochSlots
+        let changeAddr = fromMaybe newAddr changeAddrM
+        let txOut = TxOutGD changeAddr trRemainingMoney
+        pure $ TxOutAux txOut : trOutputs

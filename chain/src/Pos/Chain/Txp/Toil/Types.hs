@@ -21,18 +21,21 @@ module Pos.Chain.Txp.Toil.Types
        , mpSize
        , TxMap
        , UndoMap
+
+       , originUtxo
+       , gdUtxo
        ) where
 
 import           Universum
 
 import           Control.Lens (makeLenses)
 import           Data.Default (Default, def)
-import qualified Data.Map as M (lookup, toList)
+import qualified Data.Map as M (lookup, toList, filter)
 import           Data.Text.Lazy.Builder (Builder)
 import           Formatting (Format, later)
 import           Serokell.Util.Text (mapBuilderJson)
 
-import           Pos.Chain.Txp.Tx (TxId, TxIn)
+import           Pos.Chain.Txp.Tx (TxId, TxIn, isOriginTxOut, isGDTxOut)
 import           Pos.Chain.Txp.TxAux (TxAux)
 import           Pos.Chain.Txp.TxOutAux (TxOutAux (..))
 import           Pos.Chain.Txp.Undo (TxUndo)
@@ -117,3 +120,13 @@ instance Default MemPool where
 ----------------------------------------------------------------------------
 
 type UndoMap = HashMap TxId TxUndo
+
+----------------------------------------------------------------------------
+-- Helper functions 
+----------------------------------------------------------------------------
+
+originUtxo :: Utxo -> Utxo
+originUtxo = M.filter (isOriginTxOut . toaOut)
+
+gdUtxo :: Utxo -> Utxo
+gdUtxo = M.filter (isGDTxOut . toaOut)

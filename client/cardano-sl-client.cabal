@@ -20,6 +20,7 @@ library
                        Pos.Client.Txp.History
                        Pos.Client.Txp.Network
                        Pos.Client.Txp.Util
+                       Pos.Client.Txp.Currency
 
                        Pos.Client.Update
                        Pos.Client.Update.Network
