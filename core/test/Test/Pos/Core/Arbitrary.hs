@@ -46,6 +46,7 @@ import           Pos.Core (AddrAttributes (..), AddrSpendingData (..),
                      SharedSeed (..), SlotCount (..), SlotId (..),
                      StakeholderId, TimeDiff (..), Timestamp (..),
                      TxFeePolicy (..), TxSizeLinear (..),
+                     GoldDollar (..), unsafeGetGoldDollar, mkGoldDollar,
                      coinPortionDenominator, coinToInteger, divCoin,
                      localSlotIndexMaxBound, localSlotIndexMinBound,
                      makeAddress, mkCoin, mkLocalSlotIndex, mkMultiKeyDistr,
@@ -446,6 +447,14 @@ newtype DoubleInZeroToOneRange = DoubleInRange
 
 instance Arbitrary DoubleInZeroToOneRange where
     arbitrary = DoubleInRange <$> choose (0, 1)
+
+----------------------------------------------------------------------------
+-- GoldDollar
+----------------------------------------------------------------------------
+
+instance Arbitrary GoldDollar where
+    arbitrary = mkGoldDollar <$> choose (1, unsafeGetGoldDollar maxBound)
+    shrink = genericShrink
 
 instance Arbitrary SharedSeed where
     arbitrary = do

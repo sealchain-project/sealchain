@@ -14,7 +14,8 @@ module Pos.Chain.Txp.Tx
        , TxIn (..)
 
        , TxOut (..)
-       , _TxOut
+       , isOriginTxOut
+       , isGDTxOut
 
        , TxValidationRules (..)
        , TxValidationRulesConfig (..)
@@ -23,13 +24,14 @@ module Pos.Chain.Txp.Tx
 
 import           Universum
 
-import           Control.Lens (makeLenses, makePrisms)
+import           Control.Lens (makeLenses)
 import           Control.Monad.Except (MonadError (throwError))
-import           Data.Aeson (FromJSON (..), FromJSONKey (..),
+import           Data.Aeson (FromJSON (..), FromJSONKey (..), 
                      FromJSONKeyFunction (..), ToJSON (toJSON), ToJSONKey (..),
-                     object, withObject, (.:), (.=))
+                     Value (..), object, withObject, (.:), (.=))
 import           Data.Aeson.TH (defaultOptions, deriveJSON)
-import           Data.Aeson.Types (toJSONKeyText)
+import           Data.Aeson.Types (toJSONKeyText, typeMismatch)
+import qualified Data.HashMap.Strict as HM
 import qualified Data.List.NonEmpty as NE
 import           Data.SafeCopy (base, deriveSafeCopySimple)
 import qualified Data.Text as T
@@ -41,13 +43,14 @@ import           Serokell.Util.Verify (VerificationRes (..), verResSingleF,
                      verifyGeneric)
 
 import           Pos.Binary.Class (Bi (..), Cons (..), Field (..),
-                     decodeKnownCborDataItem,
-                     deriveSimpleBi, encodeKnownCborDataItem, encodeListLen,
+                     decodeKnownCborDataItem, cborError,
+                     deriveIndexedBi, encodeKnownCborDataItem, encodeListLen,
                      enforceSize)
 import           Pos.Core.Attributes (Attributes, areAttributesKnown,
                      unknownAttributesLength)
-import           Pos.Core.Common (Address (..), Coin (..), checkCoin, coinF,
-                     coinToInteger, decodeTextAddress, integerToCoin)
+import           Pos.Core.Common (Address (..), Coin (..), GoldDollar (..), 
+                     checkCoin, coinF, coinToInteger, 
+                     goldDollarF, goldDollarToInteger, checkGoldDollar)
 import           Pos.Core.Slotting (EpochIndex)
 import           Pos.Core.Util.LogSafe (SecureLog (..))
 import           Pos.Crypto (Hash, decodeAbstractHash, hash, hashHexF,
@@ -116,7 +119,10 @@ checkTx txValRules it =
   where
     verRes =
         verifyGeneric $
-        concat $ zipWith outputPredicates [0 ..] $ toList (_txOutputs it)
+        concat $ 
+        zipWith outputPredicates [0 ..] (toList (_txOutputs it)) <>
+        zipWith otherPredicates [0 ..] (toList (_txOutputs it))
+
     outputPredicates (i :: Word) TxOut {..} =
         [ ( txOutValue > Coin 0
           , sformat
@@ -128,10 +134,24 @@ checkTx txValRules it =
                 ("output #"%int%" has invalid coin")
                 i
           )
+        ]
+    outputPredicates (i :: Word) TxOutGD {..} =
+        [ ( txOutGD > GoldDollar 0
+          , sformat
+                ("output #"%int%" has non-positive value: "%goldDollarF)
+                i txOutGD
+          )
+        , ( isRight (checkGoldDollar txOutGD)
+          , sformat
+                ("output #"%int%" has invalid coin")
+                i
+          )
+        ]
         -- The following rules check to see if we have passed a "cutoffEpoch"
         -- after which we reject transactions larger than a size specified
         -- in the `configuration.yaml` via the `TxValidationRules` struct.
-        , ( if currentEpoch > cutoffEpoch
+    otherPredicates (i :: Word) _ =
+        [( if currentEpoch > cutoffEpoch
                 then (fromIntegral $ tvrTxAttrSize txValRules)
                       > unknownAttributesLength (_txAttributes it)
                 else True
@@ -267,38 +287,55 @@ txInToText (TxInUtxo txInHash txInIndex) =
 --------------------------------------------------------------------------------
 
 -- | Transaction output.
-data TxOut = TxOut
+data TxOut = 
+    TxOut
     { txOutAddress :: !Address
     , txOutValue   :: !Coin
-    } deriving (Eq, Ord, Generic, Show, Typeable)
+    }
+    | TxOutGD
+    { txOutAddress :: !Address
+    , txOutGD      :: !GoldDollar
+    }
+     deriving (Eq, Ord, Generic, Show, Typeable)
 
 instance FromJSON TxOut where
-    parseJSON = withObject "TxOut" $ \o -> do
-        txOutValue   <- toAesonError . integerToCoin =<< o .: "coin"
-        txOutAddress <- toAesonError . decodeTextAddress =<< o .: "address"
-        return $ TxOut {..}
+    parseJSON (Object o)
+        | HM.member "txOut" o   = flip TxOut <$> ((o .: "txOut") >>= (.: "address"))
+                                             <*> ((o .: "txOut") >>= (.: "coin"))
+        | HM.member "txOutGD" o = flip TxOutGD <$> ((o .: "txOutGD") >>= (.: "address"))
+                                               <*> ((o .: "txOutGD") >>= (.: "gd"))
+    parseJSON invalid = typeMismatch "TxOut" invalid
 
 instance ToJSON TxOut where
-    toJSON TxOut{..} = object [
-        "coin"    .= coinToInteger txOutValue,
-        "address" .= sformat build txOutAddress ]
+    toJSON (TxOut addr coin) =
+        object [ "txOut" .= object [ "address" .= sformat build addr
+                                   , "coin"    .= coinToInteger coin ]
+               ]
+    toJSON (TxOutGD addr gd) =
+        object [ "txOutGD" .= object [ "address" .= sformat build addr
+                                     , "gd"      .= goldDollarToInteger gd ]
+               ]
 
 instance Hashable TxOut
 
 instance Buildable TxOut where
     build TxOut {..} =
         bprint ("TxOut "%coinF%" -> "%build) txOutValue txOutAddress
+    build TxOutGD {..} =
+        bprint ("TxOutGD "%goldDollarF%" -> "%build) txOutGD txOutAddress
 
 instance NFData TxOut
 
-makePrisms ''TxOut
-
 makeLenses ''Tx
 
-deriveSimpleBi ''TxOut [
+deriveIndexedBi ''TxOut [
     Cons 'TxOut [
-        Field [| txOutAddress :: Address |],
-        Field [| txOutValue   :: Coin    |]
+        Field [| 0 :: Address |],
+        Field [| 1 :: Coin    |]
+    ],
+    Cons 'TxOutGD [
+        Field [| 0 :: Address |],
+        Field [| 1 :: GoldDollar |]
     ]]
 
 deriveSafeCopySimple 0 'base ''TxIn
@@ -306,3 +343,11 @@ deriveSafeCopySimple 0 'base ''TxOut
 deriveSafeCopySimple 0 'base ''Tx
 
 deriveJSON defaultOptions ''Tx
+
+isOriginTxOut :: TxOut -> Bool
+isOriginTxOut TxOut{..} = True
+isOriginTxOut _ = False
+
+isGDTxOut :: TxOut -> Bool
+isGDTxOut TxOutGD{..} = True
+isGDTxOut _ = False

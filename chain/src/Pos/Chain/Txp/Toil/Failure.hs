@@ -91,14 +91,14 @@ instance Buildable ToilVerFailure where
         bprint (ords%" output is invalid:\n'"%
                 " reason: "%build)
             n reason
-    build (ToilWitnessDoesntMatch i txIn txOut@TxOut {..} witness) =
+    build (ToilWitnessDoesntMatch i txIn txOut witness) =
         bprint ("input #"%int%"'s witness doesn't match address "%
                 "of corresponding output:\n"%
                 "  input: "%build%"\n"%
                 "  output spent by this input: "%build%"\n"%
                 "  address details: "%addressDetailedF%"\n"%
                 "  witness: "%build)
-            i txIn txOut txOutAddress witness
+            i txIn txOut (txOutAddress txOut) witness
     build (ToilInvalidWitness i witness reason) =
         bprint ("input #"%int%"'s witness doesn't pass verification:\n"%
                 "  witness: "%build%"\n"%

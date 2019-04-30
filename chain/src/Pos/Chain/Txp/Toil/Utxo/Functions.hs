@@ -170,7 +170,8 @@ verifyOutputs VTxContext {..} (TxAux UnsafeTx {..} _) =
     mapM_ verifyOutput . enumerate $ toList _txOutputs
   where
     verifyOutput :: (Word32, TxOut) -> Either ToilVerFailure ()
-    verifyOutput (i, (TxOut {txOutAddress = addr@Address {..}, ..})) = do
+    verifyOutput (i, txOut) = do
+        let addr@Address{..} = txOutAddress txOut
         when (vtcVerifyAllIsKnown && not (areAttributesKnown addrAttributes)) $
             throwError $ ToilInvalidOutput i (TxOutUnknownAttributes addr)
         when (vtcVerifyAllIsKnown && isUnknownAddressType addr) $
@@ -209,8 +210,9 @@ verifyKnownInputs protocolMagic VTxContext {..} resolvedInputs TxAux {..} = do
         -> (TxIn, TxOutAux) -- ^ Input and corresponding output data
         -> TxInWitness
         -> Either ToilVerFailure ()
-    checkInput i (txIn, toa@(TxOutAux txOut@TxOut{..})) witness = do
-        unless (checkSpendingData txOutAddress witness) $
+    checkInput i (txIn, toa@(TxOutAux txOut)) witness = do
+        let addr = txOutAddress txOut
+        unless (checkSpendingData addr witness) $
             throwError $ ToilWitnessDoesntMatch i txIn txOut witness
         whenLeft (checkWitness toa witness) $ \err ->
             throwError $ ToilInvalidWitness i witness err

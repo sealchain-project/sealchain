@@ -68,6 +68,7 @@ txOutStake genesisStakeholders (TxOut {..}) =
         in (headStakeholder, unsafeIntegerToCoin headStake) : restDistr
     computeMultiKeyDistrRest :: [(StakeholderId, CoinPortion)] -> StakesList
     computeMultiKeyDistrRest = map (second (`applyCoinPortionDown` txOutValue))
+txOutStake _ _ = []
 
 -- | Convert 'TxPayload' into a flat list of `TxAux`s.
 flattenTxPayload :: TxPayload -> [TxAux]
