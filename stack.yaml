@@ -31,14 +31,14 @@ packages:
 - client
 - auxx
 - script-runner
-- explorer
+# - explorer
 - node
 - tools
 - tools/post-mortem
 - utxo
-- wallet
+# - wallet
 - node-ipc
-- faucet
+# - faucet
 - acid-state-exts
 - x509
 - cluster
@@ -251,7 +251,7 @@ ghc-options:
   cardano-sl-crypto-test:       -Wall -Werror -Wcompat -fwarn-redundant-constraints
   cardano-sl-db:                -Wall -Werror -Wcompat -fwarn-redundant-constraints
   cardano-sl-db-test:           -Wall -Werror -Wcompat -fwarn-redundant-constraints
-  cardano-sl-explorer:          -Wall -Werror -Wcompat -fwarn-redundant-constraints
+  # cardano-sl-explorer:          -Wall -Werror -Wcompat -fwarn-redundant-constraints
   cardano-sl-generator:         -Wall -Werror -Wcompat -fwarn-redundant-constraints
   cardano-sl-infra:             -Wall -Werror -Wcompat -fwarn-redundant-constraints
   cardano-sl-networking:        -Werror -Wcompat -fwarn-redundant-constraints
@@ -264,4 +264,4 @@ ghc-options:
   cardano-sl-x509:              -Wall -Werror -Wcompat -fwarn-redundant-constraints
   cardano-sl-mnemonic:          -Wall -Werror -Wcompat -fwarn-redundant-constraints
   cardano-sl-cluster:           -Wall -Werror -Wcompat -fwarn-redundant-constraints
-  cardano-wallet:               -Wall -Werror -Wcompat -fwarn-redundant-constraints
+  # cardano-wallet:               -Wall -Werror -Wcompat -fwarn-redundant-constraints
