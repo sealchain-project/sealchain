@@ -43,7 +43,9 @@ Seal chain is **Cardano 2.0**，a financial Cardano with **multi-coin support** 
 To learn more about Sealchain, please view our [Website](https://sealchain.io) or our [Whitepaper](https://sealchain.io/whitepaper.html)
 
 ## Supported Platforms
-Supported platforms are Windows, macOS and Linux.
+Windows 
+MacOS
+Linux.
 
 ## Building Sealchain from Source Code
 
