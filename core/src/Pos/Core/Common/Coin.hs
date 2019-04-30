@@ -80,7 +80,7 @@ instance ToHttpApiData Coin where
 
 -- | Maximal possible value of 'Coin'.
 maxCoinVal :: Word64
-maxCoinVal = 45000000000000000
+maxCoinVal = 180000000000000000
 
 -- | Makes a 'Coin' but is _|_ if that coin exceeds 'maxCoinVal'.
 -- You can also use 'checkCoin' to do that check.
