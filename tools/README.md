@@ -1,17 +1,17 @@
-# cardano-sl-tools
+# sealchain-tools
 
-A collection of tools for interacting with the Cardano SL network. The tools
+A collection of tools for interacting with the Sealchain network. The tools
 include:
 
-* `cardano-dht-keygen` - Generate a DHT key.
-* `cardano-genupdate` - Generate an update for the Cardano SL network.
-* `cardano-keygen` - Generate keyfiles for the Cardano SL network.
-* `cardano-launcher` - A program that launches the Cardano SL code and the Daedalus
+* `sealchain-dht-keygen` - Generate a DHT key.
+* `sealchain-genupdate` - Generate an update for the Sealchain network.
+* `sealchain-keygen` - Generate keyfiles for the Sealchain network.
+* `sealchain-launcher` - A program that launches the Sealchain code and the Daedalus
   wallet.
-* `cardano-addr-convert` - A tool to convert vending addresses between mainnet and
+* `sealchain-addr-convert` - A tool to convert vending addresses between mainnet and
   testnet address format.
-* `cardano-cli-docs` - A tool to generate markdown documentation for Cardano SL
+* `sealchain-cli-docs` - A tool to generate markdown documentation for Sealchain
   executables.
-* `cardano-post-mortem` - Analyzes JSON logs.
-* `cardano-blockchain-analyser` - A tool to analyze a blockchain and spit out useful
+* `sealchain-post-mortem` - Analyzes JSON logs.
+* `sealchain-blockchain-analyser` - A tool to analyze a blockchain and spit out useful
   metrics.

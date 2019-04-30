@@ -1,15 +1,12 @@
-name:                cardano-sl-util
-version:             3.0.1
-synopsis:            Cardano SL - general utilities
+name:                sealchain-util
+version:             0.0.1
+synopsis:            Sealchain - general utilities
 description:         This package contains utility functions not specific
-                     to Cardano SL which extend 3rd party libraries or implement
+                     to Sealchain which extend 3rd party libraries or implement
                      something from scratch.
 license:             MIT
 license-file:        LICENSE
-homepage:            https://github.com/input-output-hk/cardano-sl
-author:              IOHK
-maintainer:          support@iohk.io
-copyright:           2016 IOHK
+copyright:           2018 SEAL
 category:            Currency
 build-type:          Simple
 extra-source-files:  README.md
@@ -57,7 +54,7 @@ library
                        Pos.Util.Log.Rotator
 
   other-modules:
-                       Paths_cardano_sl_util
+                       Paths_sealchain_util
                        Pos.Util.CompileInfoGit
                        Pos.Util.Log.Scribes
 
@@ -168,7 +165,7 @@ test-suite util-test
                      , bytestring
                      , async
                      , canonical-json
-                     , cardano-sl-util
+                     , sealchain-util
                      , cereal
                      , directory
                      , file-embed

@@ -1,12 +1,12 @@
-name:                cardano-sl-infra
-version:             3.0.1
-synopsis:            Cardano SL - infrastructural
-description:         Cardano SL - infrastructural
+name:                sealchain-infra
+version:             0.0.1
+synopsis:            Sealchain - infrastructural
+description:         Sealchain - infrastructural
 license:             MIT
 license-file:        LICENSE
 author:              Serokell
 maintainer:          hi@serokell.io
-copyright:           2016 IOHK
+copyright:           2018 SEAL
 category:            Currency
 build-type:          Simple
 extra-source-files:  README.md
@@ -114,7 +114,7 @@ library
                         Pos.Infra.Util.TimeWarp
 
 
-  other-modules:        Paths_cardano_sl_infra
+  other-modules:        Paths_sealchain_infra
 
   build-depends:        aeson
                       , async
@@ -122,13 +122,13 @@ library
                       , parsec
                       , base64-bytestring
                       , bytestring
-                      , cardano-sl-binary
-                      , cardano-sl-chain
-                      , cardano-sl-core
-                      , cardano-sl-crypto
-                      , cardano-sl-db
-                      , cardano-sl-networking
-                      , cardano-sl-util
+                      , sealchain-binary
+                      , sealchain-chain
+                      , sealchain-core
+                      , sealchain-crypto
+                      , sealchain-db
+                      , sealchain-networking
+                      , sealchain-util
                       , cardano-report-server >= 0.4.5
                       , clock
                       , conduit
@@ -229,16 +229,16 @@ test-suite infra-test
                   , aeson
                   , base
                   , bytestring
-                  , cardano-sl-binary-test
-                  , cardano-sl-chain
-                  , cardano-sl-chain-test
-                  , cardano-sl-core
-                  , cardano-sl-core-test
-                  , cardano-sl-crypto
-                  , cardano-sl-crypto-test
-                  , cardano-sl-infra
-                  , cardano-sl-networking
-                  , cardano-sl-util-test
+                  , sealchain-binary-test
+                  , sealchain-chain
+                  , sealchain-chain-test
+                  , sealchain-core
+                  , sealchain-core-test
+                  , sealchain-crypto
+                  , sealchain-crypto-test
+                  , sealchain-infra
+                  , sealchain-networking
+                  , sealchain-util-test
                   , containers
                   , dns
                   , generic-arbitrary

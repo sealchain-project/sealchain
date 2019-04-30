@@ -1,9 +1,9 @@
-# Cardano-SL-Mnemonic
+# sealchain-mnemonic
 
-Custom Mnemonic module, previously located in cardano-wallet
+Custom Mnemonic module, previously located in sealchain-wallet
 
 It includes an executable too:
 ```shell
-$ stack exec cardano-sl-generate-mnemonic
+$ stack exec sealchain-generate-mnemonic
 ["squirrel","material","silly","twice","direct","slush","pistol","razor","become","junk","kingdom","flee"]
 ```

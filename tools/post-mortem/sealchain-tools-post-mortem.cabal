@@ -1,12 +1,11 @@
-name:                cardano-sl-tools-post-mortem
-version:             3.0.1
-synopsis:            Cardano SL - post-mortem tool
-description:         Cardano SL - post-mortem tool
+name:                sealchain-tools-post-mortem
+version:             0.0.1
+synopsis:            Sealchain - post-mortem tool
+description:         Sealchain - post-mortem tool
 license:             MIT
 license-file:        LICENSE
-author:              IOHK
 maintainer:          operations@iohk.io
-copyright:           2018 IOHK
+copyright:           2018 SEAL
 category:            Currency
 build-type:          Simple
 extra-source-files:  README.md
@@ -23,7 +22,7 @@ Flag for-installer
   description: Build a reduced set of components (only what is needed for the
                installer)
 
-executable cardano-post-mortem
+executable sealchain-post-mortem
   hs-source-dirs:      src
   main-is:             Main.hs
   other-modules:       JSONLog
@@ -51,8 +50,8 @@ executable cardano-post-mortem
                        , attoparsec
                        , base
                        , bytestring
-                       , cardano-sl-infra
-                       , cardano-sl-util
+                       , sealchain-infra
+                       , sealchain-util
                        , containers
                        , cassava
                        , directory

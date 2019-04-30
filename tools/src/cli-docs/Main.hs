@@ -18,7 +18,7 @@ import           System.Environment (getProgName)
 import           System.FilePath.Posix ((<.>), (</>))
 import           System.Process (readProcess)
 
-import           Paths_cardano_sl (version)
+import           Paths_sealchain (version)
 
 type Help     = Text
 type Markdown = Text

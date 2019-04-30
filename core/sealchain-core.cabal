@@ -1,12 +1,12 @@
-name:                cardano-sl-core
-version:             3.0.1
-synopsis:            Cardano SL - core
-description:         Cardano SL - core
+name:                sealchain-core
+version:             0.0.1
+synopsis:            Sealchain - core
+description:         Sealchain - core
 license:             MIT
 license-file:        LICENSE
 author:              Serokell
 maintainer:          hi@serokell.io
-copyright:           2016 IOHK
+copyright:           2018 SEAL
 category:            Currency
 build-type:          Simple
 extra-source-files:  README.md
@@ -118,9 +118,9 @@ library
                      , bytestring
                      , canonical-json
                      , cardano-report-server >= 0.4.5
-                     , cardano-sl-binary
-                     , cardano-sl-crypto
-                     , cardano-sl-util
+                     , sealchain-binary
+                     , sealchain-crypto
+                     , sealchain-util
                      , cborg
                      , cereal
                      , containers
@@ -228,13 +228,13 @@ test-suite core-test
   build-depends:       base
                      , bytestring
                      , cardano-crypto
-                     , cardano-sl-binary
-                     , cardano-sl-binary-test
-                     , cardano-sl-core
-                     , cardano-sl-crypto
-                     , cardano-sl-crypto-test
-                     , cardano-sl-util
-                     , cardano-sl-util-test
+                     , sealchain-binary
+                     , sealchain-binary-test
+                     , sealchain-core
+                     , sealchain-crypto
+                     , sealchain-crypto-test
+                     , sealchain-util
+                     , sealchain-util-test
                      , containers
                      , cryptonite
                      , formatting

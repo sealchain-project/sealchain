@@ -1,12 +1,12 @@
-name:                cardano-sl-tools
-version:             3.0.1
-synopsis:            Cardano SL - Tools
-description:         Cardano SL - Tools
+name:                sealchain-tools
+version:             0.0.1
+synopsis:            Sealchain - Tools
+description:         Sealchain - Tools
 license:             MIT
 license-file:        LICENSE
 author:              Serokell
 maintainer:          hi@serokell.io
-copyright:           2016 IOHK
+copyright:           2018 SEAL
 category:            Currency
 build-type:          Simple
 extra-source-files:  README.md
@@ -24,14 +24,14 @@ Flag for-installer
                installer)
 
 
-executable cardano-genupdate
+executable sealchain-genupdate
   hs-source-dirs:      src/genupdate
   main-is:             Main.hs
   build-depends:       base
                      , ansi-wl-pprint
                      , bytestring
-                     , cardano-sl
-                     , cardano-sl-util
+                     , sealchain
+                     , sealchain-util
                      , cryptonite
                      , neat-interpolation
                      , optparse-applicative
@@ -59,7 +59,7 @@ executable cardano-genupdate
                        ScopedTypeVariables
                        MonadFailDesugaring
 
-executable cardano-keygen
+executable sealchain-keygen
   hs-source-dirs:      src/keygen
   main-is:             Main.hs
   other-modules:       KeygenOptions
@@ -69,11 +69,11 @@ executable cardano-keygen
                      , base58-bytestring
                      , bytestring >= 0.10
                      , canonical-json
-                     , cardano-sl
-                     , cardano-sl-chain
-                     , cardano-sl-core
-                     , cardano-sl-crypto
-                     , cardano-sl-util
+                     , sealchain
+                     , sealchain-chain
+                     , sealchain-core
+                     , sealchain-crypto
+                     , sealchain-util
                      , directory
                      , filepath
                      , formatting
@@ -120,7 +120,7 @@ executable cardano-keygen
   else
     buildable: True
 
-executable cardano-launcher
+executable sealchain-launcher
   hs-source-dirs:      src/launcher
   main-is:             Main.hs
 
@@ -131,14 +131,14 @@ executable cardano-launcher
                      , base
                      , bytestring
                      , cardano-report-server >= 0.2.1
-                     , cardano-sl
-                     , cardano-sl-chain
-                     , cardano-sl-core
-                     , cardano-sl-crypto
-                     , cardano-sl-db
-                     , cardano-sl-infra
-                     , cardano-sl-tools
-                     , cardano-sl-util
+                     , sealchain
+                     , sealchain-chain
+                     , sealchain-core
+                     , sealchain-crypto
+                     , sealchain-db
+                     , sealchain-infra
+                     , sealchain-tools
+                     , sealchain-util
                      , directory
                      , filepath
                      , formatting
@@ -178,15 +178,15 @@ executable cardano-launcher
   if os(windows)
     LD-Options:     -mwindows
 
-executable cardano-addr-convert
+executable sealchain-addr-convert
   hs-source-dirs:      src/addr-convert
   main-is:             Main.hs
   build-depends:       base
                      , ansi-wl-pprint
-                     , cardano-sl
-                     , cardano-sl-core
-                     , cardano-sl-crypto
-                     , cardano-sl-util
+                     , sealchain
+                     , sealchain-core
+                     , sealchain-crypto
+                     , sealchain-util
                      , neat-interpolation
                      , optparse-applicative
                      , text
@@ -223,12 +223,12 @@ executable cardano-addr-convert
                         ScopedTypeVariables
                         MonadFailDesugaring
 
-executable cardano-cli-docs
+executable sealchain-cli-docs
   hs-source-dirs:      src/cli-docs
   main-is:             Main.hs
   if !flag(for-installer)
    build-depends:      base
-                     , cardano-sl
+                     , sealchain
                      , directory
                      , filepath
                      , neat-interpolation
@@ -259,7 +259,7 @@ executable cardano-cli-docs
   if flag(for-installer)
     buildable: False
 
-executable cardano-blockchain-analyser
+executable sealchain-blockchain-analyser
   hs-source-dirs:      src/blockchain-analyser
   main-is:             Main.hs
   other-modules:       Options
@@ -268,13 +268,13 @@ executable cardano-blockchain-analyser
   if !flag(for-installer)
    build-depends:      ansi-wl-pprint
                      , base
-                     , cardano-sl
-                     , cardano-sl-binary
-                     , cardano-sl-chain
-                     , cardano-sl-core
-                     , cardano-sl-crypto
-                     , cardano-sl-db
-                     , cardano-sl-util
+                     , sealchain
+                     , sealchain-binary
+                     , sealchain-chain
+                     , sealchain-core
+                     , sealchain-crypto
+                     , sealchain-db
+                     , sealchain-util
                      , directory
                      , formatting
                      , lens
@@ -308,12 +308,12 @@ executable cardano-blockchain-analyser
   if flag(for-installer)
     buildable: False
 
-executable cardano-x509-certificates
+executable sealchain-x509-certificates
   hs-source-dirs: src/gencerts
   main-is: Main.hs
 
   build-depends: base >=4.7 && <5
-               , cardano-sl-x509
+               , sealchain-x509
                , filepath
                , optparse-applicative
                , universum
@@ -385,10 +385,10 @@ executable wallet-extractor
   build-depends:       base
                      , universum
                      , text
-                     , cardano-sl
-                     , cardano-sl-util
+                     , sealchain
+                     , sealchain-util
 
-test-suite cardano-sl-tools-test
+test-suite sealchain-tools-test
   main-is:             Test.hs
   other-modules:
                        -- Standard module with some magic
@@ -400,8 +400,8 @@ test-suite cardano-sl-tools-test
   type:                exitcode-stdio-1.0
   build-depends:       aeson
                      , base
-                     , cardano-sl-tools
-                     , cardano-sl-util-test
+                     , sealchain-tools
+                     , sealchain-util-test
                      , directory
                      , hspec
                      , temporary

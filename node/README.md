@@ -1,3 +1,3 @@
-# Cardano SL simple node
+# Sealchain simple node
 
-This package provides a minimum working CSL node without wallet capabilities.
+This package provides a minimum working node without wallet capabilities.

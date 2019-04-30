@@ -22,7 +22,7 @@ import           Options.Applicative (CommandFields, Mod, Parser, command,
 import           Pos.Communication (NodeId)
 import           Text.PrettyPrint.ANSI.Leijen (Doc)
 
-import           Paths_cardano_sl (version)
+import           Paths_sealchain (version)
 import qualified Pos.Client.CLI as CLI
 import           Pos.Util.CompileInfo (CompileTimeInfo (..), HasCompileInfo,
                      compileInfo)

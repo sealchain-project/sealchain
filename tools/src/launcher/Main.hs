@@ -66,7 +66,7 @@ import qualified System.Win32.Process as Process
 import           Foreign.C.Error (Errno (..), ePIPE)
 import           GHC.IO.Exception (IOErrorType (..), IOException (..))
 
-import           Paths_cardano_sl (version)
+import           Paths_sealchain (version)
 import           Pos.Chain.Genesis (Config (..))
 import           Pos.Client.CLI (readLoggerConfig)
 import           Pos.Core (Timestamp (..))

@@ -25,7 +25,7 @@ import           Pos.ReportServer.Report (BackendVersion (..), ReportInfo (..),
 import           System.FilePath (takeFileName)
 import           System.Info (arch, os)
 
-import           Paths_cardano_sl_infra (version)
+import           Paths_sealchain_infra (version)
 import           Pos.Crypto (ProtocolMagic (..), getProtocolMagic)
 import           Pos.Infra.Reporting.Exceptions (ReportingError (..))
 import           Pos.Util.CompileInfo (CompileTimeInfo)

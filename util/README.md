@@ -1,6 +1,6 @@
-# cardano-sl-util
+# sealchain-util
 
-A library of utility data types are functions for Cardano SL, including:
+A library of utility data types are functions for Sealchain, including:
 
 * Functions for collecting compile time version information.
 * Extra concurrency primitives, including more operations on `MVar`s, `RWLock`s
@@ -23,7 +23,7 @@ A library of utility data types are functions for Cardano SL, including:
 ### Context naming
 
 In all logging modes, it is handy to name the context in which logging happens.
-This named context is added to the log message. The root is always named 'cardano-sl'.
+This named context is added to the log message. The root is always named 'sealchain'.
 The context naming is similar to a stack: entering a new named context 
 corresponds to pushing the name onto the naming stack. On leaving the context,
 the named context is reset to the previous version, thus dropping the last name.
@@ -40,7 +40,7 @@ interestingContext = do
 ```
 its output will look like this:
 ```
-[cardano-sl.interestingContext:Info:ThreadId 123] [2018-10-04 06:30:23.01 UTC] we now are in a new context
+[sealchain.interestingContext:Info:ThreadId 123] [2018-10-04 06:30:23.01 UTC] we now are in a new context
 ```
 
 to produce the same output in 'Trace' logging (Pos.Util.Trace.Named):
@@ -60,8 +60,8 @@ Structured logging enables us to record JSON objects and directly work on them (
 
 In this example we output the time from one slot to the next in the field "data":
 ```
-{"at":"2018-10-03T12:37:57.001766381Z","env":"bench:1.3.0","ns":["cardano-sl","node","slotting"],"data":{"TimeDiff":"19998265"},
-"app":["cardano-sl"],"msg":"","pid":"13560","loc":null,"host":"hostname","sev":"Info","thread":"ThreadId 7532"}
+{"at":"2018-10-03T12:37:57.001766381Z","env":"bench:1.3.0","ns":["sealchain","node","slotting"],"data":{"TimeDiff":"19998265"},
+"app":["sealchain"],"msg":"","pid":"13560","loc":null,"host":"hostname","sev":"Info","thread":"ThreadId 7532"}
 ```
 or nicely formatted with jq:
 ```
@@ -69,7 +69,7 @@ or nicely formatted with jq:
   "at": "2018-10-03T12:37:57.001766381Z",
   "env": "bench:1.3.0",
   "ns": [
-    "cardano-sl",
+    "sealchain",
     "node",
     "slotting"
   ],
@@ -77,7 +77,7 @@ or nicely formatted with jq:
     "TimeDiff": "19998265"
   },
   "app": [
-    "cardano-sl"
+    "sealchain"
   ],
   "msg": "",
   "pid": "13560",
@@ -145,7 +145,7 @@ rotation:
 
 loggerTree:
   severity: Info+
-  cardano-sl.syncWalletWorker: Error+
+  sealchain.syncWalletWorker: Error+
   files:
     - node
 
@@ -162,7 +162,7 @@ loggerTree:
 has size of at most five megabytes.
 - under "loggerTree", the compatiblity to the old format, it defines
 global severity filter to be at least 'Info', and for the named context 
-"cardano-sl.syncWalletWorker" only errors are output. The keyword 'files:' 
+"sealchain.syncWalletWorker" only errors are output. The keyword 'files:' 
 lists the output files which are created.
 - under 'handlers:' a list of outputs can be defined. Here we open a JSON 
 backend to a file and only output messages with severity at least 'Info' and 

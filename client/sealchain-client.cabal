@@ -1,12 +1,12 @@
-name:                cardano-sl-client
-version:             3.0.1
-synopsis:            Cardano SL client modules
-description:         Cardano SL client modules
+name:                sealchain-client
+version:             0.0.1
+synopsis:            Sealchain client modules
+description:         Sealchain client modules
 license:             MIT
 license-file:        LICENSE
 author:              Serokell
 maintainer:          hi@serokell.io
-copyright:           2017 IOHK
+copyright:           2018 SEAL
 category:            Currency
 build-type:          Simple
 extra-source-files:  README.md
@@ -28,13 +28,13 @@ library
                        Pos.Client.KeyStorage
 
   build-depends:       base
-                     , cardano-sl
-                     , cardano-sl-chain
-                     , cardano-sl-core
-                     , cardano-sl-crypto
-                     , cardano-sl-db
-                     , cardano-sl-infra
-                     , cardano-sl-util
+                     , sealchain
+                     , sealchain-chain
+                     , sealchain-core
+                     , sealchain-crypto
+                     , sealchain-db
+                     , sealchain-infra
+                     , sealchain-util
                      , containers
                      , data-default
                      , formatting
@@ -82,7 +82,7 @@ library
   build-tools: cpphs >= 1.19
   ghc-options: -pgmP cpphs -optP --cpp
 
-test-suite cardano-client-test
+test-suite sealchain-client-test
   main-is:             Test.hs
   other-modules:
                        Spec
@@ -96,16 +96,16 @@ test-suite cardano-client-test
   build-depends:
                        base
                      , bytestring
-                     , cardano-sl
-                     , cardano-sl-chain
-                     , cardano-sl-chain-test
-                     , cardano-sl-client
-                     , cardano-sl-core
-                     , cardano-sl-crypto
-                     , cardano-sl-crypto-test
-                     , cardano-sl-db
-                     , cardano-sl-util
-                     , cardano-sl-util-test
+                     , sealchain
+                     , sealchain-chain
+                     , sealchain-chain-test
+                     , sealchain-client
+                     , sealchain-core
+                     , sealchain-crypto
+                     , sealchain-crypto-test
+                     , sealchain-db
+                     , sealchain-util
+                     , sealchain-util-test
                      , containers
                      , formatting
                      , hspec

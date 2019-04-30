@@ -1,12 +1,12 @@
-name:                cardano-sl-db
-version:             3.0.1
-synopsis:            Cardano SL - basic DB interfaces
-description:         Cardano SL - basic DB interfaces
+name:                sealchain-db
+version:             0.0.1
+synopsis:            Sealchain - basic DB interfaces
+description:         Sealchain - basic DB interfaces
 license:             MIT
 license-file:        LICENSE
 author:              Serokell
 maintainer:          hi@serokell.io
-copyright:           2016 IOHK
+copyright:           2018 SEAL
 category:            Currency
 build-type:          Simple
 extra-source-files:  README.md
@@ -128,11 +128,11 @@ library
                      , base
                      , binary
                      , bytestring
-                     , cardano-sl-binary
-                     , cardano-sl-chain
-                     , cardano-sl-core
-                     , cardano-sl-crypto
-                     , cardano-sl-util
+                     , sealchain-binary
+                     , sealchain-chain
+                     , sealchain-core
+                     , sealchain-crypto
+                     , sealchain-util
                      , concurrent-extra
                      , conduit
                      , containers
@@ -204,15 +204,15 @@ test-suite db-test
   type:                exitcode-stdio-1.0
   build-depends:       base
                      , cardano-crypto
-                     , cardano-sl-crypto
-                     , cardano-sl-binary
-                     , cardano-sl-chain
-                     , cardano-sl-chain-test
-                     , cardano-sl-core
-                     , cardano-sl-core-test
-                     , cardano-sl-db
-                     , cardano-sl-util
-                     , cardano-sl-util-test
+                     , sealchain-crypto
+                     , sealchain-binary
+                     , sealchain-chain
+                     , sealchain-chain-test
+                     , sealchain-core
+                     , sealchain-core-test
+                     , sealchain-db
+                     , sealchain-util
+                     , sealchain-util-test
                      , data-default
                      , filepath
                      , hedgehog

@@ -1,12 +1,12 @@
-name:                cardano-sl-generator
-version:             3.0.1
-synopsis:            Cardano SL - arbitrary data generation
-description:         Cardano SL - arbitrary data generation
+name:                sealchain-generator
+version:             0.0.1
+synopsis:            Sealchain - arbitrary data generation
+description:         Sealchain - arbitrary data generation
 license:             MIT
 license-file:        LICENSE
 author:              Serokell
 maintainer:          hi@serokell.io
-copyright:           2017 IOHK
+copyright:           2018 SEAL
 category:            Currency
 build-type:          Simple
 extra-source-files:  README.md
@@ -38,16 +38,16 @@ library
                      , QuickCheck
                      , base
                      , bytestring
-                     , cardano-sl
-                     , cardano-sl-chain
-                     , cardano-sl-chain-test
-                     , cardano-sl-client
-                     , cardano-sl-core
-                     , cardano-sl-core-test
-                     , cardano-sl-crypto
-                     , cardano-sl-db
-                     , cardano-sl-infra
-                     , cardano-sl-util
+                     , sealchain
+                     , sealchain-chain
+                     , sealchain-chain-test
+                     , sealchain-client
+                     , sealchain-core
+                     , sealchain-core-test
+                     , sealchain-crypto
+                     , sealchain-db
+                     , sealchain-infra
+                     , sealchain-util
                      , containers
                      , cryptonite
                      , data-default
@@ -101,7 +101,7 @@ library
   build-tools: cpphs >= 1.19
   ghc-options: -pgmP cpphs -optP --cpp
 
-test-suite cardano-generator-test
+test-suite sealchain-generator-test
   main-is:             Test.hs
   other-modules:
                        Spec
@@ -118,16 +118,16 @@ test-suite cardano-generator-test
                      , QuickCheck
                      , base
                      , bytestring
-                     , cardano-sl
-                     , cardano-sl-binary
-                     , cardano-sl-chain
-                     , cardano-sl-chain-test
-                     , cardano-sl-core
-                     , cardano-sl-crypto
-                     , cardano-sl-db
-                     , cardano-sl-generator
-                     , cardano-sl-util
-                     , cardano-sl-util-test
+                     , sealchain
+                     , sealchain-binary
+                     , sealchain-chain
+                     , sealchain-chain-test
+                     , sealchain-core
+                     , sealchain-crypto
+                     , sealchain-db
+                     , sealchain-generator
+                     , sealchain-util
+                     , sealchain-util-test
                      , containers
                      , data-default
                      , formatting
@@ -177,20 +177,20 @@ test-suite cardano-generator-test
   build-tools: cpphs >= 1.19
   ghc-options: -pgmP cpphs -optP --cpp
 
-benchmark cardano-sl-verification-bench
+benchmark sealchain-verification-bench
   hs-source-dirs:       bench
   main-is:              Main.hs
   other-modules:        Bench.Pos.Criterion.Block.Logic
   type:                 exitcode-stdio-1.0
   build-depends:        base
-                      , cardano-sl
-                      , cardano-sl-chain
-                      , cardano-sl-chain-test
-                      , cardano-sl-core
-                      , cardano-sl-crypto
-                      , cardano-sl-db
-                      , cardano-sl-generator
-                      , cardano-sl-util
+                      , sealchain
+                      , sealchain-chain
+                      , sealchain-chain-test
+                      , sealchain-core
+                      , sealchain-crypto
+                      , sealchain-db
+                      , sealchain-generator
+                      , sealchain-util
                       , criterion
                       , MonadRandom
                       , random
@@ -232,19 +232,19 @@ benchmark cardano-sl-verification-bench
   build-tools: cpphs >= 1.19
   ghc-options: -pgmP cpphs -optP --cpp
 
-executable cardano-sl-verification-bench-exe
+executable sealchain-verification-bench-exe
   hs-source-dirs:       app
   main-is:              VerificationBench.hs
   build-depends:        base
                       , bytestring
-                      , cardano-sl
-                      , cardano-sl-binary
-                      , cardano-sl-chain
-                      , cardano-sl-core
-                      , cardano-sl-crypto
-                      , cardano-sl-db
-                      , cardano-sl-generator
-                      , cardano-sl-util
+                      , sealchain
+                      , sealchain-binary
+                      , sealchain-chain
+                      , sealchain-core
+                      , sealchain-crypto
+                      , sealchain-db
+                      , sealchain-generator
+                      , sealchain-util
                       , containers
                       , deepseq
                       , directory

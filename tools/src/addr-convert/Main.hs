@@ -14,7 +14,7 @@ import           Options.Applicative (Parser, execParser, footerDoc, fullDesc,
 import           Options.Applicative.Types (readerAsk)
 import           Text.PrettyPrint.ANSI.Leijen (Doc)
 
-import           Paths_cardano_sl (version)
+import           Paths_sealchain (version)
 import           Pos.Core (makeRedeemAddress)
 import           Pos.Core.NetworkMagic (NetworkMagic (..), makeNetworkMagic)
 import           Pos.Crypto.Configuration (ProtocolMagic (..),

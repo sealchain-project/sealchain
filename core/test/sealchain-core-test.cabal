@@ -1,57 +1,50 @@
-name:                cardano-sl-util-test
-version:             3.0.1
-synopsis:            Cardano SL - general utilities (tests)
-description:         QuickCheck Arbitrary instances for the Cardano SL general
-                     utilities package.
+name:                sealchain-core-test
+version:             0.0.1
+synopsis:            Sealchain - core functionality (tests)
+description:         QuickCheck Arbitrary instances for the Sealchain core
+                     functionality.
 license:             MIT
 license-file:        LICENSE
-author:              Serokell
-maintainer:          hi@serokell.io
-copyright:           2016 IOHK
+copyright:           2018 SEAL
 category:            Currency
 build-type:          Simple
 cabal-version:       >=1.10
 
 library
   exposed-modules:
-                       Test.Pos.Util.Base16
-                       Test.Pos.Util.Gen
-                       Test.Pos.Util.Golden
-                       Test.Pos.Util.Modifier
-                       Test.Pos.Util.Orphans
-                       Test.Pos.Util.Parallel.Parallelize
-                       Test.Pos.Util.QuickCheck
-                       Test.Pos.Util.QuickCheck.Property
-                       Test.Pos.Util.QuickCheck.Arbitrary
-                       Test.Pos.Util.Tripping
+                       Test.Pos.Core.Bi
+                       Test.Pos.Core.Chrono
+                       Test.Pos.Core.Dummy
+                       Test.Pos.Core.ExampleHelpers
+                       Test.Pos.Core.Gen
+                       Test.Pos.Core.Arbitrary
+                       Test.Pos.Core.Arbitrary.Unsafe
+                       Test.Pos.Core.Arbitrary.Slotting
+                       Test.Pos.Core.Json
+                       Test.Pos.Core.SafeCopy
 
   build-depends:       QuickCheck
-                     , aeson
-                     , aeson-pretty
-                     , attoparsec
                      , base
-                     , base16-bytestring
                      , bytestring
-                     , canonical-json
-                     , cardano-sl-util
-                     , cereal
+                     , cardano-crypto
+                     , sealchain-binary
+                     , sealchain-binary-test
+                     , sealchain-core
+                     , sealchain-crypto
+                     , sealchain-crypto-test
+                     , sealchain-util
+                     , sealchain-util-test
+                     , containers
                      , cryptonite
-                     , directory
-                     , file-embed
-                     , filepath
-                     , formatting
+                     , generic-arbitrary
                      , hedgehog
-                     , hspec
-                     , mtl
-                     , pretty-show
                      , quickcheck-instances
-                     , safecopy
-                     , template-haskell
+                     , random
+                     , serokell-util
                      , text
                      , time-units
                      , universum
                      , unordered-containers
-                     , yaml
 
   default-language:    Haskell2010
 
@@ -82,8 +75,6 @@ library
                        MonadFailDesugaring
                        GADTs
 
-  ghc-options:         -Wall
+  ghc-options:
                        -O2
-
-  build-tools: cpphs >= 1.19
-  ghc-options: -pgmP cpphs -optP --cpp
+                       -Wall

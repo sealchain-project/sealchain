@@ -1,7 +1,7 @@
-name:                cardano-sl-crypto-test
-version:             3.0.1
-synopsis:            Cardano SL - arbitrary instances for cardano-sl-crypto
-description:         This package contains arbitrary instances for the cryptography primitives used in Cardano SL.
+name:                sealchain-crypto-test
+version:             0.0.1
+synopsis:            Sealchain - arbitrary instances for sealchain-crypto
+description:         This package contains arbitrary instances for the cryptography primitives used in Sealchain.
 license:             MIT
 license-file:        LICENSE
 author:              Serokell
@@ -28,11 +28,11 @@ library
                      , base
                      , bytestring
                      , cardano-crypto
-                     , cardano-sl-binary
-                     , cardano-sl-binary-test
-                     , cardano-sl-crypto
-                     , cardano-sl-util
-                     , cardano-sl-util-test
+                     , sealchain-binary
+                     , sealchain-binary-test
+                     , sealchain-crypto
+                     , sealchain-util
+                     , sealchain-util-test
                      , cryptonite
                      , generic-arbitrary
                      , hedgehog

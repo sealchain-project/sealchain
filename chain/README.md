@@ -1,6 +1,6 @@
-# cardano-sl-chain
+# sealchain-chain
 
-This library implements blockchain related data types and functions for Cardano SL.
+This library implements blockchain related data types and functions for Sealchain.
 It specifically does not have any database or networking code. The basic components
 are, roughly from the lowest level to the highest level:
 

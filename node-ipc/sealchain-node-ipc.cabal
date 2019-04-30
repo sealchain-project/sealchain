@@ -1,5 +1,5 @@
-name:                cardano-sl-node-ipc
-version:             3.0.1
+name:                sealchain-node-ipc
+version:             0.0.1
 license:             MIT
 license-file:        LICENSE
 author:              Michael Bishop
@@ -15,8 +15,8 @@ library
                      , aeson
                      , binary
                      , bytestring
-                     , cardano-sl-infra
-                     , cardano-sl-util
+                     , sealchain-infra
+                     , sealchain-util
                      , Cabal
                      , mtl
                      , universum

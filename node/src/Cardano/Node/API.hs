@@ -16,7 +16,7 @@ import           Network.HTTP.Types.Status (badRequest400)
 import           Network.Wai (responseLBS)
 import           Network.Wai.Handler.Warp (defaultSettings,
                      setOnExceptionResponse)
-import qualified Paths_cardano_sl_node as Paths
+import qualified Paths_sealchain_node as Paths
 import           Servant
 
 import           Cardano.Node.NodeStateAdaptor (NodeStateAdaptor, getFeePolicy,

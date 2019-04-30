@@ -1,6 +1,6 @@
-# cardano-sl-networking
+# sealchain-networking
 
-Subproject with abstracted networking logic that is used in Cardano SL.
+Subproject with abstracted networking logic that is used in Sealchain.
 
 ## Overview
 

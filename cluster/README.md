@@ -8,7 +8,7 @@ and an environment and to _just work_, out-of-the-box. Minor configuration
 adjustments are however possible via environment variables.
 
 ```
-$> stack exec -- cardano-sl-cluster-demo
+$> stack exec -- sealchain-cluster-demo
 Cluster is starting (4 core(s), 1 relay(s), 1 edge(s))...
 ...core0 has no health-check API.
 ......system start:  1539179287
@@ -81,7 +81,7 @@ prefixed with `DEMO_` with a few gotchas:
 For instance, one can disable TLS client authentication doing:
 
 ```
-$> DEMO_NO_CLIENT_AUTH=True stack exec -- cardano-sl-cluster-demo
+$> DEMO_NO_CLIENT_AUTH=True stack exec -- sealchain-cluster-demo
 ```
 
 ### Relative FilePath
@@ -102,17 +102,17 @@ if all nodes were to share the same state directory :)
 
 ### Configuring Cluster
 
-The `cardano-sl-cluster-demo` is actually a full-blown CLI with default arguments.
+The `sealchain-cluster-demo` is actually a full-blown CLI with default arguments.
 
 ```
-$> stack exec -- cardano-sl-cluster-demo --help
-cardano-sl-cluster-demo
+$> stack exec -- sealchain-cluster-demo --help
+sealchain-cluster-demo
 
-Spawn a demo cluster of nodes running cardano-sl, ready-to-use
+Spawn a demo cluster of nodes running sealchain, ready-to-use
 
 Usage:
-  cardano-sl-cluster-demo [options]
-  cardano-sl-cluster-demo --help
+  sealchain-cluster-demo [options]
+  sealchain-cluster-demo --help
 
 Options:
   --cores=INT  Number of core nodes to start [default: 4]
@@ -124,13 +124,13 @@ So, the components of the cluster may be tweaked by providing arguments to the C
 For instance, one could switch off the edge node by doing:
 
 ```
-$> stack exec -- cardano-sl-cluster-demo --edges 0
+$> stack exec -- sealchain-cluster-demo --edges 0
 ```
 
 ## Known Issues
 
-The current logging implementation of _cardano-sl_ heavily relies on a global mutable state
-stored in a shared `MVar`. Since every node in `cardano-sl-cluster-demo` is spawned from a
+The current logging implementation of _sealchain_ heavily relies on a global mutable state
+stored in a shared `MVar`. Since every node in `sealchain-cluster-demo` is spawned from a
 common parent thread, they all eventually end up sharing the same logging state.
 
 This result in a non-friendly behavior where, every logging handler get replaced by the one
@@ -152,7 +152,7 @@ user error (Giving up waiting for node to start: it takes too long
 `$> lsof -i :3000` command will show if the port 3000 is used by any process.
 
 See [Configuring Cluster](#Configuring-Cluster) to change the default ports used by
-`cardano-sl-cluster-demo`.
+`sealchain-cluster-demo`.
 
 
 <p align="center">

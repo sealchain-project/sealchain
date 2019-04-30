@@ -1,12 +1,10 @@
-name:                cardano-sl-infra-test
-version:             3.0.1
-synopsis:            Cardano SL - generators for cardano-sl-infra
-description:         This package contains generators for the infrastructural data types used in Cardano SL.
+name:                sealchain-infra-test
+version:             0.0.1
+synopsis:            Sealchain - generators for sealchain-infra
+description:         This package contains generators for the infrastructural data types used in Sealchain.
 license:             MIT
 license-file:        LICENSE
-author:              IOHK
-maintainer:          IOHK <support@iohk.io>
-copyright:           2018 IOHK
+copyright:           2018 SEAL
 category:            Currency
 build-type:          Simple
 cabal-version:       >=1.10
@@ -29,16 +27,16 @@ library
                      , async
                      , base
                      , bytestring
-                     , cardano-sl-binary-test
-                     , cardano-sl-chain
-                     , cardano-sl-chain-test
-                     , cardano-sl-core
-                     , cardano-sl-core-test
-                     , cardano-sl-crypto
-                     , cardano-sl-crypto-test
-                     , cardano-sl-infra
-                     , cardano-sl-networking
-                     , cardano-sl-util-test
+                     , sealchain-binary-test
+                     , sealchain-chain
+                     , sealchain-chain-test
+                     , sealchain-core
+                     , sealchain-core-test
+                     , sealchain-crypto
+                     , sealchain-crypto-test
+                     , sealchain-infra
+                     , sealchain-networking
+                     , sealchain-util-test
                      , containers
                      , dns
                      , generic-arbitrary

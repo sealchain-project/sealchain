@@ -53,7 +53,7 @@ import qualified Turtle as T
 import           Universum hiding (on)
 
 import           Ntp.Client (NtpConfiguration)
-import           Paths_cardano_sl (version)
+import           Paths_sealchain (version)
 import           Pos.Chain.Block (LastKnownHeaderTag)
 import           Pos.Chain.Genesis as Genesis
 import           Pos.Chain.Txp (TxpConfiguration)

@@ -1,6 +1,6 @@
-# cardano-sl-binary
+# sealchain-binary
 
-Binary serialisation and deserialisation for Cardano SL.
+Binary serialisation and deserialisation for Sealchain.
 
 This library is built on top of the [binary] and [cborg] packages and implement
 space efficient serialising and deserialising of Haskell data types to and from

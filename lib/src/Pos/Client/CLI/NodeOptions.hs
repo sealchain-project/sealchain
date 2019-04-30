@@ -50,7 +50,7 @@ import           Pos.Util (postfixLFields)
 
 import           Text.PrettyPrint.ANSI.Leijen (Doc)
 
-import           Paths_cardano_sl (version)
+import           Paths_sealchain (version)
 
 import           Pos.Client.CLI.Options (CommonArgs (..), commonArgsParser,
                      optionalJSONPath, templateParser)

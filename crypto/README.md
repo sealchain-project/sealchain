@@ -1,6 +1,6 @@
-# cardano-sl-crypto
+# sealchain-crypto
 
-The cryptographic primitives used in Cardano SL.
+The cryptographic primitives used in Sealchain.
 
 * A simplified interface to access the AES encryption functionality in the
   [cryptonite] library. It uses AES256 CTR mode with IV = 0.
@@ -12,7 +12,7 @@ The cryptographic primitives used in Cardano SL.
 * Hierarchical derivation functionality for Hierarchical Deterministic key
   creation (ie for the wallet).
 * Cryptographic signing and signature checking.
-* `Aeson` and `Bi` (serialisation, see the cardano-sl-binary package) instances
+* `Aeson` and `Bi` (serialisation, see the sealchain-binary package) instances
   for the cryptographic data types.
 
 [cryptonite]: https://hackage.haskell.org/package/cryptonite

@@ -1,6 +1,6 @@
-# cardano-sl-lib
+# sealchain-lib
 
-Higher level components of Cardano SL, including types and operations for the
+Higher level components of Sealchain, including types and operations for the
 following concepts:
 
 * Higher level inter node message definitions.

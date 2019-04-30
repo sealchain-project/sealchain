@@ -1,12 +1,10 @@
-name:                cardano-sl-chain-test
-version:             3.0.1
-synopsis:            Cardano SL - arbitrary instances for cardano-sl-chain
-description:         Cardano SL - arbitrary instances for cardano-sl-chain
+name:                sealchain-chain-test
+version:             0.0.1
+synopsis:            Sealchain - arbitrary instances for sealchain-chain
+description:         Sealchain - arbitrary instances for sealchain-chain
 license:             MIT
 license-file:        LICENSE
-author:              Rupert Horlick
-maintainer:          rupert.horlick@iohk.io
-copyright:           2018 IOHK
+copyright:           2018 SEAL
 category:            Currency
 build-type:          Simple
 cabal-version:       >=1.10
@@ -44,15 +42,15 @@ library
                      , base16-bytestring
                      , bytestring
                      , cardano-crypto
-                     , cardano-sl-binary-test
-                     , cardano-sl-binary
-                     , cardano-sl-chain
-                     , cardano-sl-core
-                     , cardano-sl-core-test
-                     , cardano-sl-crypto
-                     , cardano-sl-crypto-test
-                     , cardano-sl-util
-                     , cardano-sl-util-test
+                     , sealchain-binary-test
+                     , sealchain-binary
+                     , sealchain-chain
+                     , sealchain-core
+                     , sealchain-core-test
+                     , sealchain-crypto
+                     , sealchain-crypto-test
+                     , sealchain-util
+                     , sealchain-util-test
                      , containers
                      , cryptonite
                      , data-default

@@ -1,8 +1,8 @@
-# cardano-sl-db
+# sealchain-db
 
-Database operations for Cardano SL.
+Database operations for Sealchain.
 
-A Cardano node has a database that is used to store:
+A sealchain node has a database that is used to store:
 
   * The blocks that make up the blockchain and a block index to make queries on
     the blocks easier and more efficient.
@@ -10,7 +10,7 @@ A Cardano node has a database that is used to store:
   * LRC (leaders and richmen computation) data required for Proof-of-Stake.
   * Other miscellaneous data.
 
-A cardano node stores its data in a [RocksDB] database. Since [RocksDB] is
+A sealchain node stores its data in a [RocksDB] database. Since [RocksDB] is
 written in C++, it is accessed from Haskell via the [rocksdb-haskell-ng] library.
 
 In addition, this library provides a pure database interface built on top

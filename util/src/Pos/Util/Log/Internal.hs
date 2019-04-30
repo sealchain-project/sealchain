@@ -29,7 +29,7 @@ import           Control.Exception.Safe (Exception (..))
 import qualified Data.Text as T
 import           Data.Time (UTCTime, getCurrentTime)
 import           Data.Version (showVersion)
-import           Paths_cardano_sl_util (version)
+import           Paths_sealchain_util (version)
 import           System.FilePath (splitFileName, (</>))
 import           Universum hiding (newMVar)
 

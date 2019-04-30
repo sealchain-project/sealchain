@@ -25,7 +25,7 @@ import           Pos.Chain.Genesis (FakeAvvmOptions (..),
 import           Pos.Client.CLI (configurationOptionsParser)
 import           Pos.Launcher (ConfigurationOptions)
 
-import           Paths_cardano_sl (version)
+import           Paths_sealchain (version)
 
 data KeygenOptions = KeygenOptions
     { koCommand              :: KeygenCommand

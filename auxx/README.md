@@ -1,6 +1,6 @@
-# cardano-sl-auxx
+# sealchain-auxx
 
-This package implements a tool and language for connecting to Cardano SL node
+This package implements a tool and language for connecting to Sealchain node
 running locally and performing operations like inspecting the node's state and
 sending commands to the node.
 

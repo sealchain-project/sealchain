@@ -1,12 +1,10 @@
-name:                cardano-sl-db-test
-version:             3.0.1
-synopsis:            Cardano SL - arbitrary instances for cardano-sl-db
-description:         Cardano SL - arbitrary instances for cardano-sl-db
+name:                sealchain-db-test
+version:             0.0.1
+synopsis:            Sealchain - arbitrary instances for sealchain-db
+description:         Sealchain - arbitrary instances for sealchain-db
 license:             MIT
 license-file:        LICENSE
-author:              IOHK
-maintainer:          IOHK <support@iohk.io>
-copyright:           2018 IOHK
+copyright:           2018 SEAL
 category:            Currency
 build-type:          Simple
 cabal-version:       >=1.10
@@ -22,13 +20,13 @@ library
 
   build-depends:       QuickCheck
                      , base
-                     , cardano-sl-binary
-                     , cardano-sl-chain
-                     , cardano-sl-chain-test
-                     , cardano-sl-core-test
-                     , cardano-sl-crypto-test
-                     , cardano-sl-db
-                     , cardano-sl-util-test
+                     , sealchain-binary
+                     , sealchain-chain
+                     , sealchain-chain-test
+                     , sealchain-core-test
+                     , sealchain-crypto-test
+                     , sealchain-db
+                     , sealchain-util-test
                      , generic-arbitrary
                      , universum
                      , unordered-containers

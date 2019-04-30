@@ -1,13 +1,10 @@
-name:                cardano-sl-utxo
-version:             3.0.1
+name:                sealchain-utxo
+version:             0.0.1
 synopsis:            Abstract definitions of UTxO based accounting
 -- description:
-homepage:            https://github.com/input-output-hk/cardano-sl/#readme
 license:             MIT
 license-file:        LICENSE
-author:              IOHK Engineering Team
-maintainer:          operations@iohk.io
-copyright:           2017-2018 IOHK
+copyright:           2018 SEAL
 category:            Testing
 build-type:          Simple
 extra-source-files:  ChangeLog.md
@@ -28,16 +25,16 @@ library
   -- other-modules:
   build-depends:       base >=4.10 && <4.12
                      , QuickCheck
-                     , cardano-sl
-                     , cardano-sl-binary
-                     , cardano-sl-chain
-                     , cardano-sl-chain-test
-                     , cardano-sl-client
-                     , cardano-sl-core
-                     , cardano-sl-core-test
-                     , cardano-sl-crypto
-                     , cardano-sl-db
-                     , cardano-sl-util
+                     , sealchain
+                     , sealchain-binary
+                     , sealchain-chain
+                     , sealchain-chain-test
+                     , sealchain-client
+                     , sealchain-core
+                     , sealchain-core-test
+                     , sealchain-crypto
+                     , sealchain-db
+                     , sealchain-util
                      , constraints
                      , containers
                      , cryptonite

@@ -26,7 +26,7 @@ import qualified System.PosixCompat as PosixCompat
 import           System.Process (readProcess)
 import           Text.PrettyPrint.ANSI.Leijen (Doc)
 
-import           Paths_cardano_sl (version)
+import           Paths_sealchain (version)
 import           Pos.Util (directory, ls, withTempDir)
 
 data UpdateGenOptions = UpdateGenOptions

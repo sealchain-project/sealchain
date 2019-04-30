@@ -1,11 +1,8 @@
-name:                cardano-sl-x509
-version:             3.0.1
+name:                sealchain-x509
+version:             0.0.1
 synopsis:            Tool-suite for generating x509 certificates specialized for RSA with SHA-256
 description:         See README
-homepage:            https://github.com/input-output-hk/cardano-sl/x509/README.md
-author:              IOHK Engineering Team
-maintainer:          operations@iohk.io
-copyright:           2018 IOHK
+copyright:           2018 SEAL
 license:             MIT
 license-file:        LICENSE
 category:            Data
@@ -45,7 +42,7 @@ library
   exposed-modules: Data.X509.Extra
                    Cardano.X509.Configuration
 
-test-suite cardano-sl-x509-test
+test-suite sealchain-x509-test
   default-language:   Haskell2010
   default-extensions: DeriveGeneric
                       NoImplicitPrelude
@@ -62,7 +59,7 @@ test-suite cardano-sl-x509-test
 
   build-depends:      base
                     , QuickCheck
-                    , cardano-sl-x509
+                    , sealchain-x509
                     , universum
                     , hedgehog
-                    , cardano-sl-util-test
+                    , sealchain-util-test

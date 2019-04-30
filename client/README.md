@@ -1,7 +1,7 @@
-# cardano-sl-client
+# sealchain-client
 
 This package implements some of the functionality required for a client of the
-Cardano SL network. This includes:
+Sealchain network. This includes:
 
 * Generation of addresses and change addresses.
 * Calculating coin balances.
