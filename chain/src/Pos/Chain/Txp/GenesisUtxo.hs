@@ -11,12 +11,13 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Map.Strict as Map
 
 import           Pos.Chain.Genesis (GenesisData (..),
-                     GenesisProtocolConstants (..), getGenesisAvvmBalances,
-                     getGenesisNonAvvmBalances)
+                     GenesisProtocolConstants (..), GDIssuer (..),
+                     getGenesisAvvmBalances, getGenesisNonAvvmBalances)
 import           Pos.Chain.Txp.Toil (Utxo, utxoToStakes)
 import           Pos.Chain.Txp.Tx (TxIn (..), TxOut (..))
 import           Pos.Chain.Txp.TxOutAux (TxOutAux (..))
-import           Pos.Core (Address, Coin, StakesMap, makeRedeemAddress)
+import           Pos.Core (Address, Coin, StakesMap, 
+                     makeRedeemAddress, mkGoldDollar)
 import           Pos.Core.NetworkMagic (NetworkMagic, makeNetworkMagic)
 import           Pos.Crypto (unsafeHash)
 
@@ -45,5 +46,12 @@ genesisUtxo genesisData =
         utxoEntry :: (Address, Coin) -> (TxIn, TxOutAux)
         utxoEntry (addr, coin) =
             (TxInUtxo (unsafeHash addr) 0, TxOutAux (TxOut addr coin))
+
+        stateUtxo :: (TxIn, TxOutAux)
+        stateUtxo = 
+            let addr = getIssuer $ gdGDIssuer genesisData
+            in ( TxInUtxo (unsafeHash addr) maxBound
+               , TxOutAux $ TxOutState addr (mkGoldDollar 0) (fromString "Putting Wall Street on the Chain")
+               )
     in
-        Map.fromList $ utxoEntry <$> preUtxo
+        Map.fromList $ (utxoEntry <$> preUtxo) <> [stateUtxo]
