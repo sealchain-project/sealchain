@@ -11,6 +11,7 @@ module Pos.Chain.Txp.Toil.Utxo.Functions
        ) where
 
 import           Universum
+import qualified Universum.Unsafe as Unsafe
 
 import           Control.Monad.Except (throwError)
 import qualified Data.List.NonEmpty as NE
@@ -25,7 +26,7 @@ import           Pos.Chain.Txp.Toil.Failure (ToilVerFailure (..),
 import           Pos.Chain.Txp.Toil.Monad (UtxoM, utxoDel, utxoGet, utxoPut)
 import           Pos.Chain.Txp.Toil.Types (TxFee (..))
 import           Pos.Chain.Txp.Tx (Tx (..), TxAttributes, TxIn (..), TxOut (..),
-                     isOriginTxOut, isGDTxOut)
+                     isOriginTxOut, isGDTxOut, isStateTxOut)
 import           Pos.Chain.Txp.TxAux (TxAux (..))
 import           Pos.Chain.Txp.TxOutAux (TxOutAux (..))
 import           Pos.Chain.Txp.TxWitness (TxInWitness (..), TxSigData (..),
@@ -33,7 +34,7 @@ import           Pos.Chain.Txp.TxWitness (TxInWitness (..), TxSigData (..),
 import           Pos.Chain.Txp.Undo (TxUndo)
 import           Pos.Core (AddrType (..), Address (..), integerToCoin,
                      isRedeemAddress, isUnknownAddressType, sumCoins,
-                     sumGoldDollars)
+                     sumGoldDollars, goldDollarToInteger)
 import           Pos.Core.Attributes (Attributes (..), areAttributesKnown)
 import           Pos.Core.Common (AddrAttributes (..), checkPubKeyAddress,
                      checkRedeemAddress)
@@ -94,7 +95,6 @@ verifyTxUtxo
     -> TxAux
     -> ExceptT ToilVerFailure UtxoM VerifyTxUtxoRes
 verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {..} witnesses) = do
-            -- Case when all inputs are known
     minimalReasonableChecks
     resolvedInputs <- filterAssetLocked =<< mapM resolveInput _txInputs
     liftEither $ do
@@ -144,26 +144,40 @@ verifySums ::
        NonEmpty (TxIn, TxOutAux)
     -> NonEmpty TxOut
     -> Either ToilVerFailure TxFee
-verifySums resolvedInputs outputs = do
-    when (gdInpSum /= gdOutSum) $ throwError $ ToilGDNotEqual gdInpSum gdOutSum
-    case mTxFee of
-        Nothing -> throwError $
-            ToilOutGreaterThanIn inpSum outSum
-        Just txFee ->
-            return txFee
+verifySums resolvedInputs outputs
+    | (not $ null stInps) || (not $ null stOuts) = do
+        unless (length stInps == 1 && length stOuts == 1) $ throwError ToilStateMismatch
+        let oldTotalGDs = goldDollarToInteger . tosTotalGDs $ toaOut . snd $ Unsafe.head stInps
+            newTotalGDS = goldDollarToInteger . tosTotalGDs $ Unsafe.head stOuts
+        when ((gdInpSum - gdOutSum) /= (oldTotalGDs - newTotalGDS)) $ 
+            throwError $ ToilGDNotEqual gdInpSum gdOutSum
+        returnResult
+
+    | otherwise = do
+        when (gdInpSum /= gdOutSum) $ throwError $ ToilGDNotEqual gdInpSum gdOutSum
+        returnResult
   where
     filterInputs f = NE.filter (f . toaOut . snd) resolvedInputs
     filterOutputs f = NE.filter f outputs
-    -- It will be 'Nothing' if value exceeds 'maxBound @Coin' (can't
-    -- happen because 'inpSum' doesn't exceed it and 'outSum' is not
-    -- negative) or if 'outSum > inpSum' (which can happen and should
-    -- be rejected).
-    mTxFee = TxFee <$> rightToMaybe (integerToCoin (inpSum - outSum))
+
+    stOuts = filterOutputs isStateTxOut
+    stInps = filterInputs isStateTxOut
+
     outSum = sumCoins $ map txOutValue $ filterOutputs isOriginTxOut
     inpSum = sumCoins $ map (txOutValue . toaOut . snd) $ filterInputs isOriginTxOut
 
     gdOutSum = sumGoldDollars $ map txOutGD $ filterOutputs isGDTxOut
     gdInpSum = sumGoldDollars $ map (txOutGD . toaOut . snd) $ filterInputs isGDTxOut
+    -- It will be 'Nothing' if value exceeds 'maxBound @Coin' (can't
+    -- happen because 'inpSum' doesn't exceed it and 'outSum' is not
+    -- negative) or if 'outSum > inpSum' (which can happen and should
+    -- be rejected).
+    mTxFee = TxFee <$> rightToMaybe (integerToCoin (inpSum - outSum))
+    returnResult = case mTxFee of
+        Nothing -> throwError $
+            ToilOutGreaterThanIn inpSum outSum
+        Just txFee ->
+            return txFee
 
 verifyConsistency :: NonEmpty TxIn -> TxWitness -> Either ToilVerFailure ()
 verifyConsistency inputs witnesses

@@ -65,6 +65,7 @@ data ToilVerFailure
     | ToilNonBootstrapDistr !(NonEmpty Address)
     | ToilRepeatedInput
     | ToilEmptyAfterFilter
+    | ToilStateMismatch
     deriving (Show, Eq)
 
 instance TypeError (DisallowException ToilVerFailure) =>
@@ -136,6 +137,9 @@ instance Buildable ToilVerFailure where
 
     build ToilEmptyAfterFilter =
        "transaction list is empty after filtering out asset-locked source addresses"
+
+    build ToilStateMismatch =
+       "bad transaction, if there is input state, there must have output state, and just 1 in each of them"
 
 ----------------------------------------------------------------------------
 -- WitnessVerFailure
