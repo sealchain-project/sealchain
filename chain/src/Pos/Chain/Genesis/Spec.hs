@@ -16,6 +16,7 @@ import           Pos.Core.Common (SharedSeed)
 
 import           Pos.Chain.Genesis.AvvmBalances
 import           Pos.Chain.Genesis.Delegation
+import           Pos.Chain.Genesis.GDIssuer
 import           Pos.Chain.Genesis.Initializer
 import           Pos.Chain.Genesis.ProtocolConstants
 
@@ -35,6 +36,8 @@ data GenesisSpec = UnsafeGenesisSpec
     -- ^ Other constants which affect consensus.
     , gsInitializer       :: !GenesisInitializer
     -- ^ Other data which depend on genesis type.
+    , gsGDIssuer          :: !GDIssuer
+    -- ^ Issuer of GD.
     } deriving (Eq, Show, Generic)
 
 deriveJSON defaultOptions ''GenesisSpec
@@ -48,11 +51,12 @@ mkGenesisSpec
     -> BlockVersionData
     -> GenesisProtocolConstants
     -> GenesisInitializer
+    -> GDIssuer
     -> Either String GenesisSpec
-mkGenesisSpec avvmDistr seed delega bvd pc specType = do
+mkGenesisSpec avvmDistr seed delega bvd pc specType gdIssuer = do
     let avvmKeys = HM.keys $ getGenesisAvvmBalances avvmDistr
     unless (allDistinct avvmKeys) $
         throwError $ "mkGenesisSpec: there are duplicates in avvm balances"
 
     -- All checks passed
-    pure $ UnsafeGenesisSpec avvmDistr seed delega bvd pc specType
+    pure $ UnsafeGenesisSpec avvmDistr seed delega bvd pc specType gdIssuer

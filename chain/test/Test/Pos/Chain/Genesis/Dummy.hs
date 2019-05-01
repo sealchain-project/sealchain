@@ -26,11 +26,12 @@ module Test.Pos.Chain.Genesis.Dummy
        ) where
 
 import           Universum
+import qualified Universum.Unsafe as Unsafe
 
 import           Pos.Chain.Genesis (Config (..), FakeAvvmOptions (..),
                      GeneratedGenesisData (..), GeneratedSecrets (..),
                      GenesisAvvmBalances (..), GenesisData (..),
-                     GenesisHash (..), GenesisInitializer (..),
+                     GenesisHash (..), GenesisInitializer (..), GDIssuer (..),
                      GenesisSpec (..), PoorSecret, RichSecrets (..),
                      TestnetBalanceOptions (..), generateGenesisData,
                      genesisProtocolConstantsFromProtocolConstants,
@@ -43,7 +44,7 @@ import           Pos.Core (BlockCount, Coeff (..), EpochIndex (..),
                      ProtocolConstants (..), SharedSeed (..), SlotCount,
                      Timestamp, TxFeePolicy (..), TxSizeLinear (..),
                      VssMaxTTL (..), VssMinTTL (..), kEpochSlots,
-                     kSlotSecurityParam, pcBlkSecurityParam,
+                     kSlotSecurityParam, pcBlkSecurityParam, decodeTextAddress,
                      unsafeCoinPortionFromDouble)
 import           Pos.Crypto (SecretKey)
 
@@ -105,12 +106,17 @@ dummyGenesisSpec = UnsafeGenesisSpec
                                                    dummyProtocolMagic
     )
     dummyGenesisInitializer
+    dummyGDIssuer
 
 dummyGenesisAvvmBalances :: GenesisAvvmBalances
 dummyGenesisAvvmBalances = GenesisAvvmBalances mempty
 
 dummyFtsSeed :: SharedSeed
 dummyFtsSeed = SharedSeed "c2tvdm9yb2RhIEdndXJkYSBib3JvZGEgcHJvdm9kYSA="
+
+dummyGDIssuer :: GDIssuer
+dummyGDIssuer = GDIssuer . Unsafe.fromJust . rightToMaybe .  decodeTextAddress $ 
+                    "weptdPA7PNZhk3aXdsqLc3ysvQBFwedH1BPspj3NBbhNAyRrcujTMhhAsqQ"
 
 dummyBlockVersionData :: BlockVersionData
 dummyBlockVersionData = BlockVersionData

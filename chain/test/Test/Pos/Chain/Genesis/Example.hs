@@ -37,7 +37,7 @@ import           Pos.Chain.Delegation (HeavyDlgIndex (..))
 import           Pos.Chain.Genesis (FakeAvvmOptions (..),
                      GenesisAvvmBalances (..), GenesisData (..),
                      GenesisDelegation (..), GenesisInitializer (..),
-                     GenesisNonAvvmBalances (..),
+                     GenesisNonAvvmBalances (..), GDIssuer (..),
                      GenesisProtocolConstants (..), GenesisSpec (..),
                      GenesisWStakeholders (..), StaticConfig (..),
                      TestnetBalanceOptions (..))
@@ -59,6 +59,14 @@ import           Test.Pos.Core.ExampleHelpers (exampleAddress, exampleAddress1,
                      exampleSharedSeed2, exampleStakeholderId)
 import           Test.Pos.Crypto.Bi (getBytes)
 
+exampleGDIssuer0 :: GDIssuer
+exampleGDIssuer0 = GDIssuer exampleAddress1
+
+exampleGDIssuer1 :: GDIssuer
+exampleGDIssuer1 = GDIssuer exampleAddress2
+
+exampleGDIssuer2 :: GDIssuer
+exampleGDIssuer2 = GDIssuer exampleAddress3
 
 exampleStaticConfig_GCSrc :: StaticConfig
 exampleStaticConfig_GCSrc =
@@ -73,6 +81,7 @@ exampleStaticConfig_GCSpec0 =
         exampleBlockVersionData0
         exampleGenesisProtocolConstants0
         exampleGenesisInitializer0
+        exampleGDIssuer0
 
 exampleStaticConfig_GCSpec1 :: StaticConfig
 exampleStaticConfig_GCSpec1 =
@@ -83,6 +92,7 @@ exampleStaticConfig_GCSpec1 =
         exampleBlockVersionData1
         exampleGenesisProtocolConstants1
         exampleGenesisInitializer1
+        exampleGDIssuer1
 
 exampleStaticConfig_GCSpec2 :: StaticConfig
 exampleStaticConfig_GCSpec2 =
@@ -93,6 +103,7 @@ exampleStaticConfig_GCSpec2 =
         exampleBlockVersionData2
         exampleGenesisProtocolConstants2
         exampleGenesisInitializer2
+        exampleGDIssuer2
 
 exampleGenesisData0 :: GenesisData
 exampleGenesisData0 =
@@ -108,6 +119,7 @@ exampleGenesisData0 =
         , gdProtocolConsts = exampleGenesisProtocolConstants0
         , gdAvvmDistr = exampleGenesisAvvmBalances0
         , gdFtsSeed = exampleSharedSeed0
+        , gdGDIssuer = exampleGDIssuer0
         }
 
 exampleGenesisData1 :: GenesisData
@@ -122,6 +134,7 @@ exampleGenesisData1 =
         , gdProtocolConsts = exampleGenesisProtocolConstants1
         , gdAvvmDistr = exampleGenesisAvvmBalances1
         , gdFtsSeed = exampleSharedSeed1
+        , gdGDIssuer = exampleGDIssuer1
         }
 
 exampleGenesisData2 :: GenesisData
@@ -136,6 +149,7 @@ exampleGenesisData2 =
         , gdProtocolConsts = exampleGenesisProtocolConstants2
         , gdAvvmDistr = exampleGenesisAvvmBalances2
         , gdFtsSeed = exampleSharedSeed2
+        , gdGDIssuer = exampleGDIssuer2
         }
 
 exampleGenesisWStakeholders :: GenesisWStakeholders

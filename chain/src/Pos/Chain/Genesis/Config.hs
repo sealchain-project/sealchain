@@ -134,6 +134,9 @@ instance FromJSON StaticConfig where
               useHeavyDlg <- initializerO .: "useHeavyDlg"
               seed <- initializerO .: "seed"
 
+              -- Address
+              gdIssuer <- specO .: "gdIssuer"
+
               return . GCSpec $
                   UnsafeGenesisSpec
                       (GenesisAvvmBalances avvmDistr)
@@ -147,6 +150,7 @@ instance FromJSON StaticConfig where
                           avvmBalanceFactor
                           useHeavyDlg
                           seed)
+                      gdIssuer
 
     parseJSON invalid = typeMismatch "StaticConfig" invalid
 
@@ -376,6 +380,7 @@ mkConfig theSystemStart spec txValRulesConfig = Config
         , gdProtocolConsts   = gsProtocolConstants spec
         , gdAvvmDistr        = ggdAvvm
         , gdFtsSeed          = gsFtsSeed spec
+        , gdGDIssuer           = gsGDIssuer spec
         }
 
     -- Anything will do for the genesis hash. A hash of "patak" was used

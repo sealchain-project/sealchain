@@ -12,6 +12,7 @@ import           Text.JSON.Canonical (FromJSON (..), ToJSON (..), fromJSField,
 
 import           Pos.Chain.Genesis.AvvmBalances
 import           Pos.Chain.Genesis.Delegation
+import           Pos.Chain.Genesis.GDIssuer
 import           Pos.Chain.Genesis.NonAvvmBalances
 import           Pos.Chain.Genesis.ProtocolConstants
 import           Pos.Chain.Genesis.WStakeholders
@@ -34,6 +35,7 @@ data GenesisData = GenesisData
     , gdProtocolConsts   :: !GenesisProtocolConstants
     , gdAvvmDistr        :: !GenesisAvvmBalances
     , gdFtsSeed          :: !SharedSeed
+    , gdGDIssuer         :: !GDIssuer
     } deriving (Show, Eq)
 
 instance Monad m => ToJSON m GenesisData where
@@ -48,6 +50,7 @@ instance Monad m => ToJSON m GenesisData where
             , ("protocolConsts", toJSON gdProtocolConsts)
             , ("avvmDistr", toJSON gdAvvmDistr)
             , ("ftsSeed", toJSON gdFtsSeed)
+            , ("GDIssuer", toJSON gdGDIssuer)
             ]
 
 instance MonadError SchemaError m => FromJSON m GenesisData where
@@ -63,4 +66,5 @@ instance MonadError SchemaError m => FromJSON m GenesisData where
         gdProtocolConsts <- fromJSField obj "protocolConsts"
         gdAvvmDistr <- fromJSField obj "avvmDistr"
         gdFtsSeed <- fromJSField obj "ftsSeed"
+        gdGDIssuer <- fromJSField obj "gdIssuer"
         return GenesisData {..}

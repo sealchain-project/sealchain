@@ -59,6 +59,7 @@ library
                        Pos.Chain.Genesis.Config
                        Pos.Chain.Genesis.Data
                        Pos.Chain.Genesis.Delegation
+                       Pos.Chain.Genesis.GDIssuer
                        Pos.Chain.Genesis.Generate
                        Pos.Chain.Genesis.Hash
                        Pos.Chain.Genesis.Initializer

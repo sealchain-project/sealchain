@@ -85,6 +85,9 @@ instance Arbitrary ProtocolConstants where
 instance Arbitrary GenesisProtocolConstants where
     arbitrary = genGenesisProtocolConstants arbitrary
 
+instance Arbitrary GDIssuer where
+    arbitrary = GDIssuer <$> arbitrary
+
 genGenesisProtocolConstants
     :: Gen ProtocolMagic
     -> Gen GenesisProtocolConstants
@@ -99,7 +102,7 @@ genGenesisData genGPC =
     GenesisData
         <$> arbitrary <*> arbitrary <*> arbitraryStartTime
         <*> arbitraryVssCerts <*> arbitrary <*> arbitraryBVD
-        <*> genGPC <*> arbitrary <*> arbitrary
+        <*> genGPC <*> arbitrary <*> arbitrary <*> arbitrary
   where
     -- System start time should be multiple of a second.
     arbitraryStartTime = Timestamp . convertUnit @Second <$> arbitrary

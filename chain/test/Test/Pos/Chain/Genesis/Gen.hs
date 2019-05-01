@@ -26,7 +26,7 @@ import           Pos.Chain.Genesis (FakeAvvmOptions (..),
                      GenesisDelegation (..), GenesisHash (..),
                      GenesisInitializer (..), GenesisNonAvvmBalances (..),
                      GenesisProtocolConstants (..), GenesisSpec (..),
-                     GenesisWStakeholders (..), StaticConfig (..),
+                     GenesisWStakeholders (..), StaticConfig (..), GDIssuer (..),
                      TestnetBalanceOptions (..), mkGenesisDelegation,
                      mkGenesisSpec)
 import           Pos.Core (TxFeePolicy (..))
@@ -57,6 +57,9 @@ genStaticConfig pm =
                , GCSpec <$> genGenesisSpec pm
                ]
 
+genGDIssuer :: Gen GDIssuer
+genGDIssuer = GDIssuer <$> genAddress
+
 genFakeAvvmOptions :: Gen FakeAvvmOptions
 genFakeAvvmOptions =
     FakeAvvmOptions
@@ -75,6 +78,7 @@ genGenesisData pm =
         <*> genGenesisProtocolConstants pm
         <*> genGenesisAvvmBalances
         <*> genSharedSeed
+        <*> genGDIssuer
   where
     -- @TxFeePolicy@s ToJSON instance crashes if we have a
     -- TxFeePolicyUnknown value.
@@ -128,6 +132,7 @@ genGenesisSpec pm = mkGenSpec >>=  either (error . toText) pure
                       <*> genBlockVersionData
                       <*> genGenesisProtocolConstants pm
                       <*> genGenesisInitializer
+                      <*> genGDIssuer
 
 genTestnetBalanceOptions :: Gen TestnetBalanceOptions
 genTestnetBalanceOptions =
