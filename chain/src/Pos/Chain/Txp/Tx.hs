@@ -16,6 +16,7 @@ module Pos.Chain.Txp.Tx
        , TxOut (..)
        , isOriginTxOut
        , isGDTxOut
+       , isStateTxOut
 
        , TxValidationRules (..)
        , TxValidationRulesConfig (..)
@@ -38,6 +39,7 @@ import qualified Data.Text as T
 import           Formatting (Format, bprint, build, builder, int, sformat, (%))
 import qualified Formatting.Buildable as Buildable
 import           Numeric.Natural (Natural)
+import qualified Serokell.Util.Base16 as B16
 import           Serokell.Util.Text (listJson)
 import           Serokell.Util.Verify (VerificationRes (..), verResSingleF,
                      verifyGeneric)
@@ -55,7 +57,7 @@ import           Pos.Core.Slotting (EpochIndex)
 import           Pos.Core.Util.LogSafe (SecureLog (..))
 import           Pos.Crypto (Hash, decodeAbstractHash, hash, hashHexF,
                      shortHashF)
-import           Pos.Util.Util (toAesonError)
+import           Pos.Util.Util (toAesonError, aesonError)
 
 ----------------------------------------------------------------------------
 -- Tx
@@ -143,7 +145,19 @@ checkTx txValRules it =
           )
         , ( isRight (checkGoldDollar txOutGD)
           , sformat
-                ("output #"%int%" has invalid coin")
+                ("output #"%int%" has invalid gold dollar")
+                i
+          )
+        ]
+    outputPredicates (i :: Word) TxOutState {..} =
+        [ ( tosTotalGDs > GoldDollar 0
+          , sformat
+                ("output #"%int%" has non-positive value: "%goldDollarF)
+                i tosTotalGDs
+          )
+        , ( isRight (checkGoldDollar tosTotalGDs)
+          , sformat
+                ("output #"%int%" has invalid gold dollar")
                 i
           )
         ]
@@ -296,14 +310,31 @@ data TxOut =
     { txOutAddress :: !Address
     , txOutGD      :: !GoldDollar
     }
+    | TxOutState
+    { txOutAddress :: !Address
+    , tosTotalGDs  :: !GoldDollar
+    , tosProof     :: !ByteString
+    }
      deriving (Eq, Ord, Generic, Show, Typeable)
 
 instance FromJSON TxOut where
     parseJSON (Object o)
-        | HM.member "txOut" o   = flip TxOut <$> ((o .: "txOut") >>= (.: "address"))
-                                             <*> ((o .: "txOut") >>= (.: "coin"))
-        | HM.member "txOutGD" o = flip TxOutGD <$> ((o .: "txOutGD") >>= (.: "address"))
-                                               <*> ((o .: "txOutGD") >>= (.: "gd"))
+        | HM.member "txOut" o = o .: "txOut" >>= \v -> do
+            address <- v .: "address"
+            value <- v .: "coin"
+            return $ TxOut address value
+        | HM.member "txOutGD" o = o .: "txOutGD" >>= \v -> do
+            address <- v .: "address"
+            gd <- v .: "gd"
+            return $ TxOutGD address gd
+        | HM.member "txOutstate" o = o .: "txOutState" >>= \v -> do
+            address <- v .: "address"
+            total <- v .: "total"
+            textProof <- v .: "proof"
+            proof <- toAesonError $ B16.decode textProof
+            return $ TxOutState address total proof
+        | otherwise = aesonError "Unknown object"
+
     parseJSON invalid = typeMismatch "TxOut" invalid
 
 instance ToJSON TxOut where
@@ -315,6 +346,11 @@ instance ToJSON TxOut where
         object [ "txOutGD" .= object [ "address" .= sformat build addr
                                      , "gd"      .= goldDollarToInteger gd ]
                ]
+    toJSON (TxOutState addr total proof) =
+        object [ "txOutState" .= object [ "address" .= sformat build addr
+                                        , "gd"      .= goldDollarToInteger total
+                                        , "prootf"  .= B16.encode proof ]
+               ]
 
 instance Hashable TxOut
 
@@ -323,6 +359,13 @@ instance Buildable TxOut where
         bprint ("TxOut "%coinF%" -> "%build) txOutValue txOutAddress
     build TxOutGD {..} =
         bprint ("TxOutGD "%goldDollarF%" -> "%build) txOutGD txOutAddress
+    build TxOutState {..} =
+        bprint ("TxOutState "%goldDollarF%
+                " "%build%
+                " -> "%build)
+                tosTotalGDs 
+                (B16.encode tosProof)
+                txOutAddress
 
 instance NFData TxOut
 
@@ -336,6 +379,11 @@ deriveIndexedBi ''TxOut [
     Cons 'TxOutGD [
         Field [| 0 :: Address |],
         Field [| 1 :: GoldDollar |]
+    ],
+    Cons 'TxOutState [
+        Field [| 0 :: Address |],
+        Field [| 1 :: GoldDollar |],
+        Field [| 2 :: ByteString |]
     ]]
 
 deriveSafeCopySimple 0 'base ''TxIn
@@ -351,3 +399,7 @@ isOriginTxOut _ = False
 isGDTxOut :: TxOut -> Bool
 isGDTxOut TxOutGD{..} = True
 isGDTxOut _ = False
+
+isStateTxOut :: TxOut -> Bool
+isStateTxOut TxOutState{..} = True
+isStateTxOut _ = False
