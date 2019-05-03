@@ -98,7 +98,8 @@ Build core node:
     [~/sealchain]$ stack build --fast sealchain-node
 
 ## For Contributors
-coming soon!
+Please see [CONTRIBUTING.md](https://github.com/sealchain-project/sealchain/blob/develop/CONTRIBUTING.md)
+for more information.
 
 ## License
 
