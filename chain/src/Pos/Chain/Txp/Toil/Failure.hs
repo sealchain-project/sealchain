@@ -44,6 +44,7 @@ data ToilVerFailure
     -- | ToilOutGreaterThanIn inputSum outputSum
     | ToilOutGreaterThanIn !Integer !Integer
     | ToilGDNotEqual !Integer !Integer
+    | ToilEmptyInput
     | ToilInconsistentTxAux !Text
     | ToilInvalidOutput !Word32 !TxOutVerFailure
     | ToilUnknownInput !Word32 !TxIn
@@ -90,6 +91,8 @@ instance Buildable ToilVerFailure where
     build (ToilGDNotEqual tInputSum tOutputSum) =
         bprint ("sum of outputs is not equal sum of inputs ("%int%" , "%int%")")
         tInputSum tOutputSum
+    build ToilEmptyInput =
+        "transaction's inputs is empty"
     build (ToilInconsistentTxAux msg) =
         bprint ("TxAux is inconsistent: "%stext) msg
     build (ToilInvalidOutput n reason) =

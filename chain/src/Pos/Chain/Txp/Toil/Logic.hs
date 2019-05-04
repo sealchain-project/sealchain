@@ -160,7 +160,7 @@ isRedeemTx :: TxUndo -> Bool
 isRedeemTx resolvedOuts = all isRedeemAddress inputAddresses
   where
     inputAddresses =
-        fmap (txOutAddress . toaOut) . catMaybes . toList $ resolvedOuts
+        fmap (txOutAddress . toaOut . snd) . toList $ resolvedOuts
 
 verifyGState ::
        BlockVersionData
@@ -170,10 +170,10 @@ verifyGState ::
     -> Either ToilVerFailure ()
 verifyGState bvd@BlockVersionData {..} curEpoch txAux vtur = do
     verifyBootEra bvd curEpoch txAux
-    let txFeeMB = vturFee vtur
+    let txFee = vturFee vtur
     let txSize = biSize txAux
     let limit = bvdMaxTxSize
-    unless (isRedeemTx $ vturUndo vtur) $ whenJust txFeeMB $ \txFee ->
+    unless (isRedeemTx $ vturUndo vtur) $
         verifyTxFeePolicy txFee bvdTxFeePolicy txSize
     when (txSize > limit) $
         throwError $ ToilTooLargeTx txSize limit

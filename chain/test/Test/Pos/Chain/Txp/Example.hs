@@ -17,9 +17,10 @@ module Test.Pos.Chain.Txp.Example
 import           Universum
 
 import           Data.Coerce (coerce)
-import           Data.List.NonEmpty (fromList)
+import qualified Data.List.NonEmpty as NE
 import           Data.Maybe (fromJust)
 import qualified Data.Vector as V
+import qualified Data.Set as Set
 
 import qualified Cardano.Crypto.Wallet as CC
 import           Pos.Chain.Txp (Tx (..), TxAux (..), TxId, TxIn (..),
@@ -47,8 +48,8 @@ exampleTxAux = TxAux tx exampleTxWitness
 exampleTxId :: TxId
 exampleTxId = exampleHashTx
 
-exampleTxInList :: (NonEmpty TxIn)
-exampleTxInList = fromList [exampleTxInUtxo]
+exampleTxInList :: Set.Set TxIn
+exampleTxInList = Set.fromList [exampleTxInUtxo]
 
 exampleTxInUtxo :: TxIn
 exampleTxInUtxo = TxInUtxo exampleHashTx 47 -- TODO: loop here
@@ -58,8 +59,8 @@ exampleTxOut = TxOut (makePubKeyAddress NetworkMainOrStage (IsBootstrapEraAddr T
     where
         Right pkey = PublicKey <$> CC.xpub (getBytes 0 64)
 
-exampleTxOutList :: (NonEmpty TxOut)
-exampleTxOutList = fromList [exampleTxOut]
+exampleTxOutList :: [TxOut]
+exampleTxOutList = [exampleTxOut]
 
 exampleTxPayload :: TxPayload
 exampleTxPayload = mkTxPayload [exampleTxAux]
@@ -77,7 +78,7 @@ exampleTxSigData :: TxSigData
 exampleTxSigData = TxSigData exampleHashTx
 
 exampleTxpUndo :: TxpUndo
-exampleTxpUndo = [Just . TxOutAux <$> exampleTxOutList]
+exampleTxpUndo = [NE.fromList $ zip (Set.toList exampleTxInList) (TxOutAux <$> exampleTxOutList)]
 
 exampleTxWitness :: TxWitness
 exampleTxWitness = V.fromList [(PkWitness examplePublicKey exampleTxSig)]

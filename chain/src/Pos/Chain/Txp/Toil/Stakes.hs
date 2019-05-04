@@ -94,7 +94,7 @@ concatStakes :: GenesisWStakeholders -> [(TxAux, TxUndo)] -> (StakesList, Stakes
 concatStakes bootStakeholders (unzip -> (txas, undo)) =
     (txasTxOutDistr, undoTxInDistr)
   where
-    onlyKnownUndos = catMaybes . toList
+    onlyKnownUndos = toList . map snd  
     txasTxOutDistr = concatMap concatDistr txas
     undoTxInDistr = concatMap (txOutStake bootStakeholders . toaOut)
                     (foldMap onlyKnownUndos undo)

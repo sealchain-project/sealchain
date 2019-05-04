@@ -16,7 +16,7 @@ module Pos.Chain.Block.Types
 import           Universum
 
 import           Formatting (Format, bprint, build, later, (%))
-import           Serokell.Util.Text (listJson)
+import           Serokell.Util.Text (listJson, listMap)
 
 import           Pos.Binary.Class (Cons (..), Field (..), deriveSimpleBi)
 import           Pos.Chain.Block.Block (Block)
@@ -48,7 +48,7 @@ buildUndo epochSlots = later $ \Undo{..} ->
             "  undoDlg: "%build%"\n"%
             "  undoUS: "%build%"\n"%
             "  undoSlog: "%buildSlogUndo epochSlots)
-            (map (bprint listJson) undoTx) undoDlg undoUS undoSlog
+            (map (bprint listMap) undoTx) undoDlg undoUS undoSlog
 
 instance HasDifficulty Blund where
     difficultyL = _1 . difficultyL

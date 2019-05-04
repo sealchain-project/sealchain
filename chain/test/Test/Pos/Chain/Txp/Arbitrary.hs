@@ -34,10 +34,10 @@ import           Universum
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Lazy.Char8 as CB
 import           Data.Default (Default (def))
-import           Data.List.NonEmpty ((<|))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import qualified Data.Vector as V
+import qualified Data.Set as Set
 import           Test.QuickCheck (Arbitrary (..), Gen, arbitraryUnicodeChar,
                      choose, listOf, oneof, scale, vectorOf)
 import           Test.QuickCheck.Arbitrary.Generic (genericArbitrary,
@@ -105,8 +105,8 @@ genAddBloated = Address <$> arbitrary <*> genAddrAttribBloated <*> arbitrary
 genTxAttributesBloated :: Gen TxAttributes
 genTxAttributesBloated = mkAttributesWithUnparsedFields () <$> genBloatedUnparsedFields
 
-genTxOutBloated :: Gen (NonEmpty TxOut)
-genTxOutBloated = NE.fromList <$> ((: []) <$> (TxOut <$> genAddBloated <*> arbitrary))
+genTxOutBloated :: Gen [TxOut]
+genTxOutBloated = (: []) <$> (TxOut <$> genAddBloated <*> arbitrary)
 
 genBloatedUnparsedFields :: Gen (M.Map Word8 LBS.ByteString)
 genBloatedUnparsedFields = do
@@ -185,7 +185,7 @@ buildProperTx pm inputList (inCoin, outCoin) =
             txToBeSpent =
                 UnsafeTx
                     txIn
-                    ((makeTxOutput fromSk inC) <| txOut)
+                    ((makeTxOutput fromSk inC):txOut)
                     (mkAttributes ())
         in ( txToBeSpent
            , TxInUtxo (hash txToBeSpent) 0
@@ -195,8 +195,8 @@ buildProperTx pm inputList (inCoin, outCoin) =
     txList = fmap fun inputList
     newTx = UnsafeTx ins outs def
     newTxHash = hash newTx
-    ins  = fmap (view _2) txList
-    outs = fmap (view _4) txList
+    ins  = Set.fromList . NE.toList $ fmap (view _2) txList
+    outs = NE.toList $ fmap (view _4) txList
     mkWitness fromSk =
         PkWitness (toPublic fromSk) (sign pm SignTx fromSk $ TxSigData newTxHash)
     makeTxOutput s c =
@@ -218,7 +218,7 @@ genGoodTxWithMagic pm =
 goodTxToTxAux :: GoodTx -> TxAux
 goodTxToTxAux (GoodTx l) = TxAux tx witness
   where
-    tx = UnsafeTx (map (view _2) l) (map (toaOut . view _3) l) def
+    tx = UnsafeTx (Set.fromList . NE.toList $ map (view _2) l) (NE.toList $ map (toaOut . view _3) l) def
     witness = V.fromList $ NE.toList $ map (view _4) l
 
 instance Arbitrary GoodTx where

@@ -31,7 +31,7 @@ import           Universum
 
 import           Data.ByteString.Base16 as B16
 import           Data.Coerce (coerce)
-import qualified Data.Set as S
+import qualified Data.Set as Set
 import qualified Data.Vector as V
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
@@ -56,7 +56,7 @@ genTxpConfiguration :: Gen TxpConfiguration
 genTxpConfiguration = do
     limit <- Gen.int (Range.constant 0 200)
     addrs <- Gen.list (Range.linear 0 50) genAddress
-    return (TxpConfiguration limit (S.fromList addrs))
+    return (TxpConfiguration limit (Set.fromList addrs))
 
 genPkWitness :: ProtocolMagic -> Gen TxInWitness
 genPkWitness pm = PkWitness <$> genPublicKey <*> genTxSig pm
@@ -102,8 +102,8 @@ genTxIn = Gen.choice gens
   where
     gens = [ TxInUtxo <$> genTxId <*> genWord32 ]
 
-genTxInList :: Gen (NonEmpty TxIn)
-genTxInList = Gen.nonEmpty (Range.linear 1 20) genTxIn
+genTxInList :: Gen (Set.Set TxIn)
+genTxInList = Gen.set (Range.linear 1 20) genTxIn
 
 genTxOut :: Gen TxOut
 genTxOut = TxOut <$> genAddress <*> genCoin
@@ -111,8 +111,8 @@ genTxOut = TxOut <$> genAddress <*> genCoin
 genTxOutAux :: Gen TxOutAux
 genTxOutAux = TxOutAux <$> genTxOut
 
-genTxOutList :: Gen (NonEmpty TxOut)
-genTxOutList = Gen.nonEmpty (Range.linear 1 100) genTxOut
+genTxOutList :: Gen [TxOut]
+genTxOutList = Gen.list (Range.linear 1 100) genTxOut
 
 genTxpUndo :: Gen TxpUndo
 genTxpUndo = Gen.list (Range.linear 1 50) genTxUndo
@@ -144,7 +144,7 @@ genTxInWitness pm = Gen.choice gens
            ]
 
 genTxUndo :: Gen TxUndo
-genTxUndo = Gen.nonEmpty (Range.linear 1 10) $ Gen.maybe genTxOutAux
+genTxUndo = Gen.nonEmpty (Range.linear 1 10) $ (,) <$> genTxIn <*> genTxOutAux
 
 genTxWitness :: ProtocolMagic -> Gen TxWitness
 genTxWitness pm = V.fromList <$> Gen.list (Range.linear 1 10) (genTxInWitness pm)

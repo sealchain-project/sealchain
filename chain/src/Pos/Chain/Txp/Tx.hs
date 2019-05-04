@@ -33,7 +33,7 @@ import           Data.Aeson (FromJSON (..), FromJSONKey (..),
 import           Data.Aeson.TH (defaultOptions, deriveJSON)
 import           Data.Aeson.Types (toJSONKeyText, typeMismatch)
 import qualified Data.HashMap.Strict as HM
-import qualified Data.List.NonEmpty as NE
+import qualified Data.Set as Set
 import           Data.SafeCopy (base, deriveSafeCopySimple)
 import qualified Data.Text as T
 import           Formatting (Format, bprint, build, builder, int, sformat, (%))
@@ -67,12 +67,14 @@ import           Pos.Util.Util (toAesonError, aesonError)
 --
 -- NB: transaction witnesses are stored separately.
 data Tx = UnsafeTx
-    { _txInputs     :: !(NonEmpty TxIn)  -- ^ Inputs of transaction.
-    , _txOutputs    :: !(NonEmpty TxOut) -- ^ Outputs of transaction.
-    , _txAttributes :: !TxAttributes     -- ^ Attributes of transaction
+    { _txInputs     :: Set.Set TxIn     -- ^ Inputs of transaction.
+    , _txOutputs    :: [TxOut]          -- ^ Outputs of transaction.
+    , _txAttributes :: !TxAttributes    -- ^ Attributes of transaction
     } deriving (Eq, Ord, Generic, Show, Typeable)
 
-instance Hashable Tx
+instance Hashable Tx where
+    hashWithSalt s UnsafeTx{..} =
+        hashWithSalt s (Set.elems _txInputs, _txOutputs, _txAttributes)
 
 instance Buildable Tx where
     build tx@(UnsafeTx{..}) =
@@ -184,7 +186,7 @@ checkTx txValRules it =
         ]
     currentEpoch = tvrCurrentEpoch txValRules
     cutoffEpoch = tvrAddrAttrCutoff txValRules
-    txOutAddresses = map txOutAddress (NE.toList (_txOutputs it))
+    txOutAddresses = map txOutAddress (_txOutputs it)
     txOutAddrAttribs = map addrAttributes txOutAddresses
 
 -- | Because there is no limit on the size of Attributes

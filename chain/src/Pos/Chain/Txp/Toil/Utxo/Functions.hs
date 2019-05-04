@@ -66,7 +66,7 @@ data VTxContext = VTxContext
 data VerifyTxUtxoRes = VerifyTxUtxoRes
     { vturUndo :: !TxUndo
     -- ^ 'TxUndo' for the verified transaction.
-    , vturFee  :: !(Maybe TxFee)
+    , vturFee  :: !TxFee
     -- ^ Fee of the verified transaction. Can be 'Nothing' if there
     -- are inputs of unknown types.
     } deriving (Show)
@@ -95,22 +95,22 @@ verifyTxUtxo
     -> TxAux
     -> ExceptT ToilVerFailure UtxoM VerifyTxUtxoRes
 verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {..} witnesses) = do
-    minimalReasonableChecks
-    resolvedInputs <- filterAssetLocked =<< mapM resolveInput _txInputs
+    liftEither $ do
+        when (Set.null _txInputs) $ throwError ToilEmptyInput
+        verifyConsistency _txInputs witnesses
+        verifyOutputs ctx ta
+
+    let inputs = NE.fromList $ Set.elems _txInputs -- NE.fromList is safe here
+    resolvedInputs <- filterAssetLocked =<< mapM resolveInput inputs
     liftEither $ do
         txFee <- verifySums resolvedInputs _txOutputs
         verifyKnownInputs protocolMagic ctx resolvedInputs ta
         when vtcVerifyAllIsKnown $ verifyAttributesAreKnown _txAttributes
         pure VerifyTxUtxoRes
-            { vturUndo = map (Just . snd) resolvedInputs
-            , vturFee = Just txFee
+            { vturUndo = resolvedInputs
+            , vturFee = txFee
             }
   where
-    minimalReasonableChecks :: ExceptT ToilVerFailure UtxoM ()
-    minimalReasonableChecks = liftEither $ do
-        verifyConsistency _txInputs witnesses
-        verifyOutputs ctx ta
-
     -- Until multisig addresses are available (which is supposed to be before decentralisation)
     -- all Ada are secured by single cryptographic signatures. In addition, before
     -- decentralisation, all blocks are being mined/minted by IOHK, Emurgo and the Cardano
@@ -142,7 +142,7 @@ resolveInput txIn =
 
 verifySums ::
        NonEmpty (TxIn, TxOutAux)
-    -> NonEmpty TxOut
+    -> [TxOut]
     -> Either ToilVerFailure TxFee
 verifySums resolvedInputs outputs
     | (not $ null stInps) || (not $ null stOuts) = do
@@ -157,8 +157,8 @@ verifySums resolvedInputs outputs
         when (gdInpSum /= gdOutSum) $ throwError $ ToilGDNotEqual gdInpSum gdOutSum
         returnResult
   where
-    filterInputs f = NE.filter (f . toaOut . snd) resolvedInputs
-    filterOutputs f = NE.filter f outputs
+    filterInputs f = filter (f . toaOut . snd) $ NE.toList resolvedInputs
+    filterOutputs f = filter f outputs
 
     stOuts = filterOutputs isStateTxOut
     stInps = filterInputs isStateTxOut
@@ -179,9 +179,9 @@ verifySums resolvedInputs outputs
         Just txFee ->
             return txFee
 
-verifyConsistency :: NonEmpty TxIn -> TxWitness -> Either ToilVerFailure ()
+verifyConsistency :: Set.Set TxIn -> TxWitness -> Either ToilVerFailure ()
 verifyConsistency inputs witnesses
-    | length inputs == length witnesses = pass
+    | Set.size inputs == length witnesses = pass
     | otherwise = throwError $ ToilInconsistentTxAux errMsg
   where
     errFmt = ("length of inputs != length of witnesses "%"("%int%" != "%int%")")
@@ -289,7 +289,5 @@ rollbackTxUtxo (txAux, undo) = do
     let tx@UnsafeTx {..} = taTx txAux
     let txid = hash tx
     mapM_ utxoDel $ take (length _txOutputs) $ map (TxInUtxo txid) [0..]
-    mapM_ (uncurry utxoPut) $ mapMaybe knownInputAndUndo $ toList $ NE.zip _txInputs undo
+    mapM_ (uncurry utxoPut) $ toList undo
   where
-    knownInputAndUndo (_,         Nothing) = Nothing
-    knownInputAndUndo (inp, Just u)        = Just (inp, u)
