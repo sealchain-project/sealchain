@@ -31,7 +31,7 @@ packages:
 - client
 - auxx
 - script-runner
-# - explorer
+- explorer
 - node
 - tools
 - tools/post-mortem
@@ -251,7 +251,7 @@ ghc-options:
   sealchain-crypto-test:       -Wall -Werror -Wcompat -fwarn-redundant-constraints
   sealchain-db:                -Wall -Werror -Wcompat -fwarn-redundant-constraints
   sealchain-db-test:           -Wall -Werror -Wcompat -fwarn-redundant-constraints
-  # sealchain-explorer:          -Wall -Werror -Wcompat -fwarn-redundant-constraints
+  sealchain-explorer:          -Wall -Werror -Wcompat -fwarn-redundant-constraints
   sealchain-generator:         -Wall -Werror -Wcompat -fwarn-redundant-constraints
   sealchain-infra:             -Wall -Werror -Wcompat -fwarn-redundant-constraints
   sealchain-networking:        -Werror -Wcompat -fwarn-redundant-constraints

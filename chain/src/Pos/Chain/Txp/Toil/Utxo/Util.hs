@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 -- | Utility functions working on Utxo.
 
 module Pos.Chain.Txp.Toil.Utxo.Util
@@ -6,10 +7,8 @@ module Pos.Chain.Txp.Toil.Utxo.Util
        , getTotalCoinsInUtxo
        , getTotalGDsInUtxo
        , utxoToStakes
-       , utxoToAddressCoinPairs
-       , utxoToAddressCoinMap
-       , utxoToAddressGDPairs
-       , utxoToAddressGDMap
+       , utxoToAddressCoinGDPairs
+       , utxoToAddressCoinGDPairMap
        ) where
 
 import           Universum
@@ -25,7 +24,7 @@ import           Pos.Chain.Txp.Toil.Types (Utxo)
 import           Pos.Chain.Txp.Tx (TxOut (..), isOriginTxOut, isGDTxOut)
 import           Pos.Chain.Txp.TxOutAux (TxOutAux (..))
 import           Pos.Core (Address, Coin, GoldDollar, StakesMap, 
-                     sumCoins, unsafeAddCoin, unsafeIntegerToCoin,
+                     sumCoins, unsafeAddCoin, unsafeIntegerToCoin, mkCoin, mkGoldDollar,
                      unsafeAddGoldDollar, sumGoldDollars, unsafeIntegerToGoldDollar)
 
 -- | Select only TxOuts for given address
@@ -64,38 +63,25 @@ utxoToStakes bootStakeholders = foldl' putDistr mempty . M.toList
     putDistr hm (_, TxOutAux txOut) =
         foldl' plusAt hm (txOutStake bootStakeholders txOut)
 
-utxoToAddressCoinPairs :: Utxo -> [(Address, Coin)]
-utxoToAddressCoinPairs utxo = combineWith unsafeAddCoin txOuts
+utxoToAddressCoinGDPairs :: Utxo -> [(Address, (Coin, GoldDollar))]
+utxoToAddressCoinGDPairs utxo = combineWith unsafeAddCoinGDPair txOuts
   where
     combineWith :: (Eq a, Hashable a) => (b -> b -> b) -> [(a, b)] -> [(a, b)]
     combineWith func = HM.toList . HM.fromListWith func
 
-    txOuts :: [(Address, Coin)]
-    txOuts = map processTxOutAux utxoOriginTxOuts
+    unsafeAddCoinGDPair :: (Coin, GoldDollar) -> (Coin, GoldDollar) -> (Coin, GoldDollar)
+    unsafeAddCoinGDPair (c1, gd1) (c2, gd2) = (unsafeAddCoin c1 c2, unsafeAddGoldDollar gd1 gd2)
 
-    utxoOriginTxOuts :: [TxOutAux]
-    utxoOriginTxOuts = filter (isOriginTxOut . toaOut) $ M.elems utxo
+    txOuts :: [(Address, (Coin, GoldDollar))]
+    txOuts = map processTxOutAux utxoTxOuts
 
-    processTxOutAux :: TxOutAux -> (Address, Coin)
-    processTxOutAux (TxOutAux txOut) = (txOutAddress txOut, txOutValue txOut)
+    utxoTxOuts :: [TxOutAux]
+    utxoTxOuts =  M.elems utxo
 
-utxoToAddressGDPairs :: Utxo -> [(Address, GoldDollar)]
-utxoToAddressGDPairs utxo = combineWith unsafeAddGoldDollar txOuts
-  where
-    combineWith :: (Eq a, Hashable a) => (b -> b -> b) -> [(a, b)] -> [(a, b)]
-    combineWith func = HM.toList . HM.fromListWith func
+    processTxOutAux :: TxOutAux -> (Address, (Coin, GoldDollar))
+    processTxOutAux (TxOutAux TxOut{..}) = (txOutAddress, (txOutValue, mkGoldDollar 0))
+    processTxOutAux (TxOutAux TxOutGD{..}) = (txOutAddress, (mkCoin 0, txOutGD))
+    processTxOutAux (TxOutAux TxOutState{..}) = (txOutAddress, (mkCoin 0, mkGoldDollar 0))
 
-    txOuts :: [(Address, GoldDollar)]
-    txOuts = map processTxOutAux utxoGDTxOuts
-
-    utxoGDTxOuts :: [TxOutAux]
-    utxoGDTxOuts = filter (isGDTxOut . toaOut) $ M.elems utxo
-
-    processTxOutAux :: TxOutAux -> (Address, GoldDollar)
-    processTxOutAux (TxOutAux txOut) = (txOutAddress txOut, txOutGD txOut)
-
-utxoToAddressCoinMap :: Utxo -> HashMap Address Coin
-utxoToAddressCoinMap = HM.fromList . utxoToAddressCoinPairs
-
-utxoToAddressGDMap :: Utxo -> HashMap Address GoldDollar
-utxoToAddressGDMap = HM.fromList . utxoToAddressGDPairs
+utxoToAddressCoinGDPairMap :: Utxo -> HashMap Address (Coin, GoldDollar)
+utxoToAddressCoinGDPairMap = HM.fromList . utxoToAddressCoinGDPairs

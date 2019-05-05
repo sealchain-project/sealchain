@@ -228,10 +228,11 @@ makeUnsignedAbstractTx
     :: TxOwnedInputs owner
     -> [TxOutAux]
     -> Tx
-makeUnsignedAbstractTx txInputs outputs = tx
+makeUnsignedAbstractTx inputs outputs = tx
   where
-    tx = UnsafeTx (map snd txInputs) txOutputs txAttributes
-    txOutputs = NE.fromList $ map toaOut outputs -- TODO xl fix here after refactor Tx
+    tx = UnsafeTx txInputs txOutputs txAttributes
+    txInputs = Set.fromList . NE.toList $ map snd inputs
+    txOutputs = map toaOut outputs
     txAttributes = mkAttributes ()
 
 -- | Generic function to create a transaction, given desired inputs,
