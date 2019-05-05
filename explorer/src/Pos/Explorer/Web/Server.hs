@@ -44,6 +44,7 @@ import           Network.Wai (Application)
 import           Network.Wai.Middleware.RequestLogger (logStdoutDev)
 
 import qualified Serokell.Util.Base64 as B64
+import qualified Serokell.Util.Base16 as B16
 import           Servant.API.Generic (toServant)
 import           Servant.Server (Server, ServerT, err405, errReasonPhrase,
                      serve)
@@ -62,7 +63,7 @@ import           Pos.Chain.Block (Block, Blund, HeaderHash, MainBlock, Undo,
                      mcdSlot)
 import           Pos.Chain.Genesis as Genesis (Config (..), GenesisHash,
                      configEpochSlots)
-import           Pos.Chain.Txp (Tx (..), TxAux, TxId, TxIn (..), TxMap,
+import           Pos.Chain.Txp (Tx (..), TxAux, TxId, TxIn (..), TxMap, TxOut (..),
                      TxOutAux (..), mpLocalTxs, taTx, topsortTxs, txOutAddress,
                      txOutValue, txpTxs, _txOutputs)
 import           Pos.Core (AddrType (..), Address (..), Coin, EpochIndex,
@@ -421,11 +422,24 @@ getAddressUtxoBulk nm cAddrs = do
     pure . map futxoToCUtxo . M.toList $ utxo
   where
     futxoToCUtxo :: (TxIn, TxOutAux) -> CUtxo
-    futxoToCUtxo ((TxInUtxo txInHash txInIndex), txOutAux) = CUtxo {
+    futxoToCUtxo ((TxInUtxo txInHash txInIndex), TxOutAux (TxOut{..})) = CUtxo {
         cuId = toCTxId txInHash,
         cuOutIndex = fromIntegral txInIndex,
-        cuAddress = toCAddress . txOutAddress . toaOut $ txOutAux,
-        cuCoins = mkCCoin . txOutValue . toaOut $ txOutAux
+        cuAddress = toCAddress txOutAddress,
+        cuCoins = mkCCoin txOutValue
+    }
+    futxoToCUtxo ((TxInUtxo txInHash txInIndex), TxOutAux (TxOutGD{..})) = CUtxoGD {
+        cuId = toCTxId txInHash,
+        cuOutIndex = fromIntegral txInIndex,
+        cuAddress = toCAddress txOutAddress,
+        cuGDs = mkCGD txOutGD
+    }
+    futxoToCUtxo ((TxInUtxo txInHash txInIndex), TxOutAux (TxOutState{..})) = CUtxoState {
+        cuId = toCTxId txInHash,
+        cuOutIndex = fromIntegral txInIndex,
+        cuAddress = toCAddress txOutAddress,
+        cuTotalGDs = mkCGD tosTotalGDs,
+        cuProof = B16.encode tosProof
     }
 
 

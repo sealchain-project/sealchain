@@ -347,9 +347,18 @@ data CUtxo = CUtxo
     , cuAddress  :: !CAddress
     , cuCoins    :: !CCoin
     }
-    | CUtxoUnknown
-    { cuTag  :: !Int
-      , cuBs :: !CByteString
+    | CUtxoGD
+    { cuId       :: !CTxId
+    , cuOutIndex :: !Int
+    , cuAddress  :: !CAddress
+    , cuGDs      :: !CGD
+    }
+    | CUtxoState
+    { cuId       :: !CTxId
+    , cuOutIndex :: !Int
+    , cuAddress  :: !CAddress
+    , cuTotalGDs :: !CGD
+    , cuProof    :: !Text
     }
     deriving (Show, Generic)
 
