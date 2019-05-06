@@ -27,7 +27,7 @@ module Pos.Explorer.Web.ClientTypes
        , TxInternal (..)
        , CCoin
        , CGoldDollar
-       , CAda (..)
+       , CSeal (..)
        , CGD (..)
        , EpochIndex (..)
        , LocalSlotIndex (..)
@@ -194,12 +194,12 @@ instance NFData CGoldDollar
 mkCGoldDollar :: GoldDollar -> CGoldDollar
 mkCGoldDollar = CGoldDollar . show . unsafeGetGoldDollar
 
-newtype CAda = CAda
-    { getAda :: Micro
+newtype CSeal = CSeal
+    { getSeal :: Micro
     } deriving (Generic)
 
-instance Show CAda where
-    show (CAda ada) = showFixed True ada
+instance Show CSeal where
+    show (CSeal seal) = showFixed True seal
 
 newtype CGD = CGD
     { getGD :: Micro

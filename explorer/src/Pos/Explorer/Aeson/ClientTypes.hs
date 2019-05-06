@@ -15,7 +15,7 @@ import           Data.Aeson.Types (ToJSON (..))
 import qualified Data.ByteString.Builder as BS (string8)
 import           Data.Fixed (showFixed)
 
-import           Pos.Explorer.Web.ClientTypes (CAda (..), CGD (..), CAddress,
+import           Pos.Explorer.Web.ClientTypes (CSeal (..), CGD (..), CAddress,
                      CAddressSummary, CAddressType, CBlockEntry, CBlockSummary,
                      CByteString (..), CCoin, CGenesisAddressInfo,
                      CGenesisSummary, CHash, CNetworkAddress, CTxBrief,
@@ -44,10 +44,10 @@ deriveToJSON defaultOptions ''CUtxo
 instance ToJSON CByteString where
     toJSON (CByteString bs) = (toJSON.toString) bs
 
-instance ToJSON CAda where
+instance ToJSON CSeal where
     -- https://github.com/bos/aeson/issues/227#issuecomment-245400284
-    toEncoding (CAda ada) =
-        showFixed True ada & -- convert Micro to String chopping off trailing zeros
+    toEncoding (CSeal seal) =
+        showFixed True seal & -- convert Micro to String chopping off trailing zeros
         BS.string8 &         -- convert String to ByteString using Latin1 encoding
         unsafeToEncoding     -- convert ByteString to Aeson's Encoding
 

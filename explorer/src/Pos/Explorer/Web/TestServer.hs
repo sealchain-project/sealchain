@@ -20,7 +20,7 @@ import           Pos.Core (EpochIndex (..), mkCoin, mkGoldDollar)
 import           Pos.Explorer.Aeson.ClientTypes ()
 import           Pos.Explorer.Web.Api (ExplorerApi, ExplorerApiRecord (..),
                      explorerApi)
-import           Pos.Explorer.Web.ClientTypes (Byte, CAda (..), CAddress (..),
+import           Pos.Explorer.Web.ClientTypes (Byte, CSeal (..), CAddress (..),
                      CAddressSummary (..), CAddressType (..), CGD (..),
                      CAddressesFilter (..), CBlockEntry (..),
                      CBlockSummary (..), CGenesisAddressInfo (..),
@@ -49,7 +49,7 @@ explorerApp = serve explorerApi explorerHandlers
 explorerHandlers :: Server ExplorerApi
 explorerHandlers =
     toServant (ExplorerApiRecord
-        { _totalAda           = testTotalAda
+        { _totalSeal          = testTotalSeal
         , _totalGD            = testTotalGD
         , _blocksPages        = testBlocksPages
         , _blocksPagesTotal   = testBlocksPagesTotal
@@ -110,8 +110,8 @@ cTxBrief = CTxBrief
 -- Test handlers
 ----------------------------------------------------------------
 
-testTotalAda :: Handler CAda
-testTotalAda = pure $ CAda 123.456789
+testTotalSeal :: Handler CSeal
+testTotalSeal = pure $ CSeal 123.000456789
 
 testTotalGD :: Handler CGD
 testTotalGD = pure $ CGD 123.4567

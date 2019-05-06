@@ -91,7 +91,7 @@ import           Pos.Explorer.ExtraContext (HasExplorerCSLInterface (..),
                      HasGenesisRedeemAddressInfo (..))
 import           Pos.Explorer.Web.Api (ExplorerApi, ExplorerApiRecord (..),
                      explorerApi)
-import           Pos.Explorer.Web.ClientTypes (Byte, CAda (..), CAddress (..),
+import           Pos.Explorer.Web.ClientTypes (Byte, CSeal (..), CAddress (..),
                      CAddressSummary (..), CAddressType (..),
                      CAddressesFilter (..), CBlockEntry (..),
                      CBlockSummary (..), CGD (..),
@@ -136,7 +136,7 @@ explorerHandlers
     => Genesis.Config -> Diffusion m -> ServerT ExplorerApi m
 explorerHandlers genesisConfig _diffusion =
     toServant (ExplorerApiRecord
-        { _totalAda           = getTotalAda
+        { _totalSeal          = getTotalSeal
         , _totalGD            = getTotalGD
         , _blocksPages        = getBlocksPage epochSlots
         , _blocksPagesTotal   = getBlocksPagesTotal
@@ -166,11 +166,11 @@ explorerHandlers genesisConfig _diffusion =
 -- API Functions
 ----------------------------------------------------------------
 
-getTotalAda :: ExplorerMode ctx m => m CAda
-getTotalAda = do
+getTotalSeal :: ExplorerMode ctx m => m CSeal
+getTotalSeal = do
     coinSum <- fst <$> getUtxoSum
     validateCoinSum coinSum
-    pure $ CAda $ fromInteger coinSum / 1e8
+    pure $ CSeal $ fromInteger coinSum / 1e8
   where
     validateCoinSum :: ExplorerMode ctx m => Integer -> m ()
     validateCoinSum coins

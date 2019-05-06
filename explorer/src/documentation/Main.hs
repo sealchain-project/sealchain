@@ -93,7 +93,7 @@ instance ToSchema      C.CAddressType
 instance ToSchema      C.CAddressSummary
 instance ToSchema      C.CCoin
 instance ToSchema      C.CGoldDollar
-instance ToSchema      C.CAda
+instance ToSchema      C.CSeal
 instance ToSchema      C.CGD
 instance ToSchema      C.CNetworkAddress
 instance ToSchema      C.CGenesisSummary

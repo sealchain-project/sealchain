@@ -21,7 +21,7 @@ import           Servant.API.Generic ((:-), ToServantApi)
 import           Servant.Server (ServantErr (..))
 
 import           Pos.Core (EpochIndex)
-import           Pos.Explorer.Web.ClientTypes (Byte, CAda, CAddress,
+import           Pos.Explorer.Web.ClientTypes (Byte, CSeal, CAddress,
                      CAddressSummary, CAddressesFilter, CBlockEntry,
                      CBlockSummary, CGenesisAddressInfo, CGenesisSummary,
                      CHash, CTxBrief, CTxEntry, CTxId, CTxSummary, CUtxo, CGD)
@@ -58,10 +58,10 @@ explorerApi = Proxy
 -- | A servant-generic record with all the methods of the API
 data ExplorerApiRecord route = ExplorerApiRecord
   {
-    _totalAda :: route
+    _totalSeal :: route
         :- "supply"
-        :> "ada"
-        :> ExRes Get CAda
+        :> "seal"
+        :> ExRes Get CSeal
 
   , _totalGD :: route
         :- "supply"
