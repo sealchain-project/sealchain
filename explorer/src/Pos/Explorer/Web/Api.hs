@@ -24,7 +24,7 @@ import           Pos.Core (EpochIndex)
 import           Pos.Explorer.Web.ClientTypes (Byte, CAda, CAddress,
                      CAddressSummary, CAddressesFilter, CBlockEntry,
                      CBlockSummary, CGenesisAddressInfo, CGenesisSummary,
-                     CHash, CTxBrief, CTxEntry, CTxId, CTxSummary, CUtxo)
+                     CHash, CTxBrief, CTxEntry, CTxId, CTxSummary, CUtxo, CGD)
 import           Pos.Explorer.Web.Error (ExplorerError)
 import           Pos.Util.Servant (DQueryParam, ModifiesApiRes (..), VerbMod)
 
@@ -62,6 +62,11 @@ data ExplorerApiRecord route = ExplorerApiRecord
         :- "supply"
         :> "ada"
         :> ExRes Get CAda
+
+  , _totalGD :: route
+        :- "supply"
+        :> "gd"
+        :> ExRes Get CGD
 
   , _blocksPages :: route
         :- Summary "Get the list of blocks, contained in pages."

@@ -21,7 +21,7 @@ import           Pos.Explorer.Aeson.ClientTypes ()
 import           Pos.Explorer.Web.Api (ExplorerApi, ExplorerApiRecord (..),
                      explorerApi)
 import           Pos.Explorer.Web.ClientTypes (Byte, CAda (..), CAddress (..),
-                     CAddressSummary (..), CAddressType (..),
+                     CAddressSummary (..), CAddressType (..), CGD (..),
                      CAddressesFilter (..), CBlockEntry (..),
                      CBlockSummary (..), CGenesisAddressInfo (..),
                      CGenesisSummary (..), CHash (..), CTxBrief (..),
@@ -50,6 +50,7 @@ explorerHandlers :: Server ExplorerApi
 explorerHandlers =
     toServant (ExplorerApiRecord
         { _totalAda           = testTotalAda
+        , _totalGD            = testTotalGD
         , _blocksPages        = testBlocksPages
         , _blocksPagesTotal   = testBlocksPagesTotal
         , _blocksSummary      = testBlocksSummary
@@ -111,6 +112,9 @@ cTxBrief = CTxBrief
 
 testTotalAda :: Handler CAda
 testTotalAda = pure $ CAda 123.456789
+
+testTotalGD :: Handler CGD
+testTotalGD = pure $ CGD 123.4567
 
 testBlocksPagesTotal
     :: Maybe Word

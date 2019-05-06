@@ -28,6 +28,7 @@ module Pos.Explorer.Web.ClientTypes
        , CCoin
        , CGoldDollar
        , CAda (..)
+       , CGD (..)
        , EpochIndex (..)
        , LocalSlotIndex (..)
        , StakeholderId
@@ -185,7 +186,7 @@ mkCCoin :: Coin -> CCoin
 mkCCoin = CCoin . show . unsafeGetCoin
 
 newtype CGoldDollar = CGoldDollar
-    { getGD :: Text
+    { getGoldDollar :: Text
     } deriving (Show, Generic, Eq)
 
 instance NFData CGoldDollar
@@ -199,6 +200,13 @@ newtype CAda = CAda
 
 instance Show CAda where
     show (CAda ada) = showFixed True ada
+
+newtype CGD = CGD
+    { getGD :: Micro
+    } deriving (Generic)
+
+instance Show CGD where
+    show (CGD gd) = showFixed True gd
 
 -- | List of block entries is returned from "get latest N blocks" endpoint
 data CBlockEntry = CBlockEntry

@@ -67,8 +67,8 @@ import           Pos.Chain.Txp (Tx (..), TxAux, TxId, TxIn (..), TxMap, TxOut (.
                      TxOutAux (..), mpLocalTxs, taTx, topsortTxs, txOutAddress,
                      txOutValue, txpTxs, _txOutputs)
 import           Pos.Core (AddrType (..), Address (..), Coin, EpochIndex,
-                     SlotCount, Timestamp, coinToInteger, difficultyL,
-                     getChainDifficulty, isUnknownAddressType,
+                     SlotCount, Timestamp, GoldDollar, coinToInteger, difficultyL,
+                     getChainDifficulty, isUnknownAddressType, goldDollarToInteger,
                      makeRedeemAddress, siEpoch, siSlot, sumCoins,
                      timestampToPosix, unsafeAddCoin, unsafeIntegerToCoin,
                      unsafeSubCoin, unsafeIntegerToGoldDollar, sumGoldDollars)
@@ -94,7 +94,7 @@ import           Pos.Explorer.Web.Api (ExplorerApi, ExplorerApiRecord (..),
 import           Pos.Explorer.Web.ClientTypes (Byte, CAda (..), CAddress (..),
                      CAddressSummary (..), CAddressType (..),
                      CAddressesFilter (..), CBlockEntry (..),
-                     CBlockSummary (..),
+                     CBlockSummary (..), CGD (..),
                      CGenesisAddressInfo (..), CGenesisSummary (..), CHash,
                      CTxBrief (..), CTxEntry (..), CTxId (..), CTxSummary (..),
                      CUtxo (..), TxInternal (..),
@@ -137,6 +137,7 @@ explorerHandlers
 explorerHandlers genesisConfig _diffusion =
     toServant (ExplorerApiRecord
         { _totalAda           = getTotalAda
+        , _totalGD            = getTotalGD
         , _blocksPages        = getBlocksPage epochSlots
         , _blocksPagesTotal   = getBlocksPagesTotal
         , _blocksSummary      = getBlockSummary genesisConfig
@@ -177,6 +178,20 @@ getTotalAda = do
             sformat ("Internal tracker of utxo coin sum has a negative value: "%build) coins
         | coins > coinToInteger (maxBound :: Coin) = throwM $ Internal $
             sformat ("Internal tracker of utxo coin sum overflows: "%build) coins
+        | otherwise = pure ()
+
+getTotalGD :: ExplorerMode ctx m => m CGD
+getTotalGD = do
+    gdSum <- snd <$> getUtxoSum
+    validateGDSum gdSum
+    pure $ CGD $ fromInteger gdSum / 1e4
+  where
+    validateGDSum :: ExplorerMode ctx m => Integer -> m ()
+    validateGDSum gds
+        | gds < 0 = throwM $ Internal $
+            sformat ("Internal tracker of utxo gd sum has a negative value: "%build) gds
+        | gds > goldDollarToInteger (maxBound :: GoldDollar) = throwM $ Internal $
+            sformat ("Internal tracker of utxo gd sum overflows: "%build) gds
         | otherwise = pure ()
 
 -- | Get the total number of blocks/slots currently available.

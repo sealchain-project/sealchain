@@ -15,7 +15,7 @@ import           Data.Aeson.Types (ToJSON (..))
 import qualified Data.ByteString.Builder as BS (string8)
 import           Data.Fixed (showFixed)
 
-import           Pos.Explorer.Web.ClientTypes (CAda (..), CAddress,
+import           Pos.Explorer.Web.ClientTypes (CAda (..), CGD (..), CAddress,
                      CAddressSummary, CAddressType, CBlockEntry, CBlockSummary,
                      CByteString (..), CCoin, CGenesisAddressInfo,
                      CGenesisSummary, CHash, CNetworkAddress, CTxBrief,
@@ -48,5 +48,11 @@ instance ToJSON CAda where
     -- https://github.com/bos/aeson/issues/227#issuecomment-245400284
     toEncoding (CAda ada) =
         showFixed True ada & -- convert Micro to String chopping off trailing zeros
+        BS.string8 &         -- convert String to ByteString using Latin1 encoding
+        unsafeToEncoding     -- convert ByteString to Aeson's Encoding
+
+instance ToJSON CGD where
+    toEncoding (CGD gd) =
+        showFixed True gd &  -- convert Micro to String chopping off trailing zeros
         BS.string8 &         -- convert String to ByteString using Latin1 encoding
         unsafeToEncoding     -- convert ByteString to Aeson's Encoding
