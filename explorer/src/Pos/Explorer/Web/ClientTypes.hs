@@ -26,7 +26,7 @@ module Pos.Explorer.Web.ClientTypes
        , CAddressesFilter (..)
        , TxInternal (..)
        , CCoin
-       , CGD
+       , CGoldDollar
        , CAda (..)
        , EpochIndex (..)
        , LocalSlotIndex (..)
@@ -34,8 +34,7 @@ module Pos.Explorer.Web.ClientTypes
        , Byte
        , CByteString (..)
        , mkCCoin
-       , mkCCoinMB
-       , mkCGD
+       , mkCGoldDollar
        , toCHash
        , fromCHash
        , toCAddress
@@ -185,20 +184,14 @@ instance NFData CCoin
 mkCCoin :: Coin -> CCoin
 mkCCoin = CCoin . show . unsafeGetCoin
 
-mkCCoinMB :: Maybe Coin -> CCoin
-mkCCoinMB = maybe (CCoin "N/A") mkCCoin
-
-newtype CGD = CGD
+newtype CGoldDollar = CGoldDollar
     { getGD :: Text
     } deriving (Show, Generic, Eq)
 
-instance NFData CGD
+instance NFData CGoldDollar
 
-mkCGD :: GoldDollar -> CGD
-mkCGD = CGD . show . unsafeGetGoldDollar
-
-mkCGDMB :: Maybe GoldDollar -> CGD
-mkCGDMB = maybe (CGD "N/A") mkCGD
+mkCGoldDollar :: GoldDollar -> CGoldDollar
+mkCGoldDollar = CGoldDollar . show . unsafeGetGoldDollar
 
 newtype CAda = CAda
     { getAda :: Micro
@@ -215,7 +208,7 @@ data CBlockEntry = CBlockEntry
     , cbeTimeIssued  :: !(Maybe POSIXTime)
     , cbeTxNum       :: !Word
     , cbeTotalSent   :: !CCoin
-    , cbeTotalSentGD :: !CGD
+    , cbeTotalSentGD :: !CGoldDollar
     , cbeSize        :: !Word64
     , cbeBlockLead   :: !(Maybe Text) -- todo (ks): Maybe CAddress?
     , cbeFees        :: !CCoin
@@ -253,7 +246,7 @@ toBlockEntry epochSlots (blk, Undo{..}) = do
         cbeTotalSent   = mkCCoin totalSentCoin
         addOutGDs c    = unsafeAddGoldDollar c . totalTxOutGD
         totalSentGD    = foldl' addOutGDs (mkGoldDollar 0) txs
-        cbeTotalSentGD = mkCGD totalSentGD
+        cbeTotalSentGD = mkCGoldDollar totalSentGD
         cbeSize        = fromIntegral $ biSize blk
         cbeFees        = mkCCoin $ totalSentCoin `unsafeSubCoin` totalRecvCoin
 
@@ -325,7 +318,7 @@ data CAddressSummary = CAddressSummary
     { caAddress   :: !CAddress
     , caType      :: !CAddressType
     , caTxNum     :: !Word
-    , caBalance   :: !(CCoin, CGD)
+    , caBalance   :: !(CCoin, CGoldDollar)
     , caTxList    :: ![CTxBrief]
     } deriving (Show, Generic)
 
@@ -336,9 +329,9 @@ data CTxBrief = CTxBrief
     , ctbOutputs    :: ![(CAddress, CCoin)]
     , ctbInputSum   :: !CCoin
     , ctbOutputSum  :: !CCoin
-    , ctbGDInputs   :: ![(CAddress, CGD)]
-    , ctbGDOutputs  :: ![(CAddress, CGD)]
-    , ctbGDSum      :: !CGD
+    , ctbGDInputs   :: ![(CAddress, CGoldDollar)]
+    , ctbGDOutputs  :: ![(CAddress, CGoldDollar)]
+    , ctbGDSum      :: !CGoldDollar
     } deriving (Show, Generic)
 
 data CUtxo = CUtxo
@@ -351,13 +344,13 @@ data CUtxo = CUtxo
     { cuId       :: !CTxId
     , cuOutIndex :: !Int
     , cuAddress  :: !CAddress
-    , cuGDs      :: !CGD
+    , cuGDs      :: !CGoldDollar
     }
     | CUtxoState
     { cuId       :: !CTxId
     , cuOutIndex :: !Int
     , cuAddress  :: !CAddress
-    , cuTotalGDs :: !CGD
+    , cuTotalGDs :: !CGoldDollar
     , cuProof    :: !Text
     }
     deriving (Show, Generic)
@@ -379,9 +372,9 @@ data CTxSummary = CTxSummary
     , ctsFees            :: !CCoin
     , ctsInputs          :: ![(CAddress, CCoin)]
     , ctsOutputs         :: ![(CAddress, CCoin)]
-    , ctsTotalGD         :: !CGD
-    , ctsGDInputs        :: ![(CAddress, CGD)]
-    , ctsGDOutputs       :: ![(CAddress, CGD)]
+    , ctsTotalGD         :: !CGoldDollar
+    , ctsGDInputs        :: ![(CAddress, CGoldDollar)]
+    , ctsGDOutputs       :: ![(CAddress, CGoldDollar)]
     } deriving (Show, Generic)
 
 data CGenesisSummary = CGenesisSummary
@@ -472,8 +465,8 @@ toTxBrief txi = CTxBrief {..}
     ctbOutputs    = map (second mkCCoin) txOutputs
     ctbInputSum   = sumCoinOfInputsOutputs txInputs
     ctbOutputSum  = sumCoinOfInputsOutputs txOutputs
-    ctbGDInputs   = map (second mkCGD) txGDInputs
-    ctbGDOutputs  = map (second mkCGD) txGDOutputs
+    ctbGDInputs   = map (second mkCGoldDollar) txGDInputs
+    ctbGDOutputs  = map (second mkCGoldDollar) txGDOutputs
     ctbGDSum      = sumGDOfInputsOutputs txGDInputs
 
     inputOutputs = map (toaOut . snd) $ NE.toList $ teInputOutputs (tiExtra txi)
@@ -487,8 +480,8 @@ toTxBrief txi = CTxBrief {..}
 sumCoinOfInputsOutputs :: [(CAddress, Coin)] -> CCoin
 sumCoinOfInputsOutputs = mkCCoin . mkCoin . fromIntegral . sumCoins . map snd  
 
-sumGDOfInputsOutputs :: [(CAddress, GoldDollar)] -> CGD
-sumGDOfInputsOutputs = mkCGD . mkGoldDollar . fromIntegral . sumGoldDollars . map snd  
+sumGDOfInputsOutputs :: [(CAddress, GoldDollar)] -> CGoldDollar
+sumGDOfInputsOutputs = mkCGoldDollar . mkGoldDollar . fromIntegral . sumGoldDollars . map snd  
 
 newtype CByteString = CByteString ByteString
     deriving (Generic)

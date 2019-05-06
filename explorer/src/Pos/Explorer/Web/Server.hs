@@ -101,7 +101,7 @@ import           Pos.Explorer.Web.ClientTypes (Byte, CAda (..), CAddress (..),
                      fromCAddress, fromCHash, fromCTxId,
                      getEpochIndex, getSlotIndex, mkCCoin,
                      tiToTxEntry, toBlockEntry, toBlockSummary, toCAddress,
-                     toCHash, toCTxId, toTxBrief, mkCGD,
+                     toCHash, toCTxId, toTxBrief, mkCGoldDollar,
                      filterAndConvertTxOutputs, filterAndConvertTxGDOutputs)
 import           Pos.Explorer.Web.Error (ExplorerError (..))
 
@@ -169,7 +169,7 @@ getTotalAda :: ExplorerMode ctx m => m CAda
 getTotalAda = do
     coinSum <- fst <$> getUtxoSum
     validateCoinSum coinSum
-    pure $ CAda $ fromInteger coinSum / 1e6
+    pure $ CAda $ fromInteger coinSum / 1e8
   where
     validateCoinSum :: ExplorerMode ctx m => Integer -> m ()
     validateCoinSum coins
@@ -385,7 +385,7 @@ getAddressSummary nm genesisHash cAddr = do
         caAddress = cAddr,
         caType = getAddressType addr,
         caTxNum = fromIntegral $ length transactions,
-        caBalance = (mkCCoin $ fst balance, mkCGD $ snd balance),
+        caBalance = (mkCCoin $ fst balance, mkCGoldDollar $ snd balance),
         caTxList = transactions
     }
   where
@@ -432,13 +432,13 @@ getAddressUtxoBulk nm cAddrs = do
         cuId = toCTxId txInHash,
         cuOutIndex = fromIntegral txInIndex,
         cuAddress = toCAddress txOutAddress,
-        cuGDs = mkCGD txOutGD
+        cuGDs = mkCGoldDollar txOutGD
     }
     futxoToCUtxo ((TxInUtxo txInHash txInIndex), TxOutAux (TxOutState{..})) = CUtxoState {
         cuId = toCTxId txInHash,
         cuOutIndex = fromIntegral txInIndex,
         cuAddress = toCAddress txOutAddress,
-        cuTotalGDs = mkCGD tosTotalGDs,
+        cuTotalGDs = mkCGoldDollar tosTotalGDs,
         cuProof = B16.encode tosProof
     }
 
@@ -515,9 +515,9 @@ getTxSummary genesisHash cTxId = do
             , ctsFees            = mkCCoin $ totalInput `unsafeSubCoin` totalOutput
             , ctsInputs          = map (second mkCCoin) inputOutputs
             , ctsOutputs         = map (second mkCCoin) txOutputs
-            , ctsTotalGD         = mkCGD totalGD
-            , ctsGDInputs        = map (second mkCGD) inputGDOutputs
-            , ctsGDOutputs       = map (second mkCGD) txGDOutputs
+            , ctsTotalGD         = mkCGoldDollar totalGD
+            , ctsGDInputs        = map (second mkCGoldDollar) inputGDOutputs
+            , ctsGDOutputs       = map (second mkCGoldDollar) txGDOutputs
             }
 
 

@@ -26,7 +26,7 @@ import           Pos.Explorer.Web.ClientTypes (Byte, CAda (..), CAddress (..),
                      CBlockSummary (..), CGenesisAddressInfo (..),
                      CGenesisSummary (..), CHash (..), CTxBrief (..),
                      CTxEntry (..), CTxId (..), CTxSummary (..), CUtxo (..),
-                     mkCCoin, mkCGD)
+                     mkCCoin, mkCGoldDollar)
 import           Pos.Explorer.Web.Error (ExplorerError (..))
 import           Pos.Web ()
 
@@ -78,7 +78,7 @@ sampleAddressSummary = CAddressSummary
     { caAddress = CAddress "1fi9sA3pRt8bKVibdun57iyWG9VsWZscgQigSik6RHoF5Mv"
     , caType    = CPubKeyAddress
     , caTxNum   = 0
-    , caBalance = (mkCCoin $ mkCoin 0, mkCGD $ mkGoldDollar 0)
+    , caBalance = (mkCCoin $ mkCoin 0, mkCGoldDollar $ mkGoldDollar 0)
     , caTxList  = []
     }
 
@@ -100,9 +100,9 @@ cTxBrief = CTxBrief
     , ctbOutputs    = [(CAddress "1fSCHaQhy6L7Rfjn9xR2Y5H7ZKkzKLMXKYLyZvwWVffQwkQ", mkCCoin $ mkCoin 33333)]
     , ctbInputSum   = mkCCoin $ mkCoin 33333
     , ctbOutputSum  = mkCCoin $ mkCoin 33333
-    , ctbGDSum      = mkCGD $ mkGoldDollar 33333
-    , ctbGDInputs   = [(CAddress "1fi9sA3pRt8bKVibdun57iyWG9VsWZscgQigSik6RHoF5Mv", mkCGD $ mkGoldDollar 33333)]
-    , ctbGDOutputs  = [(CAddress "1fSCHaQhy6L7Rfjn9xR2Y5H7ZKkzKLMXKYLyZvwWVffQwkQ", mkCGD $ mkGoldDollar 33333)]
+    , ctbGDSum      = mkCGoldDollar $ mkGoldDollar 33333
+    , ctbGDInputs   = [(CAddress "1fi9sA3pRt8bKVibdun57iyWG9VsWZscgQigSik6RHoF5Mv", mkCGoldDollar $ mkGoldDollar 33333)]
+    , ctbGDOutputs  = [(CAddress "1fSCHaQhy6L7Rfjn9xR2Y5H7ZKkzKLMXKYLyZvwWVffQwkQ", mkCGoldDollar $ mkGoldDollar 33333)]
     }
 
 ----------------------------------------------------------------
@@ -128,7 +128,7 @@ testBlocksPages _ _  = pure (1, [CBlockEntry
     , cbeTimeIssued   = Just posixTime
     , cbeTxNum        = 0
     , cbeTotalSent    = mkCCoin $ mkCoin 0
-    , cbeTotalSentGD  = mkCGD $ mkGoldDollar 0
+    , cbeTotalSentGD  = mkCGoldDollar $ mkGoldDollar 0
     , cbeSize         = 390
     , cbeBlockLead    = Nothing
     , cbeFees         = mkCCoin $ mkCoin 0
@@ -145,7 +145,7 @@ testBlocksSummary _ = pure CBlockSummary
                         , cbeTimeIssued   = Just posixTime
                         , cbeTxNum        = 0
                         , cbeTotalSent    = mkCCoin $ mkCoin 0
-                        , cbeTotalSentGD  = mkCGD $ mkGoldDollar 0
+                        , cbeTotalSentGD  = mkCGoldDollar $ mkGoldDollar 0
                         , cbeSize         = 390
                         , cbeBlockLead    = Nothing
                         , cbeFees         = mkCCoin $ mkCoin 0
@@ -186,12 +186,12 @@ testTxsSummary _       = pure CTxSummary
     , ctsOutputs         =  [ (CAddress "19F6U1Go5B4KakVoCZfzCtqNAWhUBprxVzL3JsGu74TEwQnXPvAKPUbvG8o4Qe5RaY8Z7WKLfxmNFwBqPV1NQ2hRpKkdEN", mkCCoin $ mkCoin 94)
                             , (CAddress "1feqWtoyaxFyvKQFWo46vHSc7urynGaRELQE62T74Y3RBs8", mkCCoin $ mkCoin 3)
                             ]
-    , ctsTotalGD         = mkCGD $ mkGoldDollar 33333
-    , ctsGDInputs        =  [ (CAddress "19HxN7PseAPT93RftAh7bBmbnJU5gtH6QzvUyZXnbz9Y1UtYwPDdiCGkB2gwvC8CjBUtHXBij9j9Qb6JYgHPi6LtevDcFQ", mkCGD $ mkGoldDollar 97)
-                            , (CAddress "LaVWPVaMHxNVtqJ1uvVZ8FyQmeRam5avHE1Uv9iwRivCKTN83CUW", mkCGD $ mkGoldDollar 3333)
+    , ctsTotalGD         = mkCGoldDollar $ mkGoldDollar 33333
+    , ctsGDInputs        =  [ (CAddress "19HxN7PseAPT93RftAh7bBmbnJU5gtH6QzvUyZXnbz9Y1UtYwPDdiCGkB2gwvC8CjBUtHXBij9j9Qb6JYgHPi6LtevDcFQ", mkCGoldDollar $ mkGoldDollar 97)
+                            , (CAddress "LaVWPVaMHxNVtqJ1uvVZ8FyQmeRam5avHE1Uv9iwRivCKTN83CUW", mkCGoldDollar $ mkGoldDollar 3333)
                             ]
-    , ctsGDOutputs       =  [ (CAddress "19F6U1Go5B4KakVoCZfzCtqNAWhUBprxVzL3JsGu74TEwQnXPvAKPUbvG8o4Qe5RaY8Z7WKLfxmNFwBqPV1NQ2hRpKkdEN", mkCGD $ mkGoldDollar 94)
-                            , (CAddress "1feqWtoyaxFyvKQFWo46vHSc7urynGaRELQE62T74Y3RBs8", mkCGD $ mkGoldDollar 3)
+    , ctsGDOutputs       =  [ (CAddress "19F6U1Go5B4KakVoCZfzCtqNAWhUBprxVzL3JsGu74TEwQnXPvAKPUbvG8o4Qe5RaY8Z7WKLfxmNFwBqPV1NQ2hRpKkdEN", mkCGoldDollar $ mkGoldDollar 94)
+                            , (CAddress "1feqWtoyaxFyvKQFWo46vHSc7urynGaRELQE62T74Y3RBs8", mkCGoldDollar $ mkGoldDollar 3)
                             ]
     }
 
@@ -228,7 +228,7 @@ testEpochSlotSearch _ _ = pure [CBlockEntry
     , cbeTimeIssued = Just posixTime
     , cbeTxNum      = 0
     , cbeTotalSent  = mkCCoin $ mkCoin 0
-    , cbeTotalSentGD  = mkCGD $ mkGoldDollar 0
+    , cbeTotalSentGD  = mkCGoldDollar $ mkGoldDollar 0
     , cbeSize       = 390
     , cbeBlockLead  = Nothing
     , cbeFees       = mkCCoin $ mkCoin 0
@@ -245,7 +245,7 @@ testEpochPageSearch _ _ = pure (1, [CBlockEntry
     , cbeTimeIssued   = Just posixTime
     , cbeTxNum        = 0
     , cbeTotalSent    = mkCCoin $ mkCoin 0
-    , cbeTotalSentGD  = mkCGD $ mkGoldDollar 0
+    , cbeTotalSentGD  = mkCGoldDollar $ mkGoldDollar 0
     , cbeSize         = 390
     , cbeBlockLead    = Nothing
     , cbeFees         = mkCCoin $ mkCoin 0
