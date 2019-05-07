@@ -20,7 +20,6 @@ import           Data.Coerce (coerce)
 import qualified Data.List.NonEmpty as NE
 import           Data.Maybe (fromJust)
 import qualified Data.Vector as V
-import qualified Data.Set as Set
 
 import qualified Cardano.Crypto.Wallet as CC
 import           Pos.Chain.Txp (Tx (..), TxAux (..), TxId, TxIn (..),
@@ -48,8 +47,8 @@ exampleTxAux = TxAux tx exampleTxWitness
 exampleTxId :: TxId
 exampleTxId = exampleHashTx
 
-exampleTxInList :: Set.Set TxIn
-exampleTxInList = Set.fromList [exampleTxInUtxo]
+exampleTxInList :: NonEmpty TxIn
+exampleTxInList = exampleTxInUtxo :| []
 
 exampleTxInUtxo :: TxIn
 exampleTxInUtxo = TxInUtxo exampleHashTx 47 -- TODO: loop here
@@ -78,7 +77,7 @@ exampleTxSigData :: TxSigData
 exampleTxSigData = TxSigData exampleHashTx
 
 exampleTxpUndo :: TxpUndo
-exampleTxpUndo = [NE.fromList $ zip (Set.toList exampleTxInList) (TxOutAux <$> exampleTxOutList)]
+exampleTxpUndo = [NE.fromList $ zip (NE.toList exampleTxInList) (TxOutAux <$> exampleTxOutList)]
 
 exampleTxWitness :: TxWitness
 exampleTxWitness = V.fromList [(PkWitness examplePublicKey exampleTxSig)]

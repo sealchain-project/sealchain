@@ -231,7 +231,7 @@ makeUnsignedAbstractTx
 makeUnsignedAbstractTx inputs outputs = tx
   where
     tx = UnsafeTx txInputs txOutputs txAttributes
-    txInputs = Set.fromList . NE.toList $ map snd inputs
+    txInputs = map snd inputs
     txOutputs = map toaOut outputs
     txAttributes = mkAttributes ()
 

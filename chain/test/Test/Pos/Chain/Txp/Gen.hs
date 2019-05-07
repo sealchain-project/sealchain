@@ -102,8 +102,8 @@ genTxIn = Gen.choice gens
   where
     gens = [ TxInUtxo <$> genTxId <*> genWord32 ]
 
-genTxInList :: Gen (Set.Set TxIn)
-genTxInList = Gen.set (Range.linear 1 20) genTxIn
+genTxInList :: Gen (NonEmpty TxIn)
+genTxInList = Gen.nonEmpty (Range.linear 1 20) genTxIn
 
 genTxOut :: Gen TxOut
 genTxOut = TxOut <$> genAddress <*> genCoin

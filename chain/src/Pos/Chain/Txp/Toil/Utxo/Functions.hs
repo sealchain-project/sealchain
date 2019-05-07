@@ -96,12 +96,10 @@ verifyTxUtxo
     -> ExceptT ToilVerFailure UtxoM VerifyTxUtxoRes
 verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {..} witnesses) = do
     liftEither $ do
-        when (Set.null _txInputs) $ throwError ToilEmptyInput
         verifyConsistency _txInputs witnesses
         verifyOutputs ctx ta
 
-    let inputs = NE.fromList $ Set.elems _txInputs -- NE.fromList is safe here
-    resolvedInputs <- filterAssetLocked =<< mapM resolveInput inputs
+    resolvedInputs <- filterAssetLocked =<< mapM resolveInput _txInputs
     liftEither $ do
         txFee <- verifySums resolvedInputs _txOutputs
         verifyKnownInputs protocolMagic ctx resolvedInputs ta
@@ -179,9 +177,9 @@ verifySums resolvedInputs outputs
         Just txFee ->
             return txFee
 
-verifyConsistency :: Set.Set TxIn -> TxWitness -> Either ToilVerFailure ()
+verifyConsistency :: NonEmpty TxIn -> TxWitness -> Either ToilVerFailure ()
 verifyConsistency inputs witnesses
-    | Set.size inputs == length witnesses = pass
+    | length inputs == length witnesses = pass
     | otherwise = throwError $ ToilInconsistentTxAux errMsg
   where
     errFmt = ("length of inputs != length of witnesses "%"("%int%" != "%int%")")

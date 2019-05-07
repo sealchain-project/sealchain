@@ -33,7 +33,6 @@ import           Data.Aeson (FromJSON (..), FromJSONKey (..),
 import           Data.Aeson.TH (defaultOptions, deriveJSON)
 import           Data.Aeson.Types (toJSONKeyText, typeMismatch)
 import qualified Data.HashMap.Strict as HM
-import qualified Data.Set as Set
 import           Data.SafeCopy (base, deriveSafeCopySimple)
 import qualified Data.Text as T
 import           Formatting (Format, bprint, build, builder, int, sformat, (%))
@@ -67,14 +66,10 @@ import           Pos.Util.Util (toAesonError, aesonError)
 --
 -- NB: transaction witnesses are stored separately.
 data Tx = UnsafeTx
-    { _txInputs     :: Set.Set TxIn     -- ^ Inputs of transaction.
-    , _txOutputs    :: [TxOut]          -- ^ Outputs of transaction.
+    { _txInputs     :: !(NonEmpty TxIn)     -- ^ Inputs of transaction.
+    , _txOutputs    :: ![TxOut]          -- ^ Outputs of transaction.
     , _txAttributes :: !TxAttributes    -- ^ Attributes of transaction
     } deriving (Eq, Ord, Generic, Show, Typeable)
-
-instance Hashable Tx where
-    hashWithSalt s UnsafeTx{..} =
-        hashWithSalt s (Set.elems _txInputs, _txOutputs, _txAttributes)
 
 instance Buildable Tx where
     build tx@(UnsafeTx{..}) =

@@ -376,7 +376,7 @@ addrsTouchedByTx
 addrsTouchedByTx tx = do
       -- for each transaction, get its OutTx
       -- and transactions from InTx
-      inTxs <- forM (Set.toList $ _txInputs tx) $ getTxOut >=> \case
+      inTxs <- forM (_txInputs tx) $ getTxOut >=> \case
       -- inTxs :: NonEmpty [TxOut]
           -- TODO [CSM-153]: lookup mempool as well
           Nothing       -> return mempty
@@ -385,7 +385,7 @@ addrsTouchedByTx tx = do
       pure $ addressSetByTxs (_txOutputs tx) inTxs
 
 -- | Helper to filter addresses by a given tx from a list of txs
-addressSetByTxs :: [TxOut] -> [[TxOut]] -> (Set.Set Address)
+addressSetByTxs :: [TxOut] -> NonEmpty [TxOut] -> (Set.Set Address)
 addressSetByTxs tx txs =
     let txs' = tx <> (concat txs) in
     Set.fromList $ txOutAddress <$> txs'
