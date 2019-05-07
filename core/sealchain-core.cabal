@@ -81,6 +81,7 @@ library
                        Pos.Core.Common.Coin
                        Pos.Core.Common.CoinPortion
                        Pos.Core.Common.GoldDollar
+                       Pos.Core.Common.CoinPair
                        Pos.Core.Common.Script
                        Pos.Core.Common.SharedSeed
                        Pos.Core.Common.SlotLeaders

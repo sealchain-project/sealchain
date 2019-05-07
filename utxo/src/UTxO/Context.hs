@@ -104,7 +104,7 @@ initCardanoContext genesisConfig = CardanoContext
                           configGeneratedSecrets genesisConfig
     , ccMagic       = ccMagic
     , ccInitLeaders = ccLeaders
-    , ccBalances    = map (\(addr, (coin, _)) -> (addr, coin)) $ utxoToAddressCoinGDPairs ccUtxo
+    , ccBalances    = map (\(addr, (coin, _)) -> (addr, coin)) $ utxoToAddressCoinPairs ccUtxo
     , ccHash0       = blockHeaderHash . BlockHeaderGenesis $ ccBlock0 ^. gbHeader
     , ccEpochSlots  = configEpochSlots genesisConfig
     }
