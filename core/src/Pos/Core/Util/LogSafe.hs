@@ -66,7 +66,7 @@ import           Formatting.Internal (Format (..))
 import qualified Language.Haskell.TH as TH
 
 import           Pos.Core (Timestamp)
-import           Pos.Core.Common (Address, Coin)
+import           Pos.Core.Common (Address, Coin, GoldDollar, CoinPair)
 import           Pos.Crypto (PassPhrase)
 
 import           Pos.Util.Log.LoggerConfig (LogSecurityLevel (..))
@@ -321,6 +321,12 @@ instance Buildable (SecureLog PassPhrase) where
 -- maybe I'm wrong here, but currently masking it important for wallet servant logs
 instance Buildable (SecureLog Coin) where
     build _ = "? coin(s)"
+
+instance Buildable (SecureLog GoldDollar) where
+    build _ = "? gd(s)"
+
+instance Buildable (SecureLog CoinPair) where
+    build _ = "? moneys"
 
 instance Buildable (SecureLog Address) where
     build _ = "<address>"
