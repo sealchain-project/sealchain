@@ -16,6 +16,7 @@ module Pos.Client.Txp.Util
        , PendingAddresses (..)
 
        -- * Tx creation
+       , HasTxFeePolicy (..)
        , TxCreateMode
        , makeAbstractTx
        , makeUnsignedAbstractTx
@@ -28,6 +29,7 @@ module Pos.Client.Txp.Util
        , createTx
        , createMTx
        , createUnsignedTx
+       , estimateTxFee
 
        -- * Fees logic
        , txToLinearFee
@@ -69,7 +71,6 @@ import           Pos.Chain.Txp (Tx (..), TxAux (..), TxFee (..), TxIn (..),
                      TxSigData (..), Utxo,
                      isOriginTxOut, originUtxo,
                      isGDTxOut, gdUtxo)
-import           Pos.Chain.Update (bvdTxFeePolicy)
 import           Pos.Client.Txp.Addresses
 import           Pos.Client.Txp.Currency
 import           Pos.Core (Address, Coin, SlotCount, TxFeePolicy (..),
@@ -82,7 +83,6 @@ import           Pos.Crypto (ProtocolMagic, RedeemSecretKey, SafeSigner,
                      SignTag (SignRedeemTx, SignTx), deterministicKeyGen,
                      fakeSigner, hash, redeemSign, redeemToPublic, safeSign,
                      safeToPublic)
-import           Pos.DB (MonadGState, gsAdoptedBVData)
 import           Pos.Infra.Util.LogSafe (SecureLog, buildUnsecure)
 import           Test.QuickCheck (Arbitrary (..), elements)
 
@@ -216,10 +216,11 @@ instance Arbitrary InputSelectionPolicy where
     arbitrary = elements [minBound .. maxBound]
 
 -- | Mode for creating transactions. We need to know fee policy.
-type TxDistrMode m = MonadGState m
+class Monad m => HasTxFeePolicy m where
+    getTxFeePolicy :: m TxFeePolicy
 
 type TxCreateMode m
-    = ( TxDistrMode m
+    = ( HasTxFeePolicy m
       , MonadAddresses m
       )
 
@@ -263,12 +264,12 @@ makeLenses ''TxCreatorData
 type TxCreator m = ReaderT TxCreatorData (ExceptT TxError m)
 
 runTxCreator
-    :: TxDistrMode m
+    :: HasTxFeePolicy m
     => InputSelectionPolicy
     -> TxCreator m a
     -> m (Either TxError a)
 runTxCreator inputSelectionPolicy action = runExceptT $ do
-    _tcdFeePolicy <- bvdTxFeePolicy <$> gsAdoptedBVData
+    _tcdFeePolicy <- lift $ getTxFeePolicy
     let _tcdInputSelectionPolicy = inputSelectionPolicy
     runReaderT action TxCreatorData{..}
 
@@ -669,6 +670,17 @@ createUnsignedTx genesisConfig pendingTx selectionPolicy utxo outputs changeAddr
         let tx = makeUnsignedAbstractTx inps (NE.toList outs)
         pure (tx, map fst inps)
 
+estimateTxFee
+    :: TxCreateMode m
+    => Genesis.Config
+    -> PendingAddresses
+    -> InputSelectionPolicy
+    -> Utxo
+    -> TxOutputs
+    -> m (Either TxError TxFee)
+estimateTxFee genesisConfig pendingTx inputSelectionPolicy utxo outputs =
+    runTxCreator inputSelectionPolicy $ computeTxFee genesisConfig pendingTx utxo outputs
+
 -----------------------------------------------------------------------------
 -- Fees logic
 -----------------------------------------------------------------------------
@@ -704,7 +716,7 @@ prepareTxWithFee genesisConfig pendingTx utxo outputs gdInps gdOuts =
 -- | Compute, how much fees we should pay to send money to given
 -- outputs
 computeTxFee
-    :: (MonadAddresses m, MonadGState m)
+    :: TxCreateMode m
     => Genesis.Config
     -> PendingAddresses
     -> Utxo
@@ -870,7 +882,7 @@ mkGDOutputsWithRem
     -> SlotCount
     -> Maybe Address
     -> Maybe (AddrData m)
-    -> (TxRaw GoldDollar)
+    -> TxRaw GoldDollar
     -> TxCreator m [TxOutAux]
 mkGDOutputsWithRem nm epochSlots changeAddrM addrDataM TxRaw {..}
     | trRemainingMoney == mkGoldDollar 0 = pure trOutputs
