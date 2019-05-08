@@ -19,8 +19,10 @@ library
                        Pos.Client.Txp.Balances
                        Pos.Client.Txp.History
                        Pos.Client.Txp.Network
+                       Pos.Client.Txp.Failure
                        Pos.Client.Txp.Util
                        Pos.Client.Txp.Currency
+                       Pos.Client.Txp.IssueUtil
 
                        Pos.Client.Update
                        Pos.Client.Update.Network

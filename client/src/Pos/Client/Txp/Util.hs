@@ -25,6 +25,7 @@ module Pos.Client.Txp.Util
        , makeMPubKeyTx
        , makeMPubKeyTxAddrs
        , makeRedemptionTx
+       , mkOutputsWithRem
        , prepareTxWithFee
        , createGenericTx
        , createTx
@@ -37,11 +38,10 @@ module Pos.Client.Txp.Util
        , computeTxFee
 
        -- * Additional datatypes
-       , TxError (..)
-       , isCheckedTxError
-       , isNotEnoughMoneyTxError
-
+       , TxRaw (..)
+       , TxCreator
        , TxOutputs
+       , TxOwnedInputs
        , TxWithSpendings
        ) where
 
@@ -61,7 +61,7 @@ import qualified Data.Semigroup as S
 import qualified Data.Set as Set
 import           Data.Traversable (for)
 import qualified Data.Vector as V
-import           Formatting (bprint, build, sformat, stext, (%))
+import           Formatting (bprint, build, sformat, (%))
 import qualified Formatting.Buildable
 import           Serokell.Util (listJson)
 
@@ -73,6 +73,7 @@ import           Pos.Chain.Txp (Tx (..), TxAux (..), TxFee (..), TxIn (..),
                      isGDTxOut, gdUtxo, isStateTxOut)
 import           Pos.Client.Txp.Addresses
 import           Pos.Client.Txp.Currency
+import           Pos.Client.Txp.Failure
 import           Pos.Core (Address, Coin, SlotCount, TxFeePolicy (..),
                      TxSizeLinear (..), GoldDollar (..), calculateTxSizeLinear, 
                      coinToInteger, integerToCoin, isRedeemAddress, mkCoin,
@@ -114,84 +115,6 @@ data TxRaw c = TxRaw
     , trRemainingMoney :: !c
     -- ^ Remaining money
     } deriving (Show)
-
-data TxError =
-      NotEnoughMoney
-      -- ^ Parameter: how much more money is needed
-    | NotEnoughAllowedMoney
-      -- ^ Parameter: how much more money is needed and which available input addresses
-      -- are present in output addresses set
-    | FailedToStabilize
-      -- ^ Parameter: how many attempts were performed
-    | OutputIsRedeem !Address
-      -- ^ One of the tx outputs is a redemption address
-    | RedemptionDepleted
-      -- ^ Redemption address has already been used
-    | SafeSignerNotFound !Address
-      -- ^ The safe signer at the specified address was not found
-    | SignedTxNotBase16Format
-      -- ^ Externally-signed transaction is not in Base16-format.
-    | SignedTxUnableToDecode !Text
-      -- ^ Externally-signed transaction cannot be decoded.
-    | SignedTxSignatureNotBase16Format
-      -- ^ Signature of externally-signed transaction is not in Base16-format.
-    | SignedTxInvalidSignature !Text
-      -- ^ Signature of externally-signed transaction is invalid.
-    | OutputContainsState
-      -- ^ One of the tx outputs is TxOutState
-    | GeneralTxError !Text
-      -- ^ Parameter: description of the problem
-    deriving (Show, Generic)
-
-isNotEnoughMoneyTxError :: TxError -> Bool
-isNotEnoughMoneyTxError = \case
-    NotEnoughMoney{}        -> True
-    NotEnoughAllowedMoney{} -> True
-    _                       -> False
-
-instance Exception TxError
-
-instance Buildable TxError where
-    build NotEnoughMoney =
-        bprint ("Transaction creation error: not enough money")
-    build NotEnoughAllowedMoney =
-        bprint ("Transaction creation error: not enough money on addresses which are not included \
-                \in output addresses set")
-    build FailedToStabilize =
-        "Transaction creation error: failed to stabilize fee"
-    build (OutputIsRedeem addr) =
-        bprint ("Output address "%build%" is a redemption address") addr
-    build RedemptionDepleted =
-        bprint "Redemption address balance is 0"
-    build (SafeSignerNotFound addr) =
-        bprint ("Address "%build%" has no associated safe signer") addr
-    build SignedTxNotBase16Format =
-        "Externally-signed transaction is not in Base16-format."
-    build (SignedTxUnableToDecode msg) =
-        bprint ("Unable to decode externally-signed transaction: "%stext) msg
-    build SignedTxSignatureNotBase16Format =
-        "Signature of externally-signed transaction is not in Base16-format."
-    build (SignedTxInvalidSignature msg) =
-        bprint ("Signature of externally-signed transaction is invalid: "%stext) msg
-    build (GeneralTxError msg) =
-        bprint ("Transaction creation error: "%stext) msg
-    build OutputContainsState =
-        bprint ("Outputs contains TxOutState")
-
-isCheckedTxError :: TxError -> Bool
-isCheckedTxError = \case
-    NotEnoughMoney{}        -> True
-    NotEnoughAllowedMoney{} -> True
-    FailedToStabilize{}     -> False
-    OutputIsRedeem{}        -> True
-    RedemptionDepleted{}    -> True
-    SafeSignerNotFound{}    -> True
-    SignedTxNotBase16Format{}          -> True
-    SignedTxUnableToDecode{}           -> True
-    SignedTxSignatureNotBase16Format{} -> True
-    SignedTxInvalidSignature{}         -> True
-    GeneralTxError{}        -> True
-    OutputContainsState{}   -> True
 
 -----------------------------------------------------------------------------
 -- Tx creation

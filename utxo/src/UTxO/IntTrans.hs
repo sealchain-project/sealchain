@@ -40,7 +40,7 @@ import           Pos.Chain.Genesis (GenesisWStakeholders, gdBootStakeholders,
 import           Pos.Chain.Lrc (followTheSatoshi)
 import           Pos.Chain.Txp (Tx (..), TxAux (..), TxIn (..), TxOut (..),
                      txInputs, txOutStake, txOutputs)
-import           Pos.Client.Txp.Util (TxError (..))
+import           Pos.Client.Txp.Failure (TxError (..))
 import           Pos.Core (ProtocolConstants, SlotId (..))
 import           Pos.Core.Common (Coin, SharedSeed (..), SlotLeaders,
                      StakeholderId, StakesList, StakesMap, addCoin, subCoin)

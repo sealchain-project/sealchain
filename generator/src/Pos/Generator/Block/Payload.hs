@@ -30,7 +30,8 @@ import           Pos.Chain.Txp (Tx (..), TxAux (..), TxIn (..), TxOut (..),
                      utxoToLookup)
 
 import qualified Pos.Chain.Txp as Utxo
-import           Pos.Client.Txp.Util (InputSelectionPolicy (..), TxError (..),
+import           Pos.Client.Txp.Failure (TxError (..))
+import           Pos.Client.Txp.Util (InputSelectionPolicy (..),
                      createGenericTx, makeMPubKeyTxAddrs)
 import           Pos.Core (AddrSpendingData (..), Address (..), Coin,
                      SlotId (..), addressHash, coinToInteger,
