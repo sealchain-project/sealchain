@@ -32,8 +32,9 @@ import           Pos.Chain.Block (HasSlogGState (..))
 import           Pos.Chain.Delegation (DelegationVar, HasDlgConfiguration)
 import           Pos.Chain.Genesis (GenesisWStakeholders (..))
 import           Pos.Chain.Ssc (HasSscConfiguration, SscMemTag, SscState)
-import           Pos.Chain.Update (UpdateConfiguration)
+import           Pos.Chain.Update (UpdateConfiguration, bvdTxFeePolicy)
 import           Pos.Client.Txp.Addresses (MonadAddresses (..))
+import           Pos.Client.Txp.Util (HasTxFeePolicy (..))
 import           Pos.Configuration (HasNodeConfiguration)
 import           Pos.Core (Address, HasPrimaryKey (..), SlotCount, SlotId (..),
                      Timestamp, epochOrSlotToSlot, getEpochOrSlot,
@@ -343,6 +344,10 @@ instance Monad m => MonadAddresses (BlockGenMode ext m) where
     -- N.B. Currently block-gen uses only PubKey addresses with BootstrapEra
     -- distribution.
     getFakeChangeAddress nm _ = pure (largestPubKeyAddressBoot nm)
+
+instance MonadBlockGenBase m => HasTxFeePolicy (BlockGenMode ext m) where
+    getTxFeePolicy = bvdTxFeePolicy <$> gsAdoptedBVDataDefault
+
 
 type instance MempoolExt (BlockGenMode ext m) = ext
 
