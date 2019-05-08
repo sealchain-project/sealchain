@@ -36,7 +36,7 @@ packages:
 - tools
 - tools/post-mortem
 - utxo
-# - wallet
+- wallet
 - node-ipc
 # - faucet
 - acid-state-exts
@@ -264,4 +264,4 @@ ghc-options:
   sealchain-x509:              -Wall -Werror -Wcompat -fwarn-redundant-constraints
   sealchain-mnemonic:          -Wall -Werror -Wcompat -fwarn-redundant-constraints
   sealchain-cluster:           -Wall -Werror -Wcompat -fwarn-redundant-constraints
-  # cardano-wallet:               -Wall -Werror -Wcompat -fwarn-redundant-constraints
+  sealchain-wallet:            -Wall -Werror -Wcompat -fwarn-redundant-constraints
