@@ -278,7 +278,7 @@ totalTxOutCoin =
 
 totalTxInCoin :: TxUndo -> Coin
 totalTxInCoin = 
-    unsafeIntegerToCoin . sumCoins . map (txOutValue . toaOut . snd) . NE.filter (isOriginTxOut . toaOut . snd)
+    unsafeIntegerToCoin . sumCoins . map (txOutValue . toaOut) . NE.filter (isOriginTxOut . toaOut)
 
 totalTxOutGD :: Tx -> GoldDollar
 totalTxOutGD =
@@ -477,7 +477,7 @@ toTxBrief txi = CTxBrief {..}
     ctbGDOutputs  = map (second mkCGoldDollar) txGDOutputs
     ctbGDSum      = sumGDOfInputsOutputs txGDInputs
 
-    inputOutputs = map (toaOut . snd) $ NE.toList $ teInputOutputs (tiExtra txi)
+    inputOutputs = map toaOut $ NE.toList $ teInputOutputs (tiExtra txi)
     txInputs    = filterAndConvertTxOutputs inputOutputs
     txOutputs     = filterAndConvertTxOutputs $ _txOutputs tx
 

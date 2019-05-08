@@ -44,8 +44,8 @@ import           Pos.Binary.Class (serialize')
 import           Pos.Chain.Block (HeaderHash)
 import           Pos.Chain.Genesis as Genesis (Config (..), GenesisData)
 import           Pos.Chain.Txp (Tx, TxId, TxOut (..), TxOutAux (..),
-                     genesisUtxo, utxoF, utxoToAddressCoinGDPairs)
-import           Pos.Core (Address, Coin (..), GoldDollar (..), EpochIndex (..), 
+                     genesisUtxo, utxoF, utxoToAddressCoinPairs)
+import           Pos.Core (Address, CoinPair, EpochIndex (..), 
                      mkCoin, mkGoldDollar, goldDollarToInteger,
                      coinToInteger, unsafeAddCoin, unsafeAddGoldDollar)
 import           Pos.Core.Chrono (NewestFirst (..))
@@ -140,7 +140,7 @@ getAddrHistory :: MonadDBRead m => Address -> m AddrHistory
 getAddrHistory = fmap (NewestFirst . concat . maybeToList) .
                  gsGetBi . addrHistoryKey
 
-getAddrBalance :: MonadDBRead m => Address -> m (Maybe (Coin, GoldDollar))
+getAddrBalance :: MonadDBRead m => Address -> m (Maybe CoinPair)
 getAddrBalance = gsGetBi . addrBalanceKey
 
 getUtxoSum :: MonadDBRead m => m (Integer, Integer)
@@ -167,8 +167,8 @@ getLastTransactions = gsGetBi lastTxsPrefix
 prepareExplorerDB :: (MonadDB m, MonadUnliftIO m) => GenesisData -> m ()
 prepareExplorerDB genesisData = do
     unlessM balancesInitializedM $ do
-        let addressCoinGDPairs = utxoToAddressCoinGDPairs $ genesisUtxo genesisData
-        putGenesisBalances addressCoinGDPairs
+        let addressCoinPairs = utxoToAddressCoinPairs $ genesisUtxo genesisData
+        putGenesisBalances addressCoinPairs
         putInitFlag
 
     -- Smooth migration for CSE-228.
@@ -259,7 +259,7 @@ balancesInitializedM = isJust <$> dbGet GStateDB balancesInitFlag
 putInitFlag :: MonadDB m => m ()
 putInitFlag = gsPutBi balancesInitFlag True
 
-putGenesisBalances :: (MonadDB m) => [(Address, (Coin, GoldDollar))] -> m ()
+putGenesisBalances :: (MonadDB m) => [(Address, CoinPair)] -> m ()
 putGenesisBalances addressCoinPairs = writeBatchGState putAddrBalancesOp
   where
     putAddrBalancesOp :: [ExplorerOp]
@@ -302,7 +302,7 @@ data ExplorerOp
 
     | UpdateAddrHistory !Address !AddrHistory
 
-    | PutAddrBalance !Address !(Coin, GoldDollar)
+    | PutAddrBalance !Address !CoinPair
     | DelAddrBalance !Address
 
     | PutUtxoSum !(Integer, Integer)
@@ -350,15 +350,15 @@ data BalancesIter
 
 instance DBIteratorClass BalancesIter where
     type IterKey BalancesIter = Address
-    type IterValue BalancesIter = (Coin, GoldDollar)
+    type IterValue BalancesIter = CoinPair
     iterKeyPrefix = addrBalancePrefix
 
 -- 'Source' corresponding to the whole balances mapping (for all addresses).
-balancesSource :: (MonadDBRead m) => ConduitT () (Address, (Coin, GoldDollar)) (ResourceT m) ()
+balancesSource :: (MonadDBRead m) => ConduitT () (Address, CoinPair) (ResourceT m) ()
 balancesSource = dbIterSource GStateDB (Proxy @BalancesIter)
 
 -- 'Sink' to turn balances source to a map.
-balancesSink :: (MonadDBRead m) => ConduitT (Address, (Coin, GoldDollar)) Void m (HashMap Address (Coin, GoldDollar))
+balancesSink :: (MonadDBRead m) => ConduitT (Address, CoinPair) Void m (HashMap Address CoinPair)
 balancesSink =
     CL.fold
         (\res (addr, (coin, gd)) -> res & at addr . non (minBound, minBound) %~ (\(c, g) -> (unsafeAddCoin coin c, unsafeAddGoldDollar gd g)))

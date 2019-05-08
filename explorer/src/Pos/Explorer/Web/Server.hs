@@ -501,7 +501,7 @@ getTxSummary genesisHash cTxId = do
         tx <- maybeThrow (Internal "TxExtra return tx index that is out of bounds") $
               atMay (toList $ mb ^. mainBlockTxPayload . txpTxs) (fromIntegral txIndexInBlock)
 
-        let rawInputsOutputs    = NE.toList $ map (toaOut . snd) $ teInputOutputs txExtra
+        let rawInputsOutputs    = NE.toList $ map toaOut $ teInputOutputs txExtra
         let inputOutputs        = filterAndConvertTxOutputs rawInputsOutputs
         let txOutputs           = filterAndConvertTxOutputs $ _txOutputs tx
 

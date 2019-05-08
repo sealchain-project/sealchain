@@ -26,9 +26,9 @@ import           Pos.Chain.Txp (ToilVerFailure (..), Tx (..), TxAux (..), TxId,
                      topsortTxs, isOriginTxOut, isGDTxOut)
 import qualified Pos.Chain.Txp as Txp
 import           Pos.Chain.Update (BlockVersionData)
-import           Pos.Core (Address, Coin, GoldDollar, EpochIndex, Timestamp, mkCoin,
-                     sumCoins, unsafeAddCoin, unsafeSubCoin, unsafeAddGoldDollar,
-                     mkGoldDollar, unsafeSubGoldDollar, sumGoldDollars)
+import           Pos.Core (Address, CoinPair, EpochIndex, Timestamp, 
+                     mkCoin, sumCoins, mkGoldDollar, sumGoldDollars,
+                     unsafeAddCoinPair, unsafeSubCoinPair)
 import           Pos.Core.Chrono (NewestFirst (..))
 import           Pos.Crypto (ProtocolMagic, WithHash (..), hash)
 import           Pos.Explorer.Core (AddrHistory, TxExtra (..))
@@ -131,8 +131,8 @@ eNormalizeToil pm txValRules txpConfig bvd curEpoch txs = mapM_ normalize ordere
 ----------------------------------------------------------------------------
 
 data BalanceUpdate = BalanceUpdate
-    { minusBalance :: [(Address, (Coin, GoldDollar))]
-    , plusBalance  :: [(Address, (Coin, GoldDollar))]
+    { minusBalance :: [(Address, CoinPair)]
+    , plusBalance  :: [(Address, CoinPair)]
     }
 
 modifyAddrHistory :: (AddrHistory -> AddrHistory) -> Address -> ExplorerExtraM ()
@@ -163,28 +163,28 @@ updateUtxoSumFromBalanceUpdate balanceUpdate = do
 
 getTxRelatedAddrs :: TxAux -> TxUndo -> [Address]
 getTxRelatedAddrs TxAux {taTx = UnsafeTx {..}} (toList -> undo) =
-    map txOutAddress _txOutputs `unionList` map (txOutAddress . toaOut . snd) undo
+    map txOutAddress _txOutputs `unionList` map (txOutAddress . toaOut) undo
   where
     unionList :: [Address] -> [Address] -> [Address]
     unionList lhs rhs = HS.toList $ HS.union (HS.fromList lhs) (HS.fromList rhs)
 
-combineBalanceUpdates :: BalanceUpdate -> [(Address, (Sign, (Coin, GoldDollar)))]
+combineBalanceUpdates :: BalanceUpdate -> [(Address, (Sign, CoinPair))]
 combineBalanceUpdates BalanceUpdate {..} =
     let plusCombined  = map (\(addr, bal) -> (addr, (Plus, bal))) $ 
                         HM.toList $ 
-                        HM.fromListWith unsafeAddBalance plusBalance
+                        HM.fromListWith unsafeAddCoinPair plusBalance
         minusCombined = map (\(addr, bal) -> (addr, (Minus, bal))) $ 
                         HM.toList $ 
-                        HM.fromListWith unsafeAddBalance minusBalance
+                        HM.fromListWith unsafeAddCoinPair minusBalance
     in plusCombined <> minusCombined
 
 updateAddrBalances :: BalanceUpdate -> ExplorerExtraM ()
 updateAddrBalances (combineBalanceUpdates -> updates) = mapM_ updater updates
   where
-    updater :: (Address, (Sign, (Coin, GoldDollar))) -> ExplorerExtraM ()
+    updater :: (Address, (Sign, CoinPair)) -> ExplorerExtraM ()
     updater (addr, (Plus, plus)) = do
         currentBalance <- fromMaybe (mkCoin 0, mkGoldDollar 0) <$> getAddrBalance addr
-        let newBalance = unsafeAddBalance currentBalance plus
+        let newBalance = unsafeAddCoinPair currentBalance plus
         putAddrBalance addr newBalance
     updater (addr, (Minus, minus)) = do
         maybeBalance <- getAddrBalance addr
@@ -201,7 +201,7 @@ updateAddrBalances (combineBalanceUpdates -> updates) = mapM_ updater updates
                                  " from address "%build%" which only has "%build)
                         minus addr currentBalance
                 | otherwise -> do
-                    let newBalance = unsafeSubBalance currentBalance minus
+                    let newBalance = unsafeSubCoinPair currentBalance minus
                     if newBalance == (mkCoin 0, mkGoldDollar 0) then
                         delAddrBalance addr
                     else
@@ -209,7 +209,7 @@ updateAddrBalances (combineBalanceUpdates -> updates) = mapM_ updater updates
 
 getBalanceUpdate :: TxAux -> TxUndo -> BalanceUpdate
 getBalanceUpdate txAux txUndo =
-    let undoOutputs = toList $ map (toaOut . snd) txUndo
+    let undoOutputs = toList $ map toaOut txUndo
         txOutputs = _txOutputs (taTx txAux)
 
         filterUndoOutputs f = filter f undoOutputs
@@ -225,11 +225,5 @@ getBalanceUpdate txAux txUndo =
 
     in BalanceUpdate {..}
 
-unsafeAddBalance :: (Coin, GoldDollar) -> (Coin, GoldDollar) -> (Coin, GoldDollar)
-unsafeAddBalance (c1, gd1) (c2, gd2) = (unsafeAddCoin c1 c2, unsafeAddGoldDollar gd1 gd2)
-
-unsafeSubBalance :: (Coin, GoldDollar) -> (Coin, GoldDollar) -> (Coin, GoldDollar)
-unsafeSubBalance (c1, gd1) (c2, gd2) = (unsafeSubCoin c1 c2, unsafeSubGoldDollar gd1 gd2)
-
-littleThanBalance :: (Coin, GoldDollar) -> (Coin, GoldDollar) -> Bool
+littleThanBalance :: CoinPair -> CoinPair -> Bool
 littleThanBalance (c1, gd1) (c2, gd2) = c1 < c2 || gd1 < gd2

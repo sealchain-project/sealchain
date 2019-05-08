@@ -32,7 +32,7 @@ import           Pos.Explorer.DB (Epoch, Page, getEpochBlocks, getEpochPages,
                      getPageBlocks)
 
 import           Pos.Chain.Genesis as Genesis (Config (..), GenesisHash)
-import           Pos.Chain.Txp (genesisUtxo, utxoToAddressCoinGDPairs)
+import           Pos.Chain.Txp (genesisUtxo, utxoToAddressCoinPairs)
 import           Pos.Core (Address, Coin, EpochIndex, SlotId (..), SlotLeaders,
                      Timestamp, isRedeemAddress)
 import           Pos.DB.Lrc (getLeadersForEpoch)
@@ -55,9 +55,9 @@ data ExtraContext = ExtraContext
 
 makeExtraCtx :: Genesis.Config -> ExtraContext
 makeExtraCtx genesisConfig =
-    let addressCoinGDPairs =
-            utxoToAddressCoinGDPairs $ genesisUtxo $ configGenesisData genesisConfig
-        redeemOnly = map (\(addr, (coin, _)) -> (addr, coin)) $ filter (isRedeemAddress . fst) addressCoinGDPairs
+    let addressCoinPairs =
+            utxoToAddressCoinPairs $ genesisUtxo $ configGenesisData genesisConfig
+        redeemOnly = map (\(addr, (coin, _)) -> (addr, coin)) $ filter (isRedeemAddress . fst) addressCoinPairs
     in ExtraContext
         { ecAddressCoinPairs     = V.fromList redeemOnly
         , ecExplorerMockableMode = prodMode $ configGenesisHash genesisConfig

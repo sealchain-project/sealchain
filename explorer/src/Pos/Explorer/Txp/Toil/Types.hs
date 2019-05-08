@@ -15,13 +15,13 @@ import           Control.Lens (makeLenses)
 import           Data.Default (Default, def)
 
 import           Pos.Chain.Txp (TxId)
-import           Pos.Core (Address, Coin, GoldDollar)
+import           Pos.Core (Address, CoinPair)
 import           Pos.Explorer.Core (AddrHistory, TxExtra)
 import qualified Pos.Util.Modifier as MM
 
 type TxMapExtra = MM.MapModifier TxId TxExtra
 type UpdatedAddrHistories = HashMap Address AddrHistory
-type TxMapBalances = MM.MapModifier Address (Coin, GoldDollar)
+type TxMapBalances = MM.MapModifier Address CoinPair
 
 -- | Modifier of extra data stored by explorer.
 data ExplorerExtraModifier = ExplorerExtraModifier
@@ -46,6 +46,6 @@ instance Default ExplorerExtraModifier where
 data ExplorerExtraLookup = ExplorerExtraLookup
     { eelGetTxExtra     :: TxId -> Maybe TxExtra
     , eelGetAddrHistory :: Address -> AddrHistory
-    , eelGetAddrBalance :: Address -> Maybe (Coin, GoldDollar)
+    , eelGetAddrBalance :: Address -> Maybe CoinPair
     , eelGetUtxoSum     :: !(Integer, Integer)
     }

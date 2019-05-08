@@ -13,7 +13,7 @@ import           Control.Lens (at, non)
 import qualified Data.HashMap.Strict as HM
 
 import           Pos.Chain.Txp (Tx (..), TxAux (..), Utxo, toaOut, txOutAddress)
-import           Pos.Core (Address, Coin, GoldDollar)
+import           Pos.Core (Address, CoinPair)
 import           Pos.Core.Chrono (NewestFirst (..))
 import           Pos.DB.Class (MonadDBRead)
 import qualified Pos.Explorer.DB as ExDB
@@ -45,7 +45,7 @@ buildExplorerExtraLookup utxo txAuxes = do
             , eelGetUtxoSum = utxoSum
             }
   where
-    buildHistoriesAndBalances :: TxAux -> m (HashMap Address AddrHistory, HashMap Address (Coin, GoldDollar))
+    buildHistoriesAndBalances :: TxAux -> m (HashMap Address AddrHistory, HashMap Address CoinPair)
     buildHistoriesAndBalances txAux = do
         let UnsafeTx {..} = taTx txAux
         let txInAddrs = map (txOutAddress . toaOut) $ toList utxo

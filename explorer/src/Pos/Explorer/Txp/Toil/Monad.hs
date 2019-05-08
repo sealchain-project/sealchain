@@ -36,7 +36,7 @@ import           Control.Monad.State.Strict (mapStateT)
 
 import           Pos.Chain.Txp (ExtendedGlobalToilM, ExtendedLocalToilM,
                      StakesLookupF, TxId)
-import           Pos.Core (Address, Coin, GoldDollar)
+import           Pos.Core (Address, CoinPair)
 import           Pos.Explorer.Core (AddrHistory, TxExtra)
 import           Pos.Explorer.Txp.Toil.Types (ExplorerExtraLookup (..),
                      ExplorerExtraModifier, eemAddrBalances, eemAddrHistories,
@@ -64,7 +64,7 @@ getAddrHistory addr = do
         Nothing -> eelGetAddrHistory <$> ask <*> pure addr
         Just hist -> pure hist
 
-getAddrBalance :: Address -> ExplorerExtraM (Maybe (Coin, GoldDollar))
+getAddrBalance :: Address -> ExplorerExtraM (Maybe CoinPair)
 getAddrBalance addr = do
     baseLookup <- eelGetAddrBalance <$> ask
     MM.lookup baseLookup addr <$> use eemAddrBalances
@@ -81,7 +81,7 @@ delTxExtra txId = eemLocalTxsExtra %= MM.delete txId
 updateAddrHistory :: Address -> AddrHistory -> ExplorerExtraM ()
 updateAddrHistory addr hist = eemAddrHistories . at addr .= Just hist
 
-putAddrBalance :: Address -> (Coin, GoldDollar) -> ExplorerExtraM ()
+putAddrBalance :: Address -> CoinPair -> ExplorerExtraM ()
 putAddrBalance addr coin = eemAddrBalances %= MM.insert addr coin
 
 delAddrBalance :: Address -> ExplorerExtraM ()
