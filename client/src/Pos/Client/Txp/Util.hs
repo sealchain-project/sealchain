@@ -25,6 +25,7 @@ module Pos.Client.Txp.Util
        , makeMPubKeyTx
        , makeMPubKeyTxAddrs
        , makeRedemptionTx
+       , prepareTxWithFee
        , createGenericTx
        , createTx
        , createMTx
@@ -559,7 +560,7 @@ prepareInpsOuts
     -> TxCreator m (TxOwnedInputs TxOut, [TxOutAux])
 prepareInpsOuts genesisConfig pendingTx utxo outputs addrData = do
     (gdInps, gdOuts) <- prepareGDInpsOutsIfNeeded genesisConfig pendingTx utxo outputs Nothing (Just addrData)
-    txRaw@TxRaw {..} <- prepareTxWithFee genesisConfig pendingTx utxo outputs gdInps gdOuts
+    txRaw@TxRaw {..} <- prepareTxWithFee genesisConfig pendingTx utxo (NE.toList outputs) gdInps gdOuts
     let nm = makeNetworkMagic $ configProtocolMagic genesisConfig
     outputsWithRem <-
         mkOutputsWithRem nm (configEpochSlots genesisConfig) addrData txRaw
@@ -575,7 +576,7 @@ prepareInpsOutsForUnsignedTx
     -> TxCreator m (TxOwnedInputs TxOut, TxOutputs)
 prepareInpsOutsForUnsignedTx genesisConfig pendingTx utxo outputs changeAddress = do
     (gdInps, gdOuts) <- prepareGDInpsOutsIfNeeded genesisConfig pendingTx utxo outputs (Just changeAddress) Nothing
-    txRaw@TxRaw {..} <- prepareTxWithFee genesisConfig pendingTx utxo outputs gdInps gdOuts
+    txRaw@TxRaw {..} <- prepareTxWithFee genesisConfig pendingTx utxo (NE.toList outputs) gdInps gdOuts
     let outputsWithRem = mkOutputsWithRemForUnsignedTx txRaw changeAddress
     pure (trInputs, NE.fromList outputsWithRem)
 
@@ -713,7 +714,7 @@ prepareTxWithFee
     => Genesis.Config
     -> PendingAddresses
     -> Utxo
-    -> TxOutputs
+    -> [TxOutAux]
     -> [(TxOut, TxIn)]
     -> [TxOutAux]
     -> TxCreator m (TxRaw Coin)
@@ -722,7 +723,7 @@ prepareTxWithFee genesisConfig pendingTx utxo outputs otherInps otherOuts =
         stabilizeTxFee genesisConfig pendingTx linearPolicy oriUtxo oriOuts otherInps otherOuts
   where
     oriUtxo = UnsafeQualifiedUtxo (originUtxo utxo) txOutValue
-    oriOuts = NE.filter (isOriginTxOut . toaOut) outputs
+    oriOuts = filter (isOriginTxOut . toaOut) outputs
 
 -- | Compute, how much fees we should pay to send money to given
 -- outputs
@@ -735,7 +736,7 @@ computeTxFee
     -> TxCreator m TxFee
 computeTxFee genesisConfig pendingTx utxo outputs = do
     (gdInps, gdOuts) <- prepareGDInpsOutsIfNeeded genesisConfig pendingTx utxo outputs Nothing Nothing
-    TxRaw {..} <- prepareTxWithFee genesisConfig pendingTx utxo outputs gdInps gdOuts
+    TxRaw {..} <- prepareTxWithFee genesisConfig pendingTx utxo (NE.toList outputs) gdInps gdOuts
     let outAmount = sumTxOutMoneys txOutValue $ filter (isOriginTxOut . toaOut) trOutputs
         inAmount = sumTxOutMoneys txOutValue $ map (TxOutAux . fst) $ NE.filter (isOriginTxOut . fst) trInputs
         remaining = coinToInteger trRemainingMoney
