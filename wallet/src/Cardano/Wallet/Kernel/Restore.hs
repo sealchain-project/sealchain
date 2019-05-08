@@ -562,7 +562,7 @@ blundToResolvedBlock node (b,u) = do
         now   <- liftIO $ getCurrentTimestamp
         return $ Just $ fromRawResolvedBlock UnsafeRawResolvedBlock {
             rawResolvedBlock       = mainBlock
-          , rawResolvedBlockInputs = map (map snd) $ undoTx u
+          , rawResolvedBlockInputs = undoTx u
           , rawTimestamp           = either (const now) identity mTime
           , rawResolvedContext     = ctxt
           }
