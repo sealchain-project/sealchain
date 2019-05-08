@@ -68,9 +68,8 @@ import           Pos.Binary (biSize)
 import           Pos.Chain.Genesis as Genesis (Config (..), configEpochSlots)
 import           Pos.Chain.Txp (Tx (..), TxAux (..), TxFee (..), TxIn (..),
                      TxInWitness (..), TxOut (..), TxOutAux (..),
-                     TxSigData (..), Utxo,
-                     isOriginTxOut, originUtxo,
-                     isGDTxOut, gdUtxo)
+                     TxSigData (..), Utxo, isOriginTxOut, originUtxo, 
+                     isGDTxOut, gdUtxo, isStateTxOut)
 import           Pos.Client.Txp.Addresses
 import           Pos.Client.Txp.Currency
 import           Pos.Core (Address, Coin, SlotCount, TxFeePolicy (..),
@@ -137,6 +136,8 @@ data TxError =
       -- ^ Signature of externally-signed transaction is not in Base16-format.
     | SignedTxInvalidSignature !Text
       -- ^ Signature of externally-signed transaction is invalid.
+    | OutputContainsState
+      -- ^ One of the tx outputs is TxOutState
     | GeneralTxError !Text
       -- ^ Parameter: description of the problem
     deriving (Show, Generic)
@@ -173,6 +174,8 @@ instance Buildable TxError where
         bprint ("Signature of externally-signed transaction is invalid: "%stext) msg
     build (GeneralTxError msg) =
         bprint ("Transaction creation error: "%stext) msg
+    build OutputContainsState =
+        bprint ("Outputs contains TxOutState")
 
 isCheckedTxError :: TxError -> Bool
 isCheckedTxError = \case
@@ -187,6 +190,7 @@ isCheckedTxError = \case
     SignedTxSignatureNotBase16Format{} -> True
     SignedTxInvalidSignature{}         -> True
     GeneralTxError{}        -> True
+    OutputContainsState{}   -> True
 
 -----------------------------------------------------------------------------
 -- Tx creation
@@ -575,6 +579,9 @@ prepareInpsOutsForUnsignedTx genesisConfig pendingTx utxo outputs changeAddress 
     let outputsWithRem = mkOutputsWithRemForUnsignedTx txRaw changeAddress
     pure (trInputs, NE.fromList outputsWithRem)
 
+hasStateOuts :: TxOutputs -> Bool
+hasStateOuts = not . null . NE.filter (isStateTxOut . toaOut)
+
 createGenericTx
     :: TxCreateMode m
     => Genesis.Config
@@ -585,8 +592,9 @@ createGenericTx
     -> TxOutputs
     -> AddrData m
     -> m (Either TxError TxWithSpendings)
-createGenericTx genesisConfig pendingTx creator inputSelectionPolicy utxo outputs addrData
-    = runTxCreator inputSelectionPolicy $ do
+createGenericTx genesisConfig pendingTx creator inputSelectionPolicy utxo outputs addrData =
+    runTxCreator inputSelectionPolicy $ do
+        when (hasStateOuts outputs) $ throwError OutputContainsState
         (inps, outs) <- prepareInpsOuts genesisConfig pendingTx utxo outputs addrData
         txAux <- either throwError return $ creator inps outs
         pure (txAux, map fst inps)
@@ -662,6 +670,7 @@ createUnsignedTx
     -> m (Either TxError (Tx,NonEmpty TxOut))
 createUnsignedTx genesisConfig pendingTx selectionPolicy utxo outputs changeAddress =
     runTxCreator selectionPolicy $ do
+        when (hasStateOuts outputs) $ throwError OutputContainsState
         (inps, outs) <- prepareInpsOutsForUnsignedTx genesisConfig
                                                      pendingTx
                                                      utxo
@@ -679,7 +688,9 @@ estimateTxFee
     -> TxOutputs
     -> m (Either TxError TxFee)
 estimateTxFee genesisConfig pendingTx inputSelectionPolicy utxo outputs =
-    runTxCreator inputSelectionPolicy $ computeTxFee genesisConfig pendingTx utxo outputs
+    runTxCreator inputSelectionPolicy $ do 
+        when (hasStateOuts outputs) $ throwError OutputContainsState
+        computeTxFee genesisConfig pendingTx utxo outputs
 
 -----------------------------------------------------------------------------
 -- Fees logic
@@ -706,9 +717,9 @@ prepareTxWithFee
     -> [(TxOut, TxIn)]
     -> [TxOutAux]
     -> TxCreator m (TxRaw Coin)
-prepareTxWithFee genesisConfig pendingTx utxo outputs gdInps gdOuts =
+prepareTxWithFee genesisConfig pendingTx utxo outputs otherInps otherOuts =
     withLinearFeePolicy $ \linearPolicy ->
-        stabilizeTxFee genesisConfig pendingTx linearPolicy oriUtxo oriOuts gdInps gdOuts
+        stabilizeTxFee genesisConfig pendingTx linearPolicy oriUtxo oriOuts otherInps otherOuts
   where
     oriUtxo = UnsafeQualifiedUtxo (originUtxo utxo) txOutValue
     oriOuts = NE.filter (isOriginTxOut . toaOut) outputs
@@ -784,7 +795,7 @@ stabilizeTxFee
     -> [(TxOut, TxIn)]
     -> [TxOutAux]
     -> TxCreator m (TxRaw Coin)
-stabilizeTxFee genesisConfig pendingTx linearPolicy qutxo@(UnsafeQualifiedUtxo utxo _) outputs gdInps gdOuts = do
+stabilizeTxFee genesisConfig pendingTx linearPolicy qutxo@(UnsafeQualifiedUtxo utxo _) outputs otherInps otherOuts = do
     minFee <- fixedToFee (txSizeLinearMinValue linearPolicy)
     mtx <- stabilizeTxFeeDo (False, firstStageAttempts) minFee
     case mtx of
@@ -800,8 +811,8 @@ stabilizeTxFee genesisConfig pendingTx linearPolicy qutxo@(UnsafeQualifiedUtxo u
     stabilizeTxFeeDo (_, 0) _ = pure Nothing
     stabilizeTxFeeDo (isSecondStage, attempt) expectedFee@(TxFee fee) = do
         TxRaw{..} <- prepareTxRaw pendingTx qutxo outputs fee
-        let realInputs = NE.fromList $ gdInps <> (NE.toList trInputs)
-        let realOutputs = gdOuts <> trOutputs
+        let realInputs = NE.fromList $ otherInps <> (NE.toList trInputs)
+        let realOutputs = otherOuts <> trOutputs
         let txRaw = TxRaw realInputs realOutputs trRemainingMoney
 
         let pm = configProtocolMagic genesisConfig
