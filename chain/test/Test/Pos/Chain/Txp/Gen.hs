@@ -144,7 +144,7 @@ genTxInWitness pm = Gen.choice gens
            ]
 
 genTxUndo :: Gen TxUndo
-genTxUndo = Gen.nonEmpty (Range.linear 1 10) $ (,) <$> genTxIn <*> genTxOutAux
+genTxUndo = Gen.nonEmpty (Range.linear 1 10)  genTxOutAux
 
 genTxWitness :: ProtocolMagic -> Gen TxWitness
 genTxWitness pm = V.fromList <$> Gen.list (Range.linear 1 10) (genTxInWitness pm)

@@ -105,7 +105,7 @@ verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {
         verifyKnownInputs protocolMagic ctx resolvedInputs ta
         when vtcVerifyAllIsKnown $ verifyAttributesAreKnown _txAttributes
         pure VerifyTxUtxoRes
-            { vturUndo = resolvedInputs
+            { vturUndo = map snd resolvedInputs
             , vturFee = txFee
             }
   where
@@ -287,5 +287,4 @@ rollbackTxUtxo (txAux, undo) = do
     let tx@UnsafeTx {..} = taTx txAux
     let txid = hash tx
     mapM_ utxoDel $ take (length _txOutputs) $ map (TxInUtxo txid) [0..]
-    mapM_ (uncurry utxoPut) $ toList undo
-  where
+    mapM_ (uncurry utxoPut) . toList $ NE.zip _txInputs undo

@@ -160,7 +160,7 @@ isRedeemTx :: TxUndo -> Bool
 isRedeemTx resolvedOuts = all isRedeemAddress inputAddresses
   where
     inputAddresses =
-        fmap (txOutAddress . toaOut . snd) . toList $ resolvedOuts
+        fmap (txOutAddress . toaOut) . toList $ resolvedOuts
 
 verifyGState ::
        BlockVersionData

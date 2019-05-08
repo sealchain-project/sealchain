@@ -77,7 +77,7 @@ exampleTxSigData :: TxSigData
 exampleTxSigData = TxSigData exampleHashTx
 
 exampleTxpUndo :: TxpUndo
-exampleTxpUndo = [NE.fromList $ zip (NE.toList exampleTxInList) (TxOutAux <$> exampleTxOutList)]
+exampleTxpUndo = [NE.fromList $ (TxOutAux <$> exampleTxOutList)]
 
 exampleTxWitness :: TxWitness
 exampleTxWitness = V.fromList [(PkWitness examplePublicKey exampleTxSig)]
