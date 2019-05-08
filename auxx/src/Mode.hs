@@ -28,10 +28,12 @@ import           Control.Monad.Trans.Resource (transResourceT)
 import           Data.Conduit (transPipe)
 
 import           Pos.Chain.Block (HasSlogContext (..), HasSlogGState (..))
+import           Pos.Chain.Update (bvdTxFeePolicy)
 import           Pos.Chain.Ssc (HasSscContext (..))
 import           Pos.Client.KeyStorage (MonadKeys (..), MonadKeysRead (..),
                      getSecretDefault, modifySecretDefault)
 import           Pos.Client.Txp.Addresses (MonadAddresses (..))
+import           Pos.Client.Txp.Util (HasTxFeePolicy (..))
 import           Pos.Client.Txp.Balances (MonadBalances (..),
                      getBalanceFromUtxo, getOwnUtxosGenesis)
 import           Pos.Client.Txp.History (MonadTxHistory (..),
@@ -216,6 +218,9 @@ instance (HasConfigurations, HasCompileInfo) =>
         gsIsBootstrapEra epochIndex <&> \case
             False -> largestPubKeyAddressBoot nm
             True -> largestPubKeyAddressSingleKey nm
+
+instance HasTxFeePolicy AuxxMode where
+    getTxFeePolicy = bvdTxFeePolicy <$> (realModeToAuxx ... gsAdoptedBVData)
 
 instance MonadKeysRead AuxxMode where
     getSecret = getSecretDefault
