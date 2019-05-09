@@ -92,10 +92,10 @@ If you have newer version of it - you will probably get linker errors during bui
 
 ### Building
 
-Build core node:
+Run the building script:
 
     $ cd sealchain
-    [~/sealchain]$ stack build --fast sealchain-node
+    [~/sealchain]$ ./scripts/sealchain.sh
 
 ## For Contributors
 Please see [CONTRIBUTING.md](https://github.com/sealchain-project/sealchain/blob/develop/CONTRIBUTING.md)
