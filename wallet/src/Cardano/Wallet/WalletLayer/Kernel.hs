@@ -173,6 +173,7 @@ bracketActiveWallet walletPassiveLayer passiveWallet walletDiffusion runActiveLa
     activeWalletLayer w = ActiveWalletLayer {
           walletPassiveLayer = walletPassiveLayer
         , pay                = Active.pay              w
+        , issue              = Active.issue            w
         -- , estimateFees       = Active.estimateFees     w
         , getNodeInfo        = Info.getNodeInfo        w
         }

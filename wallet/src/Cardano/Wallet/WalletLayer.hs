@@ -48,7 +48,7 @@ import           Cardano.Wallet.API.V1.Types (Account, AccountBalance,
                      AccountIndex, AccountUpdate, Address, BatchImportResult,
                      ForceNtpCheck, NewAccount, NewAddress, NewWallet,
                      NodeInfo, NodeSettings, PasswordUpdate, Payment,
-                     SpendingPassword, Transaction, V1 (..),
+                     SpendingPassword, Transaction, V1 (..), Issurance,
                      Wallet, WalletAddress, WalletId, WalletImport,
                      WalletUpdate)
 import qualified Cardano.Wallet.Kernel.Accounts as Kernel
@@ -501,6 +501,13 @@ data ActiveWalletLayer m = ActiveWalletLayer {
           -> Payment
           -- The payment we need to perform.
           -> m (Either NewPaymentError (Tx, TxMeta))
+
+      -- | Performs a issurance.
+    , issue :: PassPhrase
+            -- The \"spending password\" to decrypt the 'EncryptedSecretKey'.
+            -> Issurance
+            -- The issurance we need to perform.
+            -> m (Either NewPaymentError (Tx, TxMeta))
 
       -- | Node info
       --

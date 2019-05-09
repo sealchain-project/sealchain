@@ -11,8 +11,13 @@ import qualified Pos.Core as Core
 import           Servant
 
 type API = Tag "Transactions" 'NoTagDescription :>
-    (    "transactions" :> Summary "Generates a new transaction from the source to one or multiple target addresses."
+    (    "transactions" :> "payment"
+                        :> Summary "Generates a new transaction from the source to one or multiple target addresses."
                         :> ReqBody '[ValidJSON] Payment
+                        :> Post '[ValidJSON] (APIResponse Transaction)
+    :<|> "transactions" :> "issurance"
+                        :> Summary "Generates a new transaction for GD issurance."
+                        :> ReqBody '[ValidJSON] Issurance
                         :> Post '[ValidJSON] (APIResponse Transaction)
     :<|> "transactions" :> Summary "Returns the transaction history, i.e the list of all the past transactions."
                         :> QueryParam "wallet_id" WalletId

@@ -61,6 +61,9 @@ module Cardano.Wallet.API.V1.Types (
   , Payment (..)
   , PaymentSource (..)
   , PaymentDistribution (..)
+  , Issurance (..)
+  , IssuranceInfo (..)
+  , Proof (..)
   , Transaction (..)
   , TransactionType (..)
   , TransactionDirection (..)
@@ -170,6 +173,8 @@ import           Pos.Infra.Diffusion.Subscription.Status
 import           Pos.Infra.Util.LogSafe (BuildableSafeGen (..), buildSafe,
                      buildSafeList, buildSafeMaybe, deriveSafeBuildable,
                      plainOrSecureF)
+import           Pos.Util.Util (leftToPanic)
+
 import           Test.Pos.Core.Arbitrary ()
 
 -- | Declare generic schema, while documenting properties
@@ -1386,6 +1391,100 @@ instance BuildableSafeGen Payment where
         pmtGroupingPolicy
         pmtSpendingPassword
 
+-- | proof for issurance
+newtype Proof = Proof ByteString
+    deriving (Show, Ord, Eq, Generic)
+
+instance ToJSON Proof where
+  toJSON (Proof bs) = toJSON $ Base16.encode bs
+
+instance FromJSON Proof where
+    parseJSON = withText "Proof" $ \p -> do
+       case (Base16.decode p) of
+           Left err -> fail $ "Failed to parse Proof: " <> toString err
+           Right a  -> pure $ Proof a
+
+instance ToSchema Proof where
+    declareNamedSchema _ =
+        pure
+            $ NamedSchema (Just "Proof") $ mempty
+            & type_ .~ SwaggerString
+
+instance Arbitrary Proof where
+  arbitrary = pure . Proof . leftToPanic "Never fail" $ 
+              Base16.decode "692068617665206120746f6e206f6620676f6c647320696e204a50204d6f7267616e2e"
+
+deriveSafeBuildable ''Proof
+instance BuildableSafeGen Proof where
+    buildSafeGen _ (Proof bs) = bprint stext $ Base16.encode bs 
+
+-- | Issue number of GDs with proof
+data IssuranceInfo = IssuranceInfo {
+      iiIncrement :: !(V1 Core.GoldDollar)
+    , iiProof     :: !Proof
+      -- ^ Hex style
+    } deriving (Show, Ord, Eq, Generic)
+
+deriveJSON Aeson.defaultOptions ''IssuranceInfo
+
+instance ToSchema IssuranceInfo where
+  declareNamedSchema =
+    genericSchemaDroppingPrefix "ii" (\(--^) props -> props
+      & ("increment" --^ "Increment of GDs.")
+      & ("proof"     --^ "The proof info for this issurance.")
+    )
+
+instance Arbitrary IssuranceInfo where
+  arbitrary = IssuranceInfo <$> arbitrary
+                            <*> arbitrary
+
+deriveSafeBuildable '' IssuranceInfo
+instance BuildableSafeGen IssuranceInfo where
+    buildSafeGen sl IssuranceInfo{..} = bprint ("{"
+        %" increment="%buildSafe sl
+        %" proof="%buildSafe sl
+        %" }")
+        iiIncrement
+        iiProof
+
+-- | A 'Issurance' for issuing GD
+data Issurance = Issurance
+  { issSource           :: !PaymentSource
+  , issInfo             :: !IssuranceInfo
+  , issGroupingPolicy   :: !(Maybe (V1 Core.InputSelectionPolicy))
+  , issSpendingPassword :: !(Maybe SpendingPassword)
+  } deriving (Show, Eq, Generic)
+
+deriveJSON Aeson.defaultOptions ''Issurance
+
+instance Arbitrary Issurance where
+  arbitrary = Issurance <$> arbitrary
+                        <*> arbitrary
+                        <*> arbitrary
+                        <*> arbitrary
+
+instance ToSchema Issurance where
+  declareNamedSchema =
+    genericSchemaDroppingPrefix "iss" (\(--^) props -> props
+      & ("source"           --^ "Source for the payment.")
+      & ("info"             --^ "Increment and proof for the issurance.")
+      & ("groupingPolicy"   --^ "Optional strategy to use for selecting the transaction inputs.")
+      & ("spendingPassword" --^ "Wallet's protection password, required to spend funds if defined.")
+    )
+
+deriveSafeBuildable ''Issurance
+instance BuildableSafeGen Issurance where
+    buildSafeGen sl (Issurance{..}) = bprint ("{"
+        %" source="%buildSafe sl
+        %" destinations="%build
+        %" groupingPolicty="%build
+        %" spendingPassword="%(buildSafeMaybe mempty sl)
+        %" }")
+        issSource
+        issInfo
+        issGroupingPolicy
+        issSpendingPassword
+
 ----------------------------------------------------------------------------
 -- TxId
 ----------------------------------------------------------------------------
@@ -1879,6 +1978,19 @@ instance Example Payment where
                       <*> example
                       <*> example -- TODO: will produce `Just groupingPolicy`
                       <*> example
+
+instance Example Proof where
+    example = example
+
+instance Example IssuranceInfo where
+    example = IssuranceInfo <$> example
+                            <*> example
+
+instance Example Issurance where
+    example = Issurance <$> example
+                        <*> example
+                        <*> example -- TODO: will produce `Just groupingPolicy`
+                        <*> example
 
 instance Example Redemption where
     example = Redemption <$> example

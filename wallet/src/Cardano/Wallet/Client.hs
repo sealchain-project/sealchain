@@ -122,8 +122,10 @@ data WalletClient m
     , getAccountBalance
          :: WalletId -> AccountIndex -> Resp m AccountBalance
     -- transactions endpoints
-    , postTransaction
+    , postPayment
          :: Payment -> Resp m Transaction
+    , postIssurance
+         :: Issurance -> Resp m Transaction
     , getTransactionIndexFilterSorts
          :: Maybe WalletId
          -> Maybe AccountIndex
@@ -261,8 +263,10 @@ natMapClient phi f wc = WalletClient
         \x y p pp ff -> f $ phi $ getAccountAddresses wc x y p pp ff
     , getAccountBalance =
         \x -> f . phi . getAccountBalance wc x
-    , postTransaction =
-        f . phi . postTransaction wc
+    , postPayment =
+        f . phi . postPayment wc
+    , postIssurance =
+        f . phi . postIssurance wc
     , getTransactionIndexFilterSorts =
         \wid maid maddr mp mpp ff ->
             f . phi . getTransactionIndexFilterSorts wc wid maid maddr mp mpp ff

@@ -3,7 +3,8 @@
 
 module Cardano.Wallet.API.V1.Handlers.Transactions (
       handlers
-    , newTransaction
+    , newPayment
+    , newIssurance
     , getTransactionsHistory
     -- , estimateFees
     -- | Helper converter.
@@ -32,19 +33,33 @@ import           Cardano.Wallet.WalletLayer (ActiveWalletLayer,
 import qualified Cardano.Wallet.WalletLayer as WalletLayer
 
 handlers :: ActiveWalletLayer IO -> ServerT Transactions.API Handler
-handlers aw = newTransaction aw
+handlers aw = newPayment aw
+         :<|> newIssurance aw
          :<|> getTransactionsHistory (WalletLayer.walletPassiveLayer aw)
         --  :<|> estimateFees aw
 
--- | Given a 'Payment' as input, tries to generate a new 'Transaction', submitting
+-- | Given a 'Payment' as input, tries to generate a new 'Pay Transaction', submitting
 -- it to the network eventually.
-newTransaction :: ActiveWalletLayer IO
-               -> Payment
-               -> Handler (APIResponse Transaction)
-newTransaction aw payment@Payment{..} = liftIO $ do
+newPayment :: ActiveWalletLayer IO
+           -> Payment
+           -> Handler (APIResponse Transaction)
+newPayment aw payment@Payment{..} = liftIO $ do
 
     res <- liftIO $ (WalletLayer.pay aw) (maybe mempty coerce pmtSpendingPassword)
                                          payment
+    case res of
+         Left err        -> throwM err
+         Right (_, meta) -> txFromMeta aw NewPaymentUnknownAccountId meta
+
+-- | Given a 'Issurance' as input, tries to generate a new 'Issue Transaction', submitting
+-- it to the network eventually.
+newIssurance :: ActiveWalletLayer IO
+             -> Issurance
+             -> Handler (APIResponse Transaction)
+newIssurance aw issurance@Issurance{..} = liftIO $ do
+
+    res <- liftIO $ (WalletLayer.issue aw) (maybe mempty coerce issSpendingPassword)
+                                         issurance
     case res of
          Left err        -> throwM err
          Right (_, meta) -> txFromMeta aw NewPaymentUnknownAccountId meta

@@ -1,7 +1,9 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes                 #-}
+
 module Cardano.Wallet.Kernel.Transactions (
       pay
+    , issue
     -- * Errors
     , NewTransactionError(..)
     , SignTransactionError(..)
@@ -55,8 +57,8 @@ import           Pos.Chain.Txp as Core (TxAux, TxIn, TxOut,
                      TxOutAux, toaOut, txOutAddress)
 import           Pos.Client.Txp (HasTxFeePolicy (..), MonadAddresses (..), TxError, 
                      InputSelectionPolicy (..), PendingAddresses (..), 
-                     makeMPubKeyTxAddrs, createMTx) --, estimateTxFee)
-import           Pos.Core (Address, CoinPair, mkCoin, mkGoldDollar)
+                     makeMPubKeyTxAddrs, createMTx, createGDIssuanceTx) --, estimateTxFee)
+import           Pos.Core (Address, GoldDollar, CoinPair, mkCoin, mkGoldDollar)
 import qualified Pos.Core as Core
 import           Pos.Core.NetworkMagic (NetworkMagic (..), makeNetworkMagic)
 import           Pos.Crypto (EncryptedSecretKey, PassPhrase, ProtocolMagic,
@@ -71,6 +73,7 @@ data ClientEnv = ClientEnv
   { _ceActiveWallet :: ActiveWallet
   , _cePassPhrase   :: PassPhrase
   , _ceAccountId    :: HdAccountId
+  , _ceSigners      :: (Address -> Maybe SafeSigner)
   }
 
 makeLenses ''ClientEnv
@@ -103,24 +106,57 @@ runClientMode ::
        ActiveWallet 
     -> PassPhrase 
     -> HdAccountId 
+    -> (Address -> Maybe SafeSigner)
     -> ClientMode m a 
     -> ExceptT NewTransactionError m a
-runClientMode activeWallet spendingPassword accountId action = do
+runClientMode activeWallet spendingPassword accountId hdwSigners action = do
     let env = ClientEnv { _ceActiveWallet = activeWallet
-                        , _cePassPhrase = spendingPassword
-                        , _ceAccountId = accountId
+                        , _cePassPhrase   = spendingPassword
+                        , _ceAccountId    = accountId
+                        , _ceSigners      = hdwSigners
                         }
     runReaderT action env
 
 clientCreateMTx
     :: MonadIO m
     => Genesis.Config
-    -> Utxo
-    -> (Address -> Maybe SafeSigner)
     -> NonEmpty TxOutAux
+    -> Utxo
     -> ClientMode m (TxAux, NonEmpty TxOut)
-clientCreateMTx genesisConfig utxo hdwSigners outputs = do
-    resultE <- createMTx genesisConfig (PendingAddresses Set.empty) OptimizeForSecurity utxo hdwSigners outputs ()
+clientCreateMTx genesisConfig outputs utxo = do
+    env <- ask
+    let hdwSigners = env ^. ceSigners
+    resultE <- createMTx 
+               genesisConfig 
+               (PendingAddresses Set.empty) 
+               OptimizeForSecurity 
+               utxo 
+               hdwSigners
+               outputs 
+               ()
+    case resultE of 
+        Left e       -> throwError $ NewTransactionClientError e
+        Right result -> return result 
+
+clientCreateGDIssuranceTx
+    :: MonadIO m
+    => Genesis.Config
+    -> GoldDollar
+    -> ByteString
+    -> Utxo
+    -> ClientMode m (TxAux, NonEmpty TxOut)
+clientCreateGDIssuranceTx genesisConfig issuedGDs proof utxo = do
+    env <- ask
+    let hdwSigners = env ^. ceSigners
+    resultE <- createGDIssuanceTx 
+               genesisConfig 
+               (PendingAddresses Set.empty) 
+               OptimizeForSecurity 
+               utxo 
+               hdwSigners 
+               issuedGDs 
+               proof 
+               ()
     case resultE of 
         Left e       -> throwError $ NewTransactionClientError e
         Right result -> return result 
@@ -140,7 +176,7 @@ clientCreateMTx genesisConfig utxo hdwSigners outputs = do
 {-------------------------------------------------------------------------------
   Generating payments and estimating fees
 -------------------------------------------------------------------------------}
-
+-- TODO xl delete this 
 data NumberOfMissingUtxos = NumberOfMissingUtxos Int
 
 instance Buildable NumberOfMissingUtxos where
@@ -183,10 +219,6 @@ instance Buildable NewTransactionError where
 instance Arbitrary NewTransactionError where
     arbitrary = oneof [
         NewTransactionUnknownAccount <$> arbitrary
-    --   , NewTransactionErrorCoinSelectionFailed <$> oneof
-    --         [ pure $ CoinSelHardErrUtxoExhausted "0 coin(s)" "14 coin(s)"
-    --         , pure CoinSelHardErrCannotCoverFee
-    --         ]
       , NewTransactionErrorCreateAddressFailed <$> arbitrary
       , NewTransactionErrorSignTxFailed <$> arbitrary
       , pure NewTransactionInvalidTxIn
@@ -213,22 +245,49 @@ instance Buildable PaymentError where
     build (PaymentNoHdAddressForSrcAddress addrErr) =
         bprint ("PaymentNoHdAddressForSrcAddress" % build) addrErr
 
--- | Workhorse kernel function to perform a payment. It includes logic to
--- stop trying to perform a payment if the payment would take more than 30
--- seconds, as well as internally retrying up to 5 times to propagate the
--- transaction via 'newPending'.
+-- | Workhorse kernel function to perform a payment.
 pay :: Genesis.Config
     -> ActiveWallet
     -> PassPhrase
-    -- -> CoinSelectionOptions
     -> HdAccountId
     -- ^ The source HD Account from where the payment was originated
     -> NonEmpty (Address, CoinPair)
     -- ^ The payees
     -> IO (Either PaymentError (Tx, TxMeta))
 pay genesisConfig activeWallet spendingPassword accountId payees = do
+    newTransactionAndSubmit activeWallet accountId $
+        newPayment genesisConfig activeWallet spendingPassword accountId payees
+
+-- | Workhorse kernel function to perform a payment.
+issue :: Genesis.Config
+      -> ActiveWallet
+      -> PassPhrase
+      -- -> CoinSelectionOptions
+      -> HdAccountId
+      -- ^ The source HD Account from where the payment was originated
+      -> GoldDollar
+      -- ^ GD to issued.
+      -> ByteString
+    -- ^ proof of issurance.
+      -> IO (Either PaymentError (Tx, TxMeta))
+issue genesisConfig activeWallet spendingPassword accountId issuedGDs proof = do
+    newTransactionAndSubmit activeWallet accountId $
+        newIssurance genesisConfig activeWallet spendingPassword accountId issuedGDs proof
+
+-- | Workhorse kernel function to perform a transaction. It includes logic to
+-- stop trying to perform a payment if the payment would take more than 30
+-- seconds, as well as internally retrying up to 5 times to propagate the
+-- transaction via 'newPending'.
+newTransactionAndSubmit 
+    :: ActiveWallet
+    -> HdAccountId
+    -- ^ The source HD Account from where the payment was originated
+    -> IO (Either NewTransactionError (TxAux, PartialTxMeta, Utxo))
+    -- ^ new transaction action
+    -> IO (Either PaymentError (Tx, TxMeta))
+newTransactionAndSubmit activeWallet accountId action = do
     retrying retryPolicy shouldRetry $ \rs -> do
-        res <- newTransaction genesisConfig activeWallet spendingPassword accountId payees
+        res <- action
         case res of
              Left e      -> return (Left $ PaymentNewTransactionError e)
              Right (txAux, partialMeta, _utxo) -> do
@@ -337,25 +396,51 @@ submitSignedTx aw@ActiveWallet{..} tx srcAddrsWithProofs =
         Nothing       -> Nothing
         Just txOutput -> Just (txInput, txOutput)
 
--- | Creates a new 'TxAux' and corresponding 'TxMeta',
--- without submitting it to the network.
---
--- For testing purposes, if successful this additionally returns the utxo
--- that coin selection was run against.
-newTransaction
+-- | new transaction for payment
+newPayment
     :: Genesis.Config
     -> ActiveWallet
     -> PassPhrase
     -- ^ The spending password.
-    -- -> CoinSelectionOptions
-    -- ^ The options describing how to tune the coin selection.
     -> HdAccountId
     -- ^ The source HD account from where the payment should originate.
     -> NonEmpty (Address, CoinPair)
     -- ^ The payees.
     -> IO (Either NewTransactionError (TxAux, PartialTxMeta, Utxo))
-newTransaction genesisConfig aw@ActiveWallet{..} spendingPassword accountId payees = do
+newPayment genesisConfig aw spendingPassword accountId payees = do
     let outputs = NonEmpty.fromList $ concatMap toTxOuts payees
+    newTransaction aw spendingPassword accountId $
+        clientCreateMTx genesisConfig outputs 
+
+-- | new transaction for issurance
+newIssurance
+    :: Genesis.Config
+    -> ActiveWallet
+    -> PassPhrase
+    -- ^ The spending password.
+    -> HdAccountId
+    -- ^ The source HD account from where the payment should originate.
+    -> GoldDollar
+    -- ^ GD to issued.
+    -> ByteString
+    -- ^ proof of issurance.
+    -> IO (Either NewTransactionError (TxAux, PartialTxMeta, Utxo))
+newIssurance genesisConfig aw spendingPassword accountId issuedGDs proof = do
+    newTransaction aw spendingPassword accountId $
+        clientCreateGDIssuranceTx genesisConfig issuedGDs proof
+
+-- | low-level function, Creates a new 'TxAux' and corresponding 'TxMeta',
+-- without submitting it to the network.
+newTransaction
+    :: ActiveWallet
+    -> PassPhrase
+    -- ^ The spending password.
+    -> HdAccountId
+    -- ^ The source HD account from where the payment should originate.
+    -> (Utxo -> ClientMode IO (TxAux, NonEmpty TxOut))
+    -- ^ The action.
+    -> IO (Either NewTransactionError (TxAux, PartialTxMeta, Utxo))
+newTransaction aw@ActiveWallet{..} spendingPassword accountId clientAction = do
     let pm = walletPassive ^. Internal.walletProtocolMagic
         nm = makeNetworkMagic pm
 
@@ -376,8 +461,8 @@ newTransaction genesisConfig aw@ActiveWallet{..} spendingPassword accountId paye
         availableUtxo <- withExceptT NewTransactionUnknownAccount $ exceptT $
                          currentAvailableUtxo db accountId
 
-        (txAux, inputOuts) <- runClientMode aw spendingPassword accountId $
-                              clientCreateMTx genesisConfig availableUtxo getSigner outputs
+        (txAux, inputOuts) <- runClientMode aw spendingPassword accountId getSigner $
+                              clientAction availableUtxo
        
         txMetaCreatedAt_  <- liftIO $ Node.getCreationTimestamp (walletPassive ^. walletNode)
         let txId = hash $ taTx txAux
