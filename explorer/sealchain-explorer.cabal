@@ -1,6 +1,6 @@
 name:                sealchain-explorer
 version:             0.0.1
-synopsis:            Cardano explorer
+synopsis:            Sealchain explorer
 description:         Please see README.md
 license:             MIT
 license-file:        LICENSE
@@ -77,7 +77,6 @@ library
                       , unordered-containers
                       , vector
 
-                      -- cardano sl
                       , sealchain
                       , sealchain-binary
                       , sealchain-chain
@@ -142,7 +141,7 @@ library
     ld-options:        -fuse-ld=gold
 
 
-executable cardano-explorer
+executable sealchain-explorer
   hs-source-dirs:      src/explorer
   main-is:             Main.hs
   other-modules:       ExplorerNodeOptions
@@ -188,7 +187,7 @@ executable cardano-explorer
     ghc-options:       -optl-fuse-ld=gold
     ld-options:        -fuse-ld=gold
 
-executable cardano-explorer-hs2purs
+executable sealchain-explorer-hs2purs
   hs-source-dirs:      src/purescript
   main-is:             Main.hs
   other-modules:       PSTypes
@@ -231,7 +230,7 @@ executable cardano-explorer-hs2purs
     ghc-options:       -optl-fuse-ld=gold
     ld-options:        -fuse-ld=gold
 
-executable cardano-explorer-swagger
+executable sealchain-explorer-swagger
   hs-source-dirs:      src/documentation
   main-is:             Main.hs
   other-modules:       Paths_sealchain_explorer
@@ -265,7 +264,7 @@ executable cardano-explorer-swagger
     ghc-options:       -optl-fuse-ld=gold
     ld-options:        -fuse-ld=gold
 
-executable cardano-explorer-mock
+executable sealchain-explorer-mock
   hs-source-dirs:      src/mock
   main-is:             Main.hs
   other-modules:       Paths_sealchain_explorer
@@ -305,7 +304,7 @@ executable cardano-explorer-mock
     ghc-options:       -optl-fuse-ld=gold
     ld-options:        -fuse-ld=gold
 
-test-suite cardano-explorer-test
+test-suite sealchain-explorer-test
   main-is:             Test.hs
   other-modules:
                        -- Standard module with some magic
@@ -384,7 +383,7 @@ test-suite cardano-explorer-test
   build-tools: cpphs >= 1.19
   ghc-options: -pgmP cpphs -optP --cpp
 
-benchmark cardano-explorer-bench
+benchmark sealchain-explorer-bench
   hs-source-dirs:      bench
   main-is:             Main.hs
   other-modules:       Bench.Pos.Explorer.ServerBench
