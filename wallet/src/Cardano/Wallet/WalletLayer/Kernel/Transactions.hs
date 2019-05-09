@@ -159,11 +159,11 @@ metaToTx db slotCount current TxMeta{..} = do
         txId = V1 _txMetaId,
         txConfirmations = fromIntegral confirmations,
         txAmount = V1 _txMetaAmount,
-        txGDAmount = V1 _txMetaGDAmount,
+        txAmountGD = V1 _txMetaGDAmount,
         txInputs = inputsToPayDistr <$> _txMetaInputs,
         txOutputs = outputsToPayDistr <$> _txMetaOutputs,
         txDirection = if _txMetaIsOutgoing then V1.OutgoingTransaction else V1.IncomingTransaction,
-        txGDDirection = if _txMetaIsGDOutgoing then V1.OutgoingTransaction else V1.IncomingTransaction,
+        txDirectionGD = if _txMetaIsGDOutgoing then V1.OutgoingTransaction else V1.IncomingTransaction,
         txCreationTime = V1 _txMetaCreationAt,
         txStatus = status
     }

@@ -1121,7 +1121,7 @@ api :: HasSwagger a
     -> (DescriptionEnvironment -> T.Text)
     -> Swagger
 api (compileInfo, curSoftwareVersion) walletAPI mkDescription = toSwagger walletAPI
-  & info.title   .~ "Cardano Wallet API"
+  & info.title   .~ "Sealchain Wallet API"
   & info.version .~ fromString (show curSoftwareVersion)
   & host ?~ "127.0.0.1:8090"
   & info.description ?~ mkDescription DescriptionEnvironment
@@ -1136,5 +1136,5 @@ api (compileInfo, curSoftwareVersion) walletAPI mkDescription = toSwagger wallet
   & paths %~ (POST,   "/api/internal/apply-update")       `setDescription` applyUpdateDescription
   & paths %~ (POST,   "/api/internal/postpone-update")    `setDescription` postponeUpdateDescription
   & paths %~ (DELETE, "/api/internal/reset-wallet-state") `setDescription` resetWalletStateDescription
-  & paths %~ (POST,   "/api/v1/transactions/fees")        `setDescription` estimateFeesDescription
+  -- & paths %~ (POST,   "/api/v1/transactions/fees")        `setDescription` estimateFeesDescription
   & paths %~ (GET,    "/api/v1/addresses/{address}")      `setDescription` getAddressDescription

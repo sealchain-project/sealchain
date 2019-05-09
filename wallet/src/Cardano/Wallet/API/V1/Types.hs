@@ -1647,13 +1647,13 @@ data Transaction = Transaction
   { txId            :: !(V1 Txp.TxId)
   , txConfirmations :: !Word
   , txAmount        :: !(V1 Core.Coin)
-  , txGDAmount      :: !(V1 Core.GoldDollar)
+  , txAmountGD      :: !(V1 Core.GoldDollar)
   , txInputs        :: !(NonEmpty PaymentDistribution)
   , txOutputs       :: ![PaymentDistribution]
     -- ^ The output money distribution.
   , txDirection     :: !TransactionDirection
     -- ^ The direction for this transaction (e.g incoming, outgoing).
-  , txGDDirection   :: !TransactionDirection
+  , txDirectionGD   :: !TransactionDirection
     -- ^ The direction for this transaction (e.g incoming, outgoing).
   , txCreationTime  :: !(V1 Core.Timestamp)
     -- ^ The time when transaction was created.
@@ -1668,10 +1668,11 @@ instance ToSchema Transaction where
       & ("id"            --^ "Transaction's id.")
       & ("confirmations" --^ "Number of confirmations.")
       & ("amount"        --^ "Coins moved as part of the transaction, in Lovelace.")
+      & ("amountGD"      --^ "GDs moved as part of the transaction, in Lovelace.")
       & ("inputs"        --^ "One or more input money distributions.")
       & ("outputs"       --^ "One or more ouputs money distributions.")
-      & ("type"          --^ "Whether the transaction is entirely local or foreign.")
-      & ("direction"     --^ "Direction for this transaction.")
+      & ("direction"     --^ "Direction of coins for this transaction.")
+      & ("directionGD"   --^ "Direction of GDs for this transaction.")
       & ("creationTime"  --^ "Timestamp indicating when the transaction was created.")
       & ("status"        --^ "Shows whether or not the transaction is accepted.")
     )
@@ -1694,20 +1695,20 @@ instance BuildableSafeGen Transaction where
         %" id="%buildSafe sl
         %" confirmations="%build
         %" amount="%buildSafe sl
-        %" gdAmount="%buildSafe sl
+        %" amountGD="%buildSafe sl
         %" inputs="%buildSafeList sl
         %" outputs="%buildSafeList sl
         %" direction"%buildSafe sl
-        %" gdDirection"%buildSafe sl
+        %" directionGD"%buildSafe sl
         %" }")
         txId
         txConfirmations
         txAmount
-        txGDAmount
+        txAmountGD
         (toList txInputs)
         (toList txOutputs)
         txDirection
-        txGDDirection
+        txDirectionGD
 
 instance Buildable [Transaction] where
     build = bprint listJson
