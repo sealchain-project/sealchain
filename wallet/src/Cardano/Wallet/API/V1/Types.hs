@@ -63,7 +63,7 @@ module Cardano.Wallet.API.V1.Types (
   , PaymentDistribution (..)
   , Issurance (..)
   , IssuranceInfo (..)
-  , Proof (..)
+--   , Proof (..)
   , Transaction (..)
   , TransactionType (..)
   , TransactionDirection (..)
@@ -173,7 +173,7 @@ import           Pos.Infra.Diffusion.Subscription.Status
 import           Pos.Infra.Util.LogSafe (BuildableSafeGen (..), buildSafe,
                      buildSafeList, buildSafeMaybe, deriveSafeBuildable,
                      plainOrSecureF)
-import           Pos.Util.Util (leftToPanic)
+-- import           Pos.Util.Util (leftToPanic)
 
 import           Test.Pos.Core.Arbitrary ()
 
@@ -305,10 +305,12 @@ instance ToSchema (V1 Core.CoinPair) where
             & properties .~ (mempty
                 & at "coins" ?~ (Inline $ mempty
                     & type_ .~ SwaggerNumber
+                    & minimum_ .~ Just 0
                     & maximum_ .~ Just (fromIntegral Core.maxCoinVal)
                     )
                 & at "gds" ?~ (Inline $ mempty
                     & type_ .~ SwaggerNumber
+                    & minimum_ .~ Just 0
                     & maximum_ .~ Just (fromIntegral Core.maxGoldDollarVal)
                     )
                 )
@@ -1392,36 +1394,36 @@ instance BuildableSafeGen Payment where
         pmtSpendingPassword
 
 -- | proof for issurance
-newtype Proof = Proof ByteString
-    deriving (Show, Ord, Eq, Generic)
+-- newtype Proof = Proof ByteString
+--     deriving (Show, Ord, Eq, Generic)
 
-instance ToJSON Proof where
-  toJSON (Proof bs) = toJSON $ Base16.encode bs
+-- instance ToJSON Proof where
+--   toJSON (Proof bs) = toJSON $ Base16.encode bs
 
-instance FromJSON Proof where
-    parseJSON = withText "Proof" $ \p -> do
-       case (Base16.decode p) of
-           Left err -> fail $ "Failed to parse Proof: " <> toString err
-           Right a  -> pure $ Proof a
+-- instance FromJSON Proof where
+--     parseJSON = withText "Proof" $ \p -> do
+--        case (Base16.decode p) of
+--            Left err -> fail $ "Failed to parse Proof: " <> toString err
+--            Right a  -> pure $ Proof a
 
-instance ToSchema Proof where
-    declareNamedSchema _ =
-        pure
-            $ NamedSchema (Just "Proof") $ mempty
-            & type_ .~ SwaggerString
+-- instance ToSchema Proof where
+--     declareNamedSchema _ =
+--         pure $ NamedSchema (Just "Proof") $ mempty
+--              & type_ .~ SwaggerString
+--              & format ?~ "hex|base16"
 
-instance Arbitrary Proof where
-  arbitrary = pure . Proof . leftToPanic "Never fail" $ 
-              Base16.decode "692068617665206120746f6e206f6620676f6c647320696e204a50204d6f7267616e2e"
+-- instance Arbitrary Proof where
+--   arbitrary = pure . Proof . leftToPanic "Never fail" $ 
+--               Base16.decode "692068617665206120746f6e206f6620676f6c647320696e204a50204d6f7267616e2e"
 
-deriveSafeBuildable ''Proof
-instance BuildableSafeGen Proof where
-    buildSafeGen _ (Proof bs) = bprint stext $ Base16.encode bs 
+-- deriveSafeBuildable ''Proof
+-- instance BuildableSafeGen Proof where
+--     buildSafeGen _ (Proof bs) = bprint stext $ Base16.encode bs 
 
 -- | Issue number of GDs with proof
 data IssuranceInfo = IssuranceInfo {
       iiIncrement :: !(V1 Core.GoldDollar)
-    , iiProof     :: !Proof
+    , iiProof     :: !Text
       -- ^ Hex style
     } deriving (Show, Ord, Eq, Generic)
 
@@ -1431,7 +1433,7 @@ instance ToSchema IssuranceInfo where
   declareNamedSchema =
     genericSchemaDroppingPrefix "ii" (\(--^) props -> props
       & ("increment" --^ "Increment of GDs.")
-      & ("proof"     --^ "The proof info for this issurance.")
+      & ("proof"     --^ "The hex style proof info for this issurance.")
     )
 
 instance Arbitrary IssuranceInfo where
@@ -1706,7 +1708,7 @@ instance BuildableSafeGen Transaction where
         txAmount
         txAmountGD
         (toList txInputs)
-        (toList txOutputs)
+        txOutputs
         txDirection
         txDirectionGD
 
@@ -1980,12 +1982,12 @@ instance Example Payment where
                       <*> example -- TODO: will produce `Just groupingPolicy`
                       <*> example
 
-instance Example Proof where
-    example = example
+-- instance Example Proof where
+--     example = example
 
 instance Example IssuranceInfo where
-    example = IssuranceInfo <$> example
-                            <*> example
+    example = flip IssuranceInfo "692068617665206120746f6e206f6620676f6c647320696e204a50204d6f7267616e2e" <$> example
+                            
 
 instance Example Issurance where
     example = Issurance <$> example
@@ -2137,8 +2139,8 @@ data WalletError =
     | UtxoNotEnoughFragmented !ErrUtxoNotEnoughFragmented
     -- ^ available Utxo is not enough fragmented, ie., there is more outputs of transaction than
     -- utxos
-    | CommonError !Text
-    -- ^ Common Tx creation error
+    | GeneralError !Text
+    -- ^ General Tx creation error
     deriving (Generic, Show, Eq)
 
 deriveGeneric ''WalletError
@@ -2242,7 +2244,7 @@ instance Buildable WalletError where
             bprint "You've made too many requests too soon, and this one was throttled."
         UtxoNotEnoughFragmented x ->
             bprint build x
-        CommonError t ->
+        GeneralError t ->
             bprint ("Unable to create transaction, "%stext ) t
 
 -- | Convert wallet errors to Servant errors
@@ -2288,7 +2290,7 @@ instance ToServantError WalletError where
             err400 { errHTTPCode = 429 }
         UtxoNotEnoughFragmented{} ->
             err403
-        CommonError{} ->
+        GeneralError{} ->
             err500
 
 -- | Declare the key used to wrap the diagnostic payload, if any
@@ -2334,5 +2336,5 @@ instance HasDiagnostic WalletError where
             "microsecondsUntilRetry"
         UtxoNotEnoughFragmented{} ->
             "details"
-        CommonError{} ->
+        GeneralError{} ->
             "common"

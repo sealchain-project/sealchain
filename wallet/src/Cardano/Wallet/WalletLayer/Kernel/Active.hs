@@ -3,15 +3,16 @@
 module Cardano.Wallet.WalletLayer.Kernel.Active (
     pay
   , issue
-  -- , estimateFees
+  , estimateFees
   ) where
 
 import           Universum
 
 import           Data.Time.Units (Second)
+import qualified Serokell.Util.Base16 as Base16
 
 import           Pos.Chain.Txp (Tx (..))
-import           Pos.Core (AddrAttributes (..), Address (..), GoldDollar, CoinPair)
+import           Pos.Core (AddrAttributes (..), Address (..), Coin, GoldDollar, CoinPair)
 import           Pos.Core.Attributes (Attributes (..))
 import           Pos.Core.NetworkMagic (NetworkMagic, makeNetworkMagic)
 import           Pos.Crypto (PassPhrase)
@@ -19,15 +20,12 @@ import           Pos.Crypto (PassPhrase)
 import           Cardano.Wallet.API.V1.Types (unV1)
 import qualified Cardano.Wallet.API.V1.Types as V1
 import qualified Cardano.Wallet.Kernel as Kernel
--- import           Cardano.Wallet.Kernel.CoinSelection.FromGeneric
---                      (CoinSelectionOptions (..), ExpenseRegulation,
---                      InputGrouping, newOptions)
 import qualified Cardano.Wallet.Kernel.DB.HdWallet as HD
 import           Cardano.Wallet.Kernel.DB.TxMeta.Types
 import           Cardano.Wallet.Kernel.Internal (walletProtocolMagic)
 import qualified Cardano.Wallet.Kernel.NodeStateAdaptor as Node
 import qualified Cardano.Wallet.Kernel.Transactions as Kernel
-import           Cardano.Wallet.WalletLayer ( --EstimateFeesError (..),
+import           Cardano.Wallet.WalletLayer (EstimateFeesError (..),
                      NewPaymentError (..))
 import           Cardano.Wallet.WalletLayer.ExecutionTimeLimit
                      (limitExecutionTimeTo)
@@ -96,20 +94,18 @@ issue activeWallet pw issurance = liftIO $ do
 
 
 -- | Estimates the fees for a payment.
--- estimateFees :: MonadIO m
---              => Kernel.ActiveWallet
---              -> InputGrouping
---              -> ExpenseRegulation
---              -> V1.Payment
---              -> m (Either EstimateFeesError Coin)
--- estimateFees activeWallet grouping regulation payment = liftIO $ do
---     policy <- Node.getFeePolicy (Kernel.walletPassive activeWallet ^. Kernel.walletNode)
---     limitExecutionTimeTo (60 :: Second) EstimateFeesTimeLimitReached $ do
---       runExceptT $ do
---         (opts, accId, payees) <- withExceptT EstimateFeesWalletIdDecodingFailed $
---                                    setupPayment policy grouping regulation payment
---         withExceptT EstimateFeesError $ ExceptT $
---           Kernel.estimateFees activeWallet opts accId payees
+estimateFees :: MonadIO m
+             => Kernel.ActiveWallet
+             -> V1.Payment
+             -> m (Either EstimateFeesError Coin)
+estimateFees activeWallet payment = liftIO $ do
+    genesisConfig <- Node.getCoreConfig (Kernel.walletPassive activeWallet ^. Kernel.walletNode)
+    limitExecutionTimeTo (60 :: Second) EstimateFeesTimeLimitReached $ do
+      runExceptT $ do
+        (accId, payees) <- withExceptT EstimateFeesWalletIdDecodingFailed $
+                                   setupPayment payment
+        withExceptT EstimateFeesError $ ExceptT $
+          Kernel.estimateFees genesisConfig activeWallet accId payees
 
 {-------------------------------------------------------------------------------
   Internal auxiliary
@@ -151,8 +147,8 @@ setupIssurance :: Monad m
                                  )
 setupIssurance issurance = do
     accId <- setupAccount $ V1.issSource issurance
+    proof <- exceptT (Base16.decode $ V1.iiProof issuranceInfo)
     return (accId, issuedGds, proof)
   where
     issuranceInfo = V1.issInfo issurance
     issuedGds = unV1 $ V1.iiIncrement issuranceInfo
-    (V1.Proof proof) = V1.iiProof issuranceInfo

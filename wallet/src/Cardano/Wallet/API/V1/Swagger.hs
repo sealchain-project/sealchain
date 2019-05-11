@@ -358,7 +358,7 @@ $errors
 -- | Shorter version of the doc below, only for Dev & V0 documentations
 highLevelShortDescription :: DescriptionEnvironment -> T.Text
 highLevelShortDescription DescriptionEnvironment{..} = [text|
-This is the specification for the Cardano Wallet API, automatically generated as a [Swagger](https://swagger.io/) spec from the [Servant](http://haskell-servant.readthedocs.io/en/stable/) API of [Cardano](https://github.com/input-output-hk/cardano-sl).
+This is the specification for the Sealchain Wallet API, automatically generated as a [Swagger](https://swagger.io/) spec from the [Servant](http://haskell-servant.readthedocs.io/en/stable/) API of [Sealchain](https://github.com/sealchain-project/sealchain).
 
 Protocol Version   | Git Revision
 -------------------|-------------------
@@ -369,7 +369,7 @@ $deSoftwareVersion | $deGitRevision
 -- | Provide additional insights on V1 documentation
 highLevelDescription :: DescriptionEnvironment -> T.Text
 highLevelDescription DescriptionEnvironment{..} = [text|
-This is the specification for the Cardano Wallet API, automatically generated as a [Swagger](https://swagger.io/) spec from the [Servant](http://haskell-servant.readthedocs.io/en/stable/) API of [Cardano](https://github.com/input-output-hk/cardano-sl).
+This is the specification for the Sealchain Wallet API, automatically generated as a [Swagger](https://swagger.io/) spec from the [Servant](http://haskell-servant.readthedocs.io/en/stable/) API of [Sealchain](https://github.com/sealchain-project/sealchain).
 
 Protocol Version   | Git Revision
 -------------------|-------------------
@@ -427,7 +427,7 @@ To generate a valid `spendingPassword`, please follow the following steps:
 
 As a response, the API provides you with a unique wallet `id` to be used in subsequent
 requests. Make sure to store it / write it down. Note that every API response is
-[jsend-compliant](https://labs.omniti.com/labs/jsend); Cardano also augments responses with
+[jsend-compliant](https://labs.omniti.com/labs/jsend); Sealchain also augments responses with
 meta-data specific to pagination. More details in the section below about [Pagination](#section/Pagination)
 
 ```json
@@ -444,10 +444,10 @@ curl -X GET https://localhost:8090/api/v1/wallets/{{walletId}} \
      --cert ./scripts/tls-files/client.pem
 ```
 
-Receiving ADA
+Receiving SEAL (or GD)
 -------------
 
-To receive _ADA_ from other users you should provide your address. This address can be obtained
+To receive _SEAL_ (or GD) from other users you should provide your address. This address can be obtained
 from an account. Each wallet contains at least one account. An account is like a pocket inside
 of your wallet. Vew all existing accounts of a wallet by using the [`GET /api/v1/wallets/{{walletId}}/accounts`](#tag/Accounts%2Fpaths%2F~1api~1v1~1wallets~1{walletId}~1accounts%2Fget)
 endpoint:
@@ -466,25 +466,28 @@ $readAccounts
 ```
 
 All the wallet's accounts are listed under the `addresses` field. You can communicate one of
-these addresses to receive _ADA_ on the associated account.
+these addresses to receive _SEAL_(or GD) on the associated account.
 
 
-Sending ADA
+Sending SEAL(or GD)
 -----------
 
-In order to send _ADA_ from one of your accounts to another address, you must create a new
-payment transaction using the [`POST /api/v1/transactions`](#tag/Transactions%2Fpaths%2F~1api~1v1~1transactions%2Fpost)
+In order to send _SEAL_(or GD) from one of your accounts to another address, you must create a new
+payment transaction using the [`POST /api/v1/transactions`](#tag/Transactions%2Fpaths%2F~1api~1v1~1transactions~1payment%2Fpost)
 endpoint as follows:
 
 ```
-curl -X POST https://localhost:8090/api/v1/transactions \
+curl -X POST https://localhost:8090/api/v1/transactions/payment \
   -H "Accept: application/json; charset=utf-8" \
   -H "Content-Type: application/json; charset=utf-8" \
   --cacert ./scripts/tls-files/ca.crt \
   --cert ./scripts/tls-files/client.pem \
   -d '{
   "destinations": [{
-    "amount": 14,
+    "amount": {
+      "coins": 100000000,
+      "gds": 100
+    }
     "address": "A7k5bz1QR2...Tx561NNmfF"
   }],
   "source": {
@@ -495,13 +498,13 @@ curl -X POST https://localhost:8090/api/v1/transactions \
 }'
 ```
 
-Note that, in order to perform a transaction, you need to have enough existing _ADA_ on the
-source account! The Cardano API is designed to accomodate multiple recipients payments
+Note that, in order to perform a transaction, you need to have enough existing _SEAL_(or GD) on the
+source account! The Sealchain API is designed to accomodate multiple recipients payments
 out-of-the-box; notice how `destinations` is a list of addresses (and corresponding amounts).
 
 When the transaction succeeds, funds are no longer available in the sources addresses, and are
 soon made available to the destinations within a short delay. Note that, you can at any time see
-the status of your wallets by using the [`GET /api/v1/transactions`](#tag/Transactions%2Fpaths%2F~1api~1v1~1transactions%2Fget)
+the status of your wallets by using the [`GET /api/v1/transactions/payment`](#tag/Transactions%2Fpaths%2F~1api~1v1~1transactions%2Fget)
 endpoint as follows:
 
 ```
@@ -522,6 +525,32 @@ In addition, and because it is not possible to _preview_ a transaction, one can 
 transaction's fees using the [`POST /api/v1/transactions/fees`](#tag/Transactions%2Fpaths%2F~1api~1v1~1transactions~1fees%2Fpost)
 endpoint to get an estimation of those fees.
 See [Estimating Transaction Fees](#section/Common-Use-Cases/Estimating-Transaction-Fees) for more details.
+
+Issue GD
+-----------
+
+To increase or decrease GD total supply, The issuer (the GD operator) can create a new
+payment transaction using the [`POST /api/v1/transactions`](#tag/Transactions%2Fpaths%2F~1api~1v1~1transactions~1issurance%2Fpost)
+endpoint as follows:
+
+```
+curl -X POST https://localhost:8090/api/v1/transactions/issurance \
+  -H "Accept: application/json; charset=utf-8" \
+  -H "Content-Type: application/json; charset=utf-8" \
+  --cacert ./scripts/tls-files/ca.crt \
+  --cert ./scripts/tls-files/client.pem \
+  -d '{
+  "info": {
+    "increment": 10000000,
+    "proof": "692068617665206120746f6e206f6620676f6c647320696e204a50204d6f7267616e2e" -- proof in hex
+  },
+  "source": {
+    "accountIndex": 0,
+    "walletId": "Ae2tdPwUPE...8V3AVTnqGZ"
+  },
+  "spendingPassword": "5416b2988745725998907addf4613c9b0764f04959030e1b81c603b920a115d0"
+}'
+```
 
 
 Pagination
@@ -597,18 +626,12 @@ $deWalletErrorTable
 Monetary Denomination & Units
 =============================
 
-Cardano's currency is called _ADA_ ( ₳ ). _ADA_ has up to **6** decimal places; hence the
-smallest monetary unit that can be represented in the Cardano's blockhain is: 0.000001₳. This
-is also called a _Lovelace_ (Cardano's currency is named after the mathematician and computer
-scientist [Ada Lovelace](https://en.wikipedia.org/wiki/Ada_Lovelace)). Put in another way, one
-_ADA_ is equal to one million _Lovelace_.
+Sealchain's platform currency is called _SEAL_. _SEAL_ has up to **8** decimal places; hence the
+smallest monetary unit that can be represented in the Seaichain's blockhain is: 0.00000001. 
 
-ADA        | Lovelace
------------|----------
-`1`        | `1 000 000`
-`.000 001` | `1`
+Sealchain originaly includes stablecoin called GD (GoldDollar), GD has up to **2** decimal places.
 
-> **Warning**: All amounts manipulated in the API are given and expected in Lovelace.
+> **Warning**: All amounts manipulated in the API are given and expected in smallest monetary unit.
 
 
 Mnemonic Codes
@@ -630,7 +653,7 @@ The API is **versioned**, meaning that is possible to access different versions 
 
 This means that _omitting_ the version number would call the old version of the API. Deprecated
 endpoints are currently grouped under an appropriate section; they would be removed in upcoming
-released, if you're starting a new integration with Cardano-SL, please ignore these.
+released, if you're starting a new integration with Sealchain, please ignore these.
 
 Note that Compatibility between major versions is not _guaranteed_, i.e. the request & response formats might differ.
 
@@ -647,7 +670,7 @@ Common Use-Cases
 Sending Money to Multiple Recipients
 ------------------------------------
 
-As seen in [Sending ADA](#section/Getting-Started/Sending-ADA), you can send _ADA_ to
+As seen in [Sending SEAL](#section/Getting-Started/Sending-SEAL), you can send _SEAL_ to
 another party using the [`POST /api/v1/transactions`](#tag/Transactions%2Fpaths%2F~1api~1v1~1transactions%2Fpost) endpoint.
 Important to notice is the type of the field `destinations`: it's a list, enabling you to provide more
 than one destination. Each destination is composed of:
@@ -687,7 +710,7 @@ curl -X POST https://localhost:8090/api/v1/transactions \
 About UTXO Fragmentation
 ------------------------
 
-As described in [Sending Money to Multiple Recipients](#section/Common-Use-Cases/Sending-Money-to-Multiple-Recipients), it is possible to send ada to more than one destination. Cardano only allows a given UTXO to cover at most one single transaction output. As a result,
+As described in [Sending Money to Multiple Recipients](#section/Common-Use-Cases/Sending-Money-to-Multiple-Recipients), it is possible to send ada to more than one destination. Sealchain only allows a given UTXO to cover at most one single transaction output. As a result,
 when the number of transaction outputs is greater than the number the API returns a `UtxoNotEnoughFragmented` error which
 looks like the following
 ```
@@ -747,7 +770,7 @@ curl -X POST https://localhost:8090/api/v1/transactions/fees \
 }'
 ```
 
-The API resolves with an estimated amount in _ADA_. This estimation highly depends on the
+The API resolves with an estimated amount in _SEAL_. This estimation highly depends on the
 current state of the ledger and diverges with time.
 
 ```json
@@ -1132,9 +1155,9 @@ api (compileInfo, curSoftwareVersion) walletAPI mkDescription = toSwagger wallet
     , deGitRevision           = ctiGitRevision compileInfo
     , deSoftwareVersion       = fromString $ show (svNumber curSoftwareVersion)
     }
-  & info.license ?~ ("MIT" & url ?~ URL "https://raw.githubusercontent.com/input-output-hk/cardano-sl/develop/lib/LICENSE")
+  & info.license ?~ ("MIT" & url ?~ URL "https://github.com/sealchain-project/sealchain/develop/LICENSE")
   & paths %~ (POST,   "/api/internal/apply-update")       `setDescription` applyUpdateDescription
   & paths %~ (POST,   "/api/internal/postpone-update")    `setDescription` postponeUpdateDescription
   & paths %~ (DELETE, "/api/internal/reset-wallet-state") `setDescription` resetWalletStateDescription
-  -- & paths %~ (POST,   "/api/v1/transactions/fees")        `setDescription` estimateFeesDescription
+  & paths %~ (POST,   "/api/v1/transactions/fees")        `setDescription` estimateFeesDescription
   & paths %~ (GET,    "/api/v1/addresses/{address}")      `setDescription` getAddressDescription

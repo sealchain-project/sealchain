@@ -4,6 +4,7 @@
 module Cardano.Wallet.Kernel.Transactions (
       pay
     , issue
+    , estimateFees
     -- * Errors
     , NewTransactionError(..)
     , SignTransactionError(..)
@@ -58,7 +59,7 @@ import           Pos.Chain.Txp as Core (TxAux, TxIn, TxOut,
 import           Pos.Client.Txp (HasTxFeePolicy (..), MonadAddresses (..), TxError, 
                      InputSelectionPolicy (..), PendingAddresses (..), 
                      makeMPubKeyTxAddrs, createMTx, createGDIssuanceTx) --, estimateTxFee)
-import           Pos.Core (Address, GoldDollar, CoinPair, mkCoin, mkGoldDollar)
+import           Pos.Core (Address, Coin, GoldDollar, CoinPair, mkCoin, mkGoldDollar)
 import qualified Pos.Core as Core
 import           Pos.Core.NetworkMagic (NetworkMagic (..), makeNetworkMagic)
 import           Pos.Crypto (EncryptedSecretKey, PassPhrase, ProtocolMagic,
@@ -196,6 +197,7 @@ data NewTransactionError =
   | NewTransactionInvalidTxIn
   | NewTransactionNotEnoughUtxoFragmentation NumberOfMissingUtxos
   | NewTransactionClientError TxError
+  | NewTransactionNotSupport
 
 instance Buildable NewTransactionError where
     build (NewTransactionUnknownAccount err) =
@@ -214,6 +216,8 @@ instance Buildable NewTransactionError where
         bprint ("NewTransactionNotEnoughUtxoFragmentation" % build) err
     build (NewTransactionClientError err) =
         bprint ("NewTransactionClientError" % build) err
+    build NewTransactionNotSupport =
+        bprint "NewTransactionNotSupport"
 
 
 instance Arbitrary NewTransactionError where
@@ -476,11 +480,11 @@ newTransaction aw@ActiveWallet{..} spendingPassword accountId clientAction = do
 
 toTxOuts :: (Address, CoinPair) -> [TxOutAux]
 toTxOuts (addr, (coins, gds)) = 
-    let sealOut | coins == (mkCoin 0)   = []
-                | otherwise             = [TxOut addr coins]
-        gdOut   | gds == (mkGoldDollar 0) = []
-                | otherwise               = [TxOutGD addr gds]
-    in map TxOutAux $ sealOut <> gdOut
+    let out   | coins == (mkCoin 0)     = []
+              | otherwise               = [TxOut addr coins]
+        gdOut | gds == (mkGoldDollar 0) = []
+              | otherwise               = [TxOutGD addr gds]
+    in map TxOutAux $ out <> gdOut
 
 -- | This is called when we create a new Pending Transaction.
 -- This actually returns a function because we don`t know yet our outputs.
@@ -534,34 +538,22 @@ instance Buildable EstimateFeesError where
 instance Arbitrary EstimateFeesError where
     arbitrary = EstFeesTxCreationFailed <$> arbitrary
 
--- estimateFees 
---     :: Genesis.Config
---     -> ActiveWallet
---     -> PassPhrase
---     -> HdAccountId
---     -- ^ The source HD Account from where the payment should originate
---     -> NonEmpty (Address, CoinPair)
---     -- ^ The payees
---     -> IO (Either EstimateFeesError Coin)
--- estimateFees genesisConfig aw@ActiveWallet{..} spendingPassword accountId payees = do
---     -- res <- newUnsignedTransaction activeWallet options accountId payees
---     -- case res of
---     --      Left e  -> return . Left . EstFeesTxCreationFailed $ e
---     --      Right (_db, _tx, fees, _originalUtxo) -> do
---     --          -- sanity check of fees is done.
---     --          return $ Right fees
---     let outputs = NonEmpty.fromList $ concatMap toTxOuts payees
-
---     db <- getWalletSnapshot walletPassive
---     runExceptT $ do
---         availableUtxo <- withExceptT EstFeesTxCreationFailed $ 
---                          withExceptT NewTransactionUnknownAccount $ exceptT $
---                          currentAvailableUtxo db accountId
-
---         TxFee coins <- withExceptT EstFeesTxCreationFailed $ 
---                        runClientMode aw spendingPassword accountId $
---                        clientEstimateTxFee genesisConfig availableUtxo outputs
---         return coins
+estimateFees 
+    :: Genesis.Config
+    -> ActiveWallet
+    -> HdAccountId
+    -- ^ The source HD Account from where the payment should originate
+    -> NonEmpty (Address, CoinPair)
+    -- ^ The payees
+    -> IO (Either EstimateFeesError Coin)
+estimateFees _ _ _ _ = do
+    -- res <- newUnsignedTransaction activeWallet options accountId payees
+    -- case res of
+    --      Left e  -> return . Left . EstFeesTxCreationFailed $ e
+    --      Right (_db, _tx, fees, _originalUtxo) -> do
+    --          -- sanity check of fees is done.
+    --          return $ Right fees
+    return . Left $ EstFeesTxCreationFailed  NewTransactionNotSupport
 
 -- | Errors during transaction signing
 --

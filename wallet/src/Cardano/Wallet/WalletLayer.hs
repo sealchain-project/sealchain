@@ -35,7 +35,7 @@ import           Pos.Chain.Block (Blund)
 import           Pos.Chain.Txp (Tx, TxId, Utxo)
 import           Pos.Chain.Update (ConfirmedProposalState, SoftwareVersion)
 import           Pos.Core (Timestamp)
-import qualified Pos.Core as Core (Address)
+import qualified Pos.Core as Core (Coin, Address)
 import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..))
 import           Pos.Core.NetworkMagic (NetworkMagic)
 import           Pos.Crypto (EncryptedSecretKey, PassPhrase)
@@ -508,6 +508,11 @@ data ActiveWalletLayer m = ActiveWalletLayer {
             -> Issurance
             -- The issurance we need to perform.
             -> m (Either NewPaymentError (Tx, TxMeta))
+
+          -- | Estimates the fees for a payment.
+    , estimateFees :: Payment
+                   -- The payment we need to perform.
+                   -> m (Either EstimateFeesError Core.Coin)
 
       -- | Node info
       --

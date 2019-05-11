@@ -135,8 +135,8 @@ data WalletClient m
          -> FilterOperations '[V1 Core.TxId, V1 Core.Timestamp] Transaction
          -> SortOperations Transaction
          -> Resp m [Transaction]
-    -- , getTransactionFee
-    --      :: Payment -> Resp m EstimatedFees
+    , getTransactionFee
+         :: Payment -> Resp m EstimatedFees
     -- settings
     , getNodeSettings
          :: Resp m NodeSettings
@@ -270,8 +270,8 @@ natMapClient phi f wc = WalletClient
     , getTransactionIndexFilterSorts =
         \wid maid maddr mp mpp ff ->
             f . phi . getTransactionIndexFilterSorts wc wid maid maddr mp mpp ff
-    -- , getTransactionFee =
-    --     f . phi . getTransactionFee wc
+    , getTransactionFee =
+        f . phi . getTransactionFee wc
     , getNodeSettings =
         f $ phi $ getNodeSettings wc
     , getNodeInfo =

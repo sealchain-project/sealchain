@@ -79,5 +79,5 @@ mkSwagger details = \case
 softwareDetails :: (CompileTimeInfo, SoftwareVersion)
 softwareDetails =
     ( CompileTimeInfo gitRev
-    , SoftwareVersion (ApplicationName "cardano-sl") 1
+    , SoftwareVersion (ApplicationName "sealchain") 1
     )

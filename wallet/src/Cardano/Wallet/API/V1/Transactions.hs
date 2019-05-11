@@ -30,8 +30,8 @@ type API = Tag "Transactions" 'NoTagDescription :>
                         :> SortBy   '[ V1 Core.Timestamp
                                      ] Transaction
                         :> Get '[ValidJSON] (APIResponse [Transaction])
-    -- :<|> "transactions" :> "fees"
-    --                     :> Summary "Estimate the fees which would originate from the payment."
-    --                     :> ReqBody '[ValidJSON] Payment
-    --                     :> Post '[ValidJSON] (APIResponse EstimatedFees)
+    :<|> "transactions" :> "fees"
+                        :> Summary "Estimate the fees which would originate from the payment."
+                        :> ReqBody '[ValidJSON] Payment
+                        :> Post '[ValidJSON] (APIResponse EstimatedFees)
     )

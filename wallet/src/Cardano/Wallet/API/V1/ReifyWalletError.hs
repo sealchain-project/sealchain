@@ -278,7 +278,10 @@ newTransactionError e = case e of
         V1.UtxoNotEnoughFragmented (V1.ErrUtxoNotEnoughFragmented missingUtxo V1.msgUtxoNotEnoughFragmented)
 
     (Kernel.NewTransactionClientError e') ->
-        V1.CommonError $ (sformat build e')
+        V1.GeneralError $ (sformat build e')
+
+    (Kernel.NewTransactionNotSupport) ->
+        V1.GeneralError $ (sformat "Operation not supportted for now.")
 
 estimateFeesError :: EstimateFeesError -> V1.WalletError
 estimateFeesError e = case e of

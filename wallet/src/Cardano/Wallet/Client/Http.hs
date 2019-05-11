@@ -83,8 +83,8 @@ mkHttpClient baseUrl manager = WalletClient
     , getTransactionIndexFilterSorts
         = \walletId mAccountIndex mAddress mPage mpp filters ->
              run . getTransactionIndexFilterSortsR walletId mAccountIndex mAddress mPage mpp filters
-    -- , getTransactionFee
-    --     = run . getTransactionFeeR
+    , getTransactionFee
+        = run . getTransactionFeeR
     -- settings
     , getNodeSettings
         = run getNodeSettingsR
@@ -153,7 +153,7 @@ mkHttpClient baseUrl manager = WalletClient
     postPaymentR
         :<|> postIssuranceR
         :<|> getTransactionIndexFilterSortsR
-        -- :<|> getTransactionFeeR
+        :<|> getTransactionFeeR
         = transactionsAPI
 
 
