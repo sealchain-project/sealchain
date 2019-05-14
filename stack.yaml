@@ -43,6 +43,7 @@ packages:
 - x509
 - cluster
 - mnemonic
+- pact
 
 # IOHK projects:
 
@@ -230,6 +231,21 @@ extra-deps:
 - token-bucket-0.1.0.1
 - lzma-clib-5.2.2
 
+# pact
+- aeson-1.3.1.1
+- algebraic-graphs-0.2
+- crackNum-2.2
+- FloatingHex-0.4
+- compactable-0.1.2.2
+- ed25519-donna-0.1.1
+- hw-hspec-hedgehog-0.1.0.5
+- git: https://github.com/slpopejoy/snap-cors.git
+  commit: cc88bab1fd3f62dc4d9f9ad81a231877a639c812
+- git: https://github.com/kadena-io/thyme.git
+  commit: 6ee9fcb026ebdb49b810802a981d166680d867c9
+- git: https://github.com/LeventErkok/sbv.git
+  commit: 3dc60340634c82f39f6c5dca2b3859d10925cfdf # with exposed registerKind
+
 # katip-0.6.3.0 conflicts with Win32-2.6.1.0
 allow-newer: true
 
@@ -265,3 +281,4 @@ ghc-options:
   sealchain-mnemonic:          -Wall -Werror -Wcompat -fwarn-redundant-constraints
   sealchain-cluster:           -Wall -Werror -Wcompat -fwarn-redundant-constraints
   sealchain-wallet:            -Wall -Werror -Wcompat -fwarn-redundant-constraints
+  sealchain-pact:              -Wall -Werror -Wcompat -fwarn-redundant-constraints
