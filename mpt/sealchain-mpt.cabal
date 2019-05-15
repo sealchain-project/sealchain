@@ -1,0 +1,70 @@
+name: sealchain-mpt
+version: 0.0.1
+cabal-version: >= 1.10
+build-type: Simple
+license-file:  LICENSE
+synopsis: A modified Merkle Patricia DB
+category:      Data Structures
+license: Apache-2.0
+description:  
+    The modified Merkle Patricia DB described in the Ethereum Yellowpaper
+    base on https://github.com/jamshidh/ethereum-merkle-patricia-db
+
+ 
+library
+    default-language: Haskell2010
+    build-depends: base >= 4 && < 5
+                 , base16-bytestring
+                 , binary
+                 , bytestring
+                 , cryptonite
+                 , data-default
+                 , ethereum-rlp
+                 , rocksdb-haskell-ng
+                 , nibblestring
+                 , resourcet
+                 , transformers
+                 , ansi-wl-pprint
+                 , containers
+                 , mtl
+                 , memory
+                 , text
+    exposed-modules: Sealchain.Mpt.MerklePatricia
+                   , Sealchain.Mpt.MerklePatriciaMem
+                   , Sealchain.Mpt.MerklePatricia.Internal
+                   , Sealchain.Mpt.MerklePatricia.InternalMem
+                   , Sealchain.Mpt.MerklePatricia.Diff
+                   , Sealchain.Mpt.MerklePatricia.NodeData
+                   , Sealchain.Mpt.MerklePatricia.MPDB
+                   , Sealchain.Mpt.MerklePatricia.StateRoot
+    ghc-options: -Wall
+                 -fwarn-unused-imports
+    buildable: True
+    hs-source-dirs: src
+
+
+test-suite test-merkle-patricia-db
+    default-language: Haskell2010
+    hs-source-dirs: test
+    type:           exitcode-stdio-1.0
+    main-is:        MerklePatriciaSpec.hs
+    build-depends:  base >=4 && < 5
+                  , data-default
+                  , rocksdb-haskell-ng
+                  , resourcet
+                  , bytestring
+                  , base16-bytestring
+                  , transformers
+                  , binary
+                  , ethereum-rlp
+                  , nibblestring
+                  , ansi-wl-pprint
+                  , test-framework
+                  , test-framework-hunit
+                  , HUnit
+                  , containers
+                  , aeson
+                  , mtl
+                  , hspec
+                  , hspec-contrib
+                  , merkle-patricia-db

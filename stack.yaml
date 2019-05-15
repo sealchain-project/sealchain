@@ -43,6 +43,7 @@ packages:
 - x509
 - cluster
 - mnemonic
+- mpt
 - pact
 
 # IOHK projects:
@@ -246,6 +247,10 @@ extra-deps:
 - git: https://github.com/LeventErkok/sbv.git
   commit: 3dc60340634c82f39f6c5dca2b3859d10925cfdf # with exposed registerKind
 
+# mpt
+- ethereum-rlp-0.1.0
+- nibblestring-0.0.3
+
 # katip-0.6.3.0 conflicts with Win32-2.6.1.0
 allow-newer: true
 
@@ -281,4 +286,5 @@ ghc-options:
   sealchain-mnemonic:          -Wall -Werror -Wcompat -fwarn-redundant-constraints
   sealchain-cluster:           -Wall -Werror -Wcompat -fwarn-redundant-constraints
   sealchain-wallet:            -Wall -Werror -Wcompat -fwarn-redundant-constraints
+  sealchain-mpt:               -Wall -Werror -Wcompat -fwarn-redundant-constraints
   sealchain-pact:              -Wall -Werror -Wcompat -fwarn-redundant-constraints
