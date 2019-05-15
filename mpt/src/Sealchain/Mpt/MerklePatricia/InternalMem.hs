@@ -217,7 +217,7 @@ getNodeDataMem db (PtrRef ptr@(StateRoot p)) = do
     where
       bytes2NodeData::B.ByteString->NodeData
       bytes2NodeData bytes | B.null bytes = EmptyNodeData
-      bytes2NodeData bytes = rlpDecode $ rlpDeserialize $ B.pack $ B.unpack bytes
+      bytes2NodeData bytes = rlpDecode $ rlpDeserialize bytes
 
 putNodeDataMem::Monad m=>MPMem->NodeData->m MPMem
 putNodeDataMem db nd = do
