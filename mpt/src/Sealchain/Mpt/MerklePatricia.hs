@@ -30,7 +30,11 @@ import           Data.Maybe(isJust)
 import qualified Database.RocksDB as DB
 
 import           Blockchain.Data.RLP
+import           Sealchain.Mpt.MerklePatricia.MPDB
+import           Sealchain.Mpt.MerklePatricia.NodeData
 import           Sealchain.Mpt.MerklePatricia.Internal
+import           Sealchain.Mpt.MerklePatricia.StateRoot
+import           Sealchain.Mpt.MerklePatricia.Utils
 
 
 -- | Adds a new key/value pair.

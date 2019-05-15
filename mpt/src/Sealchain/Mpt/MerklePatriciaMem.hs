@@ -11,21 +11,23 @@ import qualified Data.Map as Map
 import           Data.Maybe(isJust)
 
 import           Blockchain.Data.RLP
+import           Sealchain.Mpt.MerklePatricia.NodeData
 import           Sealchain.Mpt.MerklePatricia.InternalMem
 import           Sealchain.Mpt.MerklePatricia.StateRoot
+import           Sealchain.Mpt.MerklePatricia.Utils
 
 putKeyValMem::Monad m=>MPMem
            ->Key
            ->Val
            ->m MPMem
-putKeyValMem db = unsafePutKeyValMem db . keyToSafeKeyMem
+putKeyValMem db = unsafePutKeyValMem db . keyToSafeKey
 
 
 getKeyValMem::Monad m=>MPMem
          -> Key
          -> m (Maybe Val)
 getKeyValMem db key = do
-  vals <- unsafeGetKeyValsMem db (keyToSafeKeyMem key)
+  vals <- unsafeGetKeyValsMem db (keyToSafeKey key)
   return $
     if not (null vals)
     then Just $ snd (head vals)
@@ -36,7 +38,7 @@ getKeyValMem db key = do
 deleteKeyMem::Monad m=>MPMem
          ->Key
          ->m MPMem
-deleteKeyMem db = unsafeDeleteKeyMem db . keyToSafeKeyMem
+deleteKeyMem db = unsafeDeleteKeyMem db . keyToSafeKey
 
 keyExistsMem::Monad m=>MPMem
          ->Key

@@ -1,7 +1,9 @@
 module Sealchain.Mpt.MerklePatricia.Diff (dbDiff, DiffOp(..)) where
 
 import           Sealchain.Mpt.MerklePatricia.Internal
+import           Sealchain.Mpt.MerklePatricia.MPDB
 import           Sealchain.Mpt.MerklePatricia.NodeData
+import           Sealchain.Mpt.MerklePatricia.StateRoot
 
 import           Control.Monad
 import           Control.Monad.Trans.Class

@@ -31,12 +31,15 @@ library
                  , text
     exposed-modules: Sealchain.Mpt.MerklePatricia
                    , Sealchain.Mpt.MerklePatriciaMem
+                   , Sealchain.Mpt.MerklePatriciaMixMem
                    , Sealchain.Mpt.MerklePatricia.Internal
                    , Sealchain.Mpt.MerklePatricia.InternalMem
+                   , Sealchain.Mpt.MerklePatricia.InternalMixMem
                    , Sealchain.Mpt.MerklePatricia.Diff
                    , Sealchain.Mpt.MerklePatricia.NodeData
                    , Sealchain.Mpt.MerklePatricia.MPDB
                    , Sealchain.Mpt.MerklePatricia.StateRoot
+                   , Sealchain.Mpt.MerklePatricia.Utils
     ghc-options: -Wall
                  -fwarn-unused-imports
     buildable: True
