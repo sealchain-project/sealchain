@@ -215,7 +215,7 @@ getNodeData db (PtrRef ptr@(StateRoot p)) = do
     where
       bytes2NodeData::B.ByteString->NodeData
       bytes2NodeData bytes | B.null bytes = EmptyNodeData
-      bytes2NodeData bytes = rlpDecode $ rlpDeserialize $ B.pack $ B.unpack bytes
+      bytes2NodeData bytes = rlpDecode $ rlpDeserialize bytes
 
 putNodeData::MonadResource m=>MPDB->NodeData->m StateRoot
 putNodeData db nd = do
