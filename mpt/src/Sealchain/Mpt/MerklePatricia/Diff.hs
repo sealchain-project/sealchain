@@ -78,4 +78,4 @@ diff :: MonadResource m=>NodeRef -> NodeRef -> MPReaderM m [DiffOp]
 diff = recurse `on` Ref
 
 dbDiff :: MonadResource m => MPDB -> StateRoot -> StateRoot -> m [DiffOp]
-dbDiff db root1 root2 = runReaderT ((diff `on` PtrRef) root1 root2) db
+dbDiff db (StateRoot bs1) (StateRoot bs2) = runReaderT ((diff `on` PtrRef) bs1 bs2) db

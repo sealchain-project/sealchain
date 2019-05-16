@@ -1,22 +1,26 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Sealchain.Mpt.MerklePatricia.InternalMixMem (
-  MPMixMem(..),
+  MMModifier,
+  MixMemMode,
+  runMixMemMode,
   unsafePutKeyValMixMem,
   unsafeGetKeyValsMixMem,
   unsafeGetAllKeyValsMixMem,
   unsafeDeleteKeyMixMem,
-  getNodeDataMixMem,
-  putNodeDataMixMem,
   ) where
 
 import           Control.Monad.Trans (MonadIO)
-import qualified Data.ByteString as B
-import           Data.ByteArray (convert)
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Reader
+import           Control.Monad.Trans.State
+import           Data.ByteArray(convert)
 import           Crypto.Hash as Crypto
+import qualified Data.ByteString as B
 import           Data.Function
 import           Data.List
 import qualified Data.Map as Map
+import           Data.Maybe
 import qualified Data.NibbleString as N
 import qualified Database.RocksDB as DB
 
@@ -26,217 +30,236 @@ import           Sealchain.Mpt.MerklePatricia.NodeData
 import           Sealchain.Mpt.MerklePatricia.StateRoot
 import           Sealchain.Mpt.MerklePatricia.Utils
 
-type MPMixMap = Map.Map B.ByteString B.ByteString
+type MMModifier = Map.Map B.ByteString B.ByteString
 
-data MPMixMem = MPMixMem {
-    mpmStateRoot :: StateRoot,
-    mpmDB        :: MPDB,
-    mpmMap       :: MPMixMap
-  } 
+type MixMemMode m = ReaderT MPDB (StateT MMModifier m)
 
-unsafePutKeyValMixMem::MonadIO m=>MPMixMem->Key->Val->m MPMixMem
-unsafePutKeyValMixMem mpmm key val = do
-  dbNodeData <- getNodeDataMixMem mpmm (PtrRef $ mpmStateRoot mpmm)
-  dbPutNodeData <- putKV_NodeDataMixMem mpmm key val dbNodeData
-  putNodeDataMixMem (fst dbPutNodeData) (snd dbPutNodeData)
+runMixMemMode::MPDB->MMModifier->MixMemMode m a->m (a,MMModifier)
+runMixMemMode db modifier action = runStateT (runReaderT action db) modifier
 
-unsafeGetKeyValsMixMem::MonadIO m=>MPMixMem->Key->m [(Key,Val)]
-unsafeGetKeyValsMixMem mpmm =
-  let dbNodeRef = PtrRef $ mpmStateRoot mpmm
-  in getKeyVals_NodeRefMixMem mpmm dbNodeRef
+unsafePutKeyValMixMem::MonadIO m=>Key->Val->MixMemMode m ()
+unsafePutKeyValMixMem key val = do
+  db <- ask
+  dbNodeData <- getNodeData (PtrRef $ getRootByteString $ stateRoot db)
+  dbPutNodeData <- putKV_NodeData key val dbNodeData
+  _ <- putNodeData dbPutNodeData
+  return ()
 
-unsafeGetAllKeyValsMixMem::MonadIO m=>MPMixMem->m [(Key,Val)]
-unsafeGetAllKeyValsMixMem mpmm = unsafeGetKeyValsMixMem mpmm N.empty
+unsafeGetKeyValsMixMem::MonadIO m=>Key->MixMemMode m [(Key, Val)]
+unsafeGetKeyValsMixMem key = do
+  db <- ask
+  let dbNodeRef = PtrRef $ getRootByteString $ stateRoot db
+  getKeyVals_NodeRef dbNodeRef key 
 
-unsafeDeleteKeyMixMem::MonadIO m=>MPMixMem->Key->m MPMixMem
-unsafeDeleteKeyMixMem mpmm key = do
-  dbNodeData <- getNodeDataMixMem mpmm (PtrRef $ mpmStateRoot mpmm)
-  dbDeleteNodeData <- deleteKey_NodeDataMixMem mpmm key dbNodeData
-  putNodeDataMixMem (fst dbDeleteNodeData) (snd dbDeleteNodeData)
+unsafeGetAllKeyValsMixMem::MonadIO m=>MixMemMode m [(Key, Val)]
+unsafeGetAllKeyValsMixMem = unsafeGetKeyValsMixMem N.empty
 
-putKV_NodeDataMixMem::MonadIO m=>MPMixMem->Key->Val->NodeData-> m (MPMixMem,NodeData)
-putKV_NodeDataMixMem mpmm key val EmptyNodeData =
-  return $ (mpmm,ShortcutNodeData key (Right val))
+unsafeDeleteKeyMixMem::MonadIO m=>Key->MixMemMode m ()
+unsafeDeleteKeyMixMem key = do
+  db <- ask
+  dbNodeData <- getNodeData (PtrRef $ getRootByteString $ stateRoot db)
+  dbDeleteNodeData <- deleteKey_NodeData key dbNodeData
+  _ <- putNodeData dbDeleteNodeData
+  return ()
 
-putKV_NodeDataMixMem mpmm key val (FullNodeData options nodeValue)
+putKV_NodeData::MonadIO m=>Key->Val->NodeData->MixMemMode m NodeData
+
+putKV_NodeData key val EmptyNodeData =
+  return $ ShortcutNodeData key (Right val)
+
+putKV_NodeData key val (FullNodeData options nodeValue)
   | options `slotIsEmpty` N.head key =
     do
-      tailNode <- newShortcutMixMem mpmm (N.tail key) $ Right val
-      return $ (fst tailNode, FullNodeData (replace options (N.head key) (snd tailNode)) nodeValue)
+      tailNode <- newShortcut (N.tail key) $ Right val
+      return $ FullNodeData (replace options (N.head key) tailNode) nodeValue
 
   | otherwise =
       do
         let conflictingNodeRef = options!!fromIntegral (N.head key)
-        newNode <- putKV_NodeRefMixMem mpmm (N.tail key) val conflictingNodeRef
-        return $ (fst newNode, FullNodeData (replace options (N.head key) (snd newNode)) nodeValue)
+        newNode <- putKV_NodeRef (N.tail key) val conflictingNodeRef
+        return $ FullNodeData (replace options (N.head key) newNode) nodeValue
 
-putKV_NodeDataMixMem mpmm key1 val1 (ShortcutNodeData key2 val2)
+putKV_NodeData key1 val1 (ShortcutNodeData key2 val2)
   | key1 == key2 =
     case val2 of
-      Right _  -> return $ (mpmm, ShortcutNodeData key1 $ Right val1)
+      Right _  -> return $ ShortcutNodeData key1 $ Right val1
       Left ref -> do
-        newNodeRef <- putKV_NodeRefMixMem mpmm key1 val1 ref
-        return $ (fst newNodeRef, ShortcutNodeData key2 (Left . snd $ newNodeRef))
+        newNodeRef <- putKV_NodeRef key1 val1 ref
+        return $ ShortcutNodeData key2 (Left newNodeRef)
 
   | N.null key1 = do
-      newNodeRef <- newShortcutMixMem mpmm (N.tail key2) val2
-      return $ (fst newNodeRef, FullNodeData (list2Options 0 [(N.head key2, snd newNodeRef)]) $ Just val1)
+      newNodeRef <- newShortcut (N.tail key2) val2
+      return $ FullNodeData (list2Options 0 [(N.head key2, newNodeRef)]) $ Just val1
 
   | key1 `N.isPrefixOf` key2 = do
-      tailNode <- newShortcutMixMem mpmm (N.drop (N.length key1) key2) val2
-      modifiedTailNode <- putKV_NodeRefMixMem (fst tailNode) "" val1 (snd tailNode)
-      return $ (fst modifiedTailNode, ShortcutNodeData key1 $ Left (snd modifiedTailNode))
+      tailNode <- newShortcut (N.drop (N.length key1) key2) val2
+      modifiedTailNode <- putKV_NodeRef "" val1 tailNode
+      return $ ShortcutNodeData key1 $ Left modifiedTailNode
 
   | key2 `N.isPrefixOf` key1 =
     case val2 of
-      Right val -> putKV_NodeDataMixMem mpmm key2 val (ShortcutNodeData key1 $ Right val1)
+      Right val -> putKV_NodeData key2 val (ShortcutNodeData key1 $ Right val1)
       Left ref  -> do
-        newNode <- putKV_NodeRefMixMem mpmm (N.drop (N.length key2) key1) val1 ref
-        return $ (fst newNode, ShortcutNodeData key2 $ Left (snd newNode))
+        newNode <- putKV_NodeRef (N.drop (N.length key2) key1) val1 ref
+        return $ ShortcutNodeData key2 $ Left newNode
 
   | N.head key1 == N.head key2 =
     let (commonPrefix, suffix1, suffix2) =
           getCommonPrefix (N.unpack key1) (N.unpack key2)
     in do
-      nodeAfterCommonBeforePut <- newShortcutMixMem mpmm (N.pack suffix2) val2
-      nodeAfterCommon <- putKV_NodeRefMixMem (fst nodeAfterCommonBeforePut)
-                                          (N.pack suffix1)
-                                          val1
-                                          (snd nodeAfterCommonBeforePut)
-
-      return $ (fst nodeAfterCommon,
-                ShortcutNodeData (N.pack commonPrefix) $ Left (snd nodeAfterCommon))
+      nodeAfterCommonBeforePut <- newShortcut (N.pack suffix2) val2
+      nodeAfterCommon <- putKV_NodeRef (N.pack suffix1) val1 nodeAfterCommonBeforePut
+      return $ ShortcutNodeData (N.pack commonPrefix) $ Left nodeAfterCommon
 
   | otherwise = do
-      tailNode1 <- newShortcutMixMem mpmm (N.tail key1) $ Right val1
-      tailNode2 <- newShortcutMixMem (fst tailNode1) (N.tail key2) val2
-      return $ (fst tailNode2, FullNodeData
-          (list2Options 0 $ sortBy (compare `on` fst) [(N.head key1, snd tailNode1),
-                                                       (N.head key2, snd tailNode2)])
-           Nothing)
+      tailNode1 <- newShortcut (N.tail key1) $ Right val1
+      tailNode2 <- newShortcut (N.tail key2) val2
+      return $ FullNodeData
+        (list2Options 0 $ sortBy (compare `on` fst)
+         [(N.head key1, tailNode1), (N.head key2, tailNode2)])
+        Nothing
 
-getKeyVals_NodeDataMixMem::MonadIO m=>MPMixMem->NodeData->Key->m [(Key, Val)]
-getKeyVals_NodeDataMixMem _ EmptyNodeData _ = return []
+-----
 
-getKeyVals_NodeDataMixMem mpmm (FullNodeData {choices=cs}) "" = do
-  partialKVs <- sequence $ (\ref -> getKeyVals_NodeRefMixMem mpmm ref "") <$> cs
+getKeyVals_NodeData::MonadIO m=>NodeData->Key->MixMemMode m [(Key, Val)]
+
+getKeyVals_NodeData EmptyNodeData _ = return []
+
+getKeyVals_NodeData (FullNodeData {choices=cs}) "" = do
+  partialKVs <- sequence $ (\ref -> getKeyVals_NodeRef ref "") <$> cs
   return $ concatMap
     (uncurry $ map . (prependToKey . N.singleton)) (zip [0..] partialKVs)
 
-getKeyVals_NodeDataMixMem mpmm (FullNodeData {choices=cs}) key
+getKeyVals_NodeData (FullNodeData {choices=cs}) key
   | ref == emptyRef = return []
   | otherwise = fmap (prependToKey $ N.singleton $ N.head key) <$>
-                getKeyVals_NodeRefMixMem mpmm ref (N.tail key)
+                getKeyVals_NodeRef ref (N.tail key)
   where ref = cs !! fromIntegral (N.head key)
 
-getKeyVals_NodeDataMixMem mpmm ShortcutNodeData{nextNibbleString=s, nextVal=Left ref} key
+getKeyVals_NodeData ShortcutNodeData{nextNibbleString=s, nextVal=Left ref} key
   | key `N.isPrefixOf` s = prependNext ""
   | s `N.isPrefixOf` key = prependNext $ N.drop (N.length s) key
   | otherwise = return []
-  where prependNext key' = fmap (prependToKey s) <$> getKeyVals_NodeRefMixMem mpmm ref key'
+  where prependNext key' = fmap (prependToKey s) <$> getKeyVals_NodeRef ref key'
 
-getKeyVals_NodeDataMixMem _ ShortcutNodeData{nextNibbleString=s, nextVal=Right val} key =
+getKeyVals_NodeData ShortcutNodeData{nextNibbleString=s, nextVal=Right val} key =
   return $
     if key `N.isPrefixOf` s
     then [(s,val)]
     else []
 
-deleteKey_NodeDataMixMem::MonadIO m=>MPMixMem->Key->NodeData-> m (MPMixMem,NodeData)
-deleteKey_NodeDataMixMem mpmm _ EmptyNodeData = return (mpmm,EmptyNodeData)
+-----
 
-deleteKey_NodeDataMixMem mpmm key nd@(FullNodeData options val)
-  | N.null key = return $ (mpmm,FullNodeData options Nothing)
+deleteKey_NodeData::MonadIO m=>Key->NodeData->MixMemMode m NodeData
 
-  | options `slotIsEmpty` N.head key = return (mpmm,nd)
+deleteKey_NodeData _ EmptyNodeData = return EmptyNodeData
+
+deleteKey_NodeData key nd@(FullNodeData options val)
+  | N.null key = return $ FullNodeData options Nothing
+
+  | options `slotIsEmpty` N.head key = return nd
 
   | otherwise = do
     let nodeRef = options!!fromIntegral (N.head key)
-    newNodeRef <- deleteKey_NodeRefMixMem mpmm (N.tail key) nodeRef
-    let newOptions = replace options (N.head key) (snd newNodeRef)
-    simplify_NodeDataMixMem mpmm $ FullNodeData newOptions val
+    newNodeRef <- deleteKey_NodeRef (N.tail key) nodeRef
+    let newOptions = replace options (N.head key) newNodeRef
+    simplify_NodeData $ FullNodeData newOptions val
 
-deleteKey_NodeDataMixMem mpmm key1 nd@(ShortcutNodeData key2 (Right _)) =
+deleteKey_NodeData key1 nd@(ShortcutNodeData key2 (Right _)) =
   return $
     if key1 == key2
-    then (mpmm,EmptyNodeData)
-    else (mpmm,nd)
+    then EmptyNodeData
+    else nd
 
-deleteKey_NodeDataMixMem mpmm key1 nd@(ShortcutNodeData key2 (Left ref))
+deleteKey_NodeData key1 nd@(ShortcutNodeData key2 (Left ref))
   | key2 `N.isPrefixOf` key1 = do
-    newNodeRef <- deleteKey_NodeRefMixMem mpmm (N.drop (N.length key2) key1) ref
-    simplify_NodeDataMixMem (fst newNodeRef) $ ShortcutNodeData key2 $ Left (snd newNodeRef)
+    newNodeRef <- deleteKey_NodeRef (N.drop (N.length key2) key1) ref
+    simplify_NodeData $ ShortcutNodeData key2 $ Left newNodeRef
 
-  | otherwise = return (mpmm, nd)
+  | otherwise = return nd
 
-putKV_NodeRefMixMem::MonadIO m=>MPMixMem->Key->Val->NodeRef->m (MPMixMem,NodeRef)
-putKV_NodeRefMixMem mpmm key val nodeRef = do
-  nodeData <- getNodeDataMixMem mpmm nodeRef
-  mpmm' <- putKV_NodeDataMixMem mpmm key val nodeData
-  nodeData2NodeRefMixMem (fst mpmm') (snd mpmm')
+-----
+
+putKV_NodeRef::MonadIO m=>Key->Val->NodeRef->MixMemMode m NodeRef
+putKV_NodeRef key val nodeRef = do
+  nodeData <- getNodeData nodeRef
+  newNodeData <- putKV_NodeData key val nodeData
+  nodeData2NodeRef newNodeData
 
 
-getKeyVals_NodeRefMixMem::MonadIO m=>MPMixMem->NodeRef->Key->m [(Key, Val)]
-getKeyVals_NodeRefMixMem mpmm ref key = do
-  nodeData <- getNodeDataMixMem mpmm ref
-  getKeyVals_NodeDataMixMem mpmm nodeData key
+getKeyVals_NodeRef::MonadIO m=>NodeRef->Key->MixMemMode m [(Key, Val)]
+getKeyVals_NodeRef ref key = do
+  nodeData <- getNodeData ref
+  getKeyVals_NodeData nodeData key
 
 --TODO- This is looking like a lift, I probably should make NodeRef some sort of Monad....
 
-deleteKey_NodeRefMixMem::MonadIO m=>MPMixMem->Key->NodeRef->m (MPMixMem,NodeRef)
-deleteKey_NodeRefMixMem mpmm key nodeRef = do
-  ref <- getNodeDataMixMem mpmm nodeRef
-  mpmm'<- deleteKey_NodeDataMixMem mpmm key ref
+deleteKey_NodeRef::MonadIO m=>Key->NodeRef->MixMemMode m NodeRef
+deleteKey_NodeRef key nodeRef =
+  nodeData2NodeRef =<< deleteKey_NodeData key =<< getNodeData nodeRef
 
-  nodeData2NodeRefMixMem (fst mpmm') ref
+-----
 
-getNodeDataMixMem::MonadIO m=>MPMixMem->NodeRef->m NodeData
-getNodeDataMixMem _ (SmallRef x) = return $ rlpDecode $ rlpDeserialize x
-getNodeDataMixMem mpmm (PtrRef ptr@(StateRoot p)) = do
-    bytesM <- lookupVal p
-    case bytesM of
-      Nothing    -> error $ "Missing StateRoot in call to getNodeData: " ++ formatStateRoot ptr
-      Just bytes ->
-        return $ bytes2NodeData bytes
+getNodeData::MonadIO m=>NodeRef->MixMemMode m NodeData
+getNodeData (SmallRef x) = return $ rlpDecode $ rlpDeserialize x
+getNodeData ptr@(PtrRef p) = do
+    modifier <- lift $ get
+    bytes <- case (Map.lookup p modifier) of
+      Just bs -> return bs 
+      Nothing -> do
+        db <- ask
+        fromMaybe
+          (error $ "Missing StateRoot in call to getNodeData: " ++ formatNodeRef ptr) <$>
+          DB.get (rdb db) DB.defaultReadOptions p
+    return $ bytes2NodeData bytes
   where
     bytes2NodeData::B.ByteString->NodeData
     bytes2NodeData bytes | B.null bytes = EmptyNodeData
     bytes2NodeData bytes = rlpDecode $ rlpDeserialize bytes
 
-    lookupVal k = case (Map.lookup k (mpmMap mpmm)) of
-      Just bytes -> pure $ Just bytes
-      Nothing    -> DB.get (rdb $ mpmDB mpmm) DB.defaultReadOptions k
-         
-
-putNodeDataMixMem::MonadIO m=>MPMixMem->NodeData->m MPMixMem
-putNodeDataMixMem mpmm nd = do
+putNodeData::MonadIO m=>NodeData->MixMemMode m B.ByteString
+putNodeData nd = do
   let bytes = rlpSerialize $ rlpEncode nd
-      ptr = convert (Crypto.hash bytes :: Crypto.Digest Crypto.Keccak_256)
-      map' = Map.insert ptr bytes (mpmMap mpmm)
-  return $ mpmm { mpmMap = map', mpmStateRoot = StateRoot ptr }
+      ptr = convert $ (Crypto.hash bytes :: Crypto.Digest Crypto.Keccak_256)
 
+  lift $ modify' (Map.insert ptr bytes) 
+  return ptr
 
-simplify_NodeDataMixMem::MonadIO m=>MPMixMem->NodeData->m (MPMixMem,NodeData)
-simplify_NodeDataMixMem mpmm EmptyNodeData = return (mpmm,EmptyNodeData)
-simplify_NodeDataMixMem mpmm nd@(ShortcutNodeData key (Left ref)) = do
-  refNodeData <- getNodeDataMixMem mpmm ref
+-----
+
+-- Only used to canonicalize the DB after a
+-- delete.  We need to concatinate ShortcutNodeData links, convert
+-- FullNodeData to ShortcutNodeData when possible, etc.
+
+-- Important note- this function should only apply to immediate items,
+-- and not recurse deep into the database (ie- by simplifying all options
+-- in a FullNodeData, etc).  Failure to adhere will result in a
+-- performance nightmare!  Any delete could result in a full read through
+-- the whole database.  The delete function only will "break" the
+-- canonical structure locally, so deep recursion isn't required.
+
+simplify_NodeData::MonadIO m=>NodeData->MixMemMode m NodeData
+simplify_NodeData EmptyNodeData = return EmptyNodeData
+simplify_NodeData nd@(ShortcutNodeData key (Left ref)) = do
+  refNodeData <- getNodeData ref
   case refNodeData of
-    (ShortcutNodeData key2 v2) -> return $ (mpmm,ShortcutNodeData (key `N.append` key2) v2)
-    _                          -> return (mpmm,nd)
-simplify_NodeDataMixMem mpmm (FullNodeData options Nothing) = do
+    (ShortcutNodeData key2 v2) -> return $ ShortcutNodeData (key `N.append` key2) v2
+    _                          -> return nd
+simplify_NodeData (FullNodeData options Nothing) = do
     case options2List options of
       [(n, nodeRef)] ->
-          simplify_NodeDataMixMem mpmm $ ShortcutNodeData (N.singleton n) $ Left nodeRef
-      _ -> return $ (mpmm,FullNodeData options Nothing)
-simplify_NodeDataMixMem mpmm x = return (mpmm,x)
+          simplify_NodeData $ ShortcutNodeData (N.singleton n) $ Left nodeRef
+      _ -> return $ FullNodeData options Nothing
+simplify_NodeData x = return x
 
-newShortcutMixMem::MonadIO m=>MPMixMem->Key->Either NodeRef Val->m (MPMixMem,NodeRef)
-newShortcutMixMem mpmm "" (Left ref) = return (mpmm,ref)
-newShortcutMixMem mpmm key val       = nodeData2NodeRefMixMem mpmm $ ShortcutNodeData key val
+-----
 
-nodeData2NodeRefMixMem::MonadIO m=>MPMixMem->NodeData->m (MPMixMem,NodeRef)
-nodeData2NodeRefMixMem mpmm nodeData =
+newShortcut::MonadIO m=>Key->Either NodeRef Val-> MixMemMode m NodeRef
+newShortcut "" (Left ref) = return ref
+newShortcut key val       = nodeData2NodeRef $ ShortcutNodeData key val
+
+nodeData2NodeRef::MonadIO m=>NodeData->MixMemMode m NodeRef
+nodeData2NodeRef nodeData =
   case rlpSerialize $ rlpEncode nodeData of
-    bytes | B.length bytes < 32 -> return $ (mpmm,SmallRef bytes)
-    _ -> do
-      new <- putNodeDataMixMem mpmm nodeData
-      return (new, PtrRef . mpmStateRoot $ new)
+    bytes | B.length bytes < 32 -> return $ SmallRef bytes
+    _                           -> PtrRef <$> putNodeData nodeData

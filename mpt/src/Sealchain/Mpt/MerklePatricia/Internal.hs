@@ -9,7 +9,7 @@ module Sealchain.Mpt.MerklePatricia.Internal (
   putNodeData,
   ) where
 
-import           Control.Monad.Trans.Resource
+import           Control.Monad.Trans (MonadIO)
 import           Data.ByteArray(convert)
 import           Crypto.Hash as Crypto
 import qualified Data.ByteString as B
@@ -25,29 +25,29 @@ import           Sealchain.Mpt.MerklePatricia.NodeData
 import           Sealchain.Mpt.MerklePatricia.StateRoot
 import           Sealchain.Mpt.MerklePatricia.Utils
 
-unsafePutKeyVal::MonadResource m=>MPDB->Key->Val->m MPDB
-unsafePutKeyVal db key val = do
-  dbNodeData <- getNodeData db (PtrRef $ stateRoot db)
+unsafePutKeyVal::MonadIO m=>MPDB->Key->Val->m MPDB
+unsafePutKeyVal db@(MPDB _ (StateRoot bs)) key val = do
+  dbNodeData <- getNodeData db (PtrRef bs)
   dbPutNodeData <- putKV_NodeData db key val dbNodeData
   p <- putNodeData db dbPutNodeData
-  return db{stateRoot=p}
+  return db{stateRoot = StateRoot p}
 
-unsafeGetKeyVals::MonadResource m=>MPDB->Key->m [(Key, Val)]
-unsafeGetKeyVals db =
-  let dbNodeRef = PtrRef $ stateRoot db
+unsafeGetKeyVals::MonadIO m=>MPDB->Key->m [(Key, Val)]
+unsafeGetKeyVals db@(MPDB _ (StateRoot bs)) =
+  let dbNodeRef = PtrRef bs
   in getKeyVals_NodeRef db dbNodeRef
 
-unsafeGetAllKeyVals::MonadResource m=>MPDB->m [(Key, Val)]
+unsafeGetAllKeyVals::MonadIO m=>MPDB->m [(Key, Val)]
 unsafeGetAllKeyVals db = unsafeGetKeyVals db N.empty
 
-unsafeDeleteKey::MonadResource m=>MPDB->Key->m MPDB
-unsafeDeleteKey db key = do
-  dbNodeData <- getNodeData db (PtrRef $ stateRoot db)
+unsafeDeleteKey::MonadIO m=>MPDB->Key->m MPDB
+unsafeDeleteKey db@(MPDB _ (StateRoot bs)) key = do
+  dbNodeData <- getNodeData db (PtrRef bs)
   dbDeleteNodeData <- deleteKey_NodeData db key dbNodeData
   p <- putNodeData db dbDeleteNodeData
-  return db{stateRoot=p}
+  return db{stateRoot = StateRoot p}
 
-putKV_NodeData::MonadResource m=>MPDB->Key->Val->NodeData->m NodeData
+putKV_NodeData::MonadIO m=>MPDB->Key->Val->NodeData->m NodeData
 
 putKV_NodeData _ key val EmptyNodeData =
   return $ ShortcutNodeData key (Right val)
@@ -106,7 +106,7 @@ putKV_NodeData db key1 val1 (ShortcutNodeData key2 val2)
 
 -----
 
-getKeyVals_NodeData::MonadResource m=>MPDB->NodeData->Key->m [(Key, Val)]
+getKeyVals_NodeData::MonadIO m=>MPDB->NodeData->Key->m [(Key, Val)]
 
 getKeyVals_NodeData _ EmptyNodeData _ = return []
 
@@ -135,7 +135,7 @@ getKeyVals_NodeData _ ShortcutNodeData{nextNibbleString=s, nextVal=Right val} ke
 
 -----
 
-deleteKey_NodeData::MonadResource m=>MPDB->Key->NodeData->m NodeData
+deleteKey_NodeData::MonadIO m=>MPDB->Key->NodeData->m NodeData
 
 deleteKey_NodeData _ _ EmptyNodeData = return EmptyNodeData
 
@@ -165,32 +165,32 @@ deleteKey_NodeData db key1 nd@(ShortcutNodeData key2 (Left ref))
 
 -----
 
-putKV_NodeRef::MonadResource m=>MPDB->Key->Val->NodeRef->m NodeRef
+putKV_NodeRef::MonadIO m=>MPDB->Key->Val->NodeRef->m NodeRef
 putKV_NodeRef db key val nodeRef = do
   nodeData <- getNodeData db nodeRef
   newNodeData <- putKV_NodeData db key val nodeData
   nodeData2NodeRef db newNodeData
 
 
-getKeyVals_NodeRef::MonadResource m=>MPDB->NodeRef->Key->m [(Key, Val)]
+getKeyVals_NodeRef::MonadIO m=>MPDB->NodeRef->Key->m [(Key, Val)]
 getKeyVals_NodeRef db ref key = do
   nodeData <- getNodeData db ref
   getKeyVals_NodeData db nodeData key
 
 --TODO- This is looking like a lift, I probably should make NodeRef some sort of Monad....
 
-deleteKey_NodeRef::MonadResource m=>MPDB->Key->NodeRef->m NodeRef
+deleteKey_NodeRef::MonadIO m=>MPDB->Key->NodeRef->m NodeRef
 deleteKey_NodeRef db key nodeRef =
   nodeData2NodeRef db =<< deleteKey_NodeData db key =<< getNodeData db nodeRef
 
 -----
 
-getNodeData::MonadResource m=>MPDB->NodeRef->m NodeData
+getNodeData::MonadIO m=>MPDB->NodeRef->m NodeData
 getNodeData _ (SmallRef x) = return $ rlpDecode $ rlpDeserialize x
-getNodeData db (PtrRef ptr@(StateRoot p)) = do
+getNodeData db ptr@(PtrRef p) = do
   bytes <-
     fromMaybe
-    (error $ "Missing StateRoot in call to getNodeData: " ++ formatStateRoot ptr) <$>
+    (error $ "Missing StateRoot in call to getNodeData: " ++ formatNodeRef ptr) <$>
     DB.get (rdb db) DB.defaultReadOptions p
   return $ bytes2NodeData bytes
     where
@@ -198,13 +198,13 @@ getNodeData db (PtrRef ptr@(StateRoot p)) = do
       bytes2NodeData bytes | B.null bytes = EmptyNodeData
       bytes2NodeData bytes = rlpDecode $ rlpDeserialize bytes
 
-putNodeData::MonadResource m=>MPDB->NodeData->m StateRoot
+putNodeData::MonadIO m=>MPDB->NodeData->m B.ByteString
 putNodeData db nd = do
   let bytes = rlpSerialize $ rlpEncode nd
       ptr = convert $ (Crypto.hash bytes :: Crypto.Digest Crypto.Keccak_256)
 
   DB.put (rdb db) DB.defaultWriteOptions ptr bytes
-  return $ StateRoot ptr
+  return ptr
 
 -----
 
@@ -219,7 +219,7 @@ putNodeData db nd = do
 -- the whole database.  The delete function only will "break" the
 -- canonical structure locally, so deep recursion isn't required.
 
-simplify_NodeData::MonadResource m=>MPDB->NodeData->m NodeData
+simplify_NodeData::MonadIO m=>MPDB->NodeData->m NodeData
 simplify_NodeData _ EmptyNodeData = return EmptyNodeData
 simplify_NodeData db nd@(ShortcutNodeData key (Left ref)) = do
   refNodeData <- getNodeData db ref
@@ -235,11 +235,11 @@ simplify_NodeData _ x = return x
 
 -----
 
-newShortcut::MonadResource m=>MPDB->Key->Either NodeRef Val->m NodeRef
+newShortcut::MonadIO m=>MPDB->Key->Either NodeRef Val->m NodeRef
 newShortcut _ "" (Left ref) = return ref
 newShortcut db key val      = nodeData2NodeRef db $ ShortcutNodeData key val
 
-nodeData2NodeRef::MonadResource m=>MPDB->NodeData->m NodeRef
+nodeData2NodeRef::MonadIO m=>MPDB->NodeData->m NodeRef
 nodeData2NodeRef db nodeData =
   case rlpSerialize $ rlpEncode nodeData of
     bytes | B.length bytes < 32 -> return $ SmallRef bytes

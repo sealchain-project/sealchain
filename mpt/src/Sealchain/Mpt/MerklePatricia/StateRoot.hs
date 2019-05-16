@@ -8,7 +8,8 @@ module Sealchain.Mpt.MerklePatricia.StateRoot (
   emptyTriePtr,
   sha2StateRoot,
   unboxStateRoot,
-  formatStateRoot
+  formatStateRoot,
+  getRootByteString
   ) where
 
 import           Control.Monad
@@ -39,6 +40,9 @@ newtype StateRoot = StateRoot B.ByteString deriving (Show, Eq, Read, Generic, Is
 
 formatStateRoot :: StateRoot -> String
 formatStateRoot (StateRoot sr) = T.unpack .  decodeUtf8 . B16.encode $ sr
+
+getRootByteString :: StateRoot -> B.ByteString
+getRootByteString (StateRoot bs) = bs
 
 instance Pretty StateRoot where
   pretty = text . formatStateRoot

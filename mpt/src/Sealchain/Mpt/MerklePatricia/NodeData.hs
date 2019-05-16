@@ -5,7 +5,8 @@ module Sealchain.Mpt.MerklePatricia.NodeData (
   Val,
   NodeData(..),
   NodeRef(..),
-  emptyRef
+  emptyRef,
+  formatNodeRef
   ) where
 
 import           Data.Bits
@@ -14,11 +15,12 @@ import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as BC
 import           Data.ByteString.Internal
 import qualified Data.NibbleString as N
+import qualified Data.Text as T
+import           Data.Text.Encoding (decodeUtf8)
 import           Numeric
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 import           Blockchain.Data.RLP
-import           Sealchain.Mpt.MerklePatricia.StateRoot
 
 -------------------------
 
@@ -30,14 +32,17 @@ type Val = RLPObject
 
 -------------------------
 
-data NodeRef = SmallRef B.ByteString | PtrRef StateRoot deriving (Show, Eq)
+data NodeRef = SmallRef B.ByteString | PtrRef B.ByteString deriving (Show, Eq)
 
 emptyRef::NodeRef
 emptyRef = SmallRef $ B.pack [0x80]
 
+formatNodeRef :: NodeRef -> String
+formatNodeRef (SmallRef bs) = T.unpack .  decodeUtf8 . B16.encode $ bs
+formatNodeRef (PtrRef bs)   = T.unpack .  decodeUtf8 . B16.encode $ bs
+
 instance Pretty NodeRef where
-  pretty (SmallRef x) = green $ text $ BC.unpack $ B16.encode x
-  pretty (PtrRef x)   = green $ pretty $ x
+  pretty = text . formatNodeRef
 
 -------------------------
 
@@ -74,7 +79,7 @@ instance RLPSerializable NodeData where
     where
       encodeChoice::NodeRef->RLPObject
       encodeChoice (SmallRef "")          = rlpEncode (0::Integer)
-      encodeChoice (PtrRef (StateRoot x)) = rlpEncode x
+      encodeChoice (PtrRef x)             = rlpEncode x
       encodeChoice (SmallRef o)           = rlpDeserialize o
       encodeVal::Maybe Val->RLPObject
       encodeVal Nothing  = rlpEncode (0::Integer)
@@ -96,7 +101,7 @@ instance RLPSerializable NodeData where
   rlpDecode (RLPArray [a, val])
       | terminator = ShortcutNodeData s $ Right val
       | B.length (rlpSerialize val) >= 32 =
-          ShortcutNodeData s (Left $ PtrRef $ StateRoot (BC.pack $ rlpDecode val))
+          ShortcutNodeData s (Left $ PtrRef (BC.pack $ rlpDecode val))
       | otherwise =
           ShortcutNodeData s (Left $ SmallRef $ rlpSerialize val)
     where
@@ -112,13 +117,8 @@ instance RLPSerializable NodeData where
       getPtr::RLPObject->NodeRef
       getPtr o | B.length (rlpSerialize o) < 32 = SmallRef $ rlpSerialize o
       --getPtr o@(RLPArray [_, _]) = SmallRef $ rlpSerialize o
-      getPtr p = PtrRef $ StateRoot $ rlpDecode p
+      getPtr p = PtrRef $ rlpDecode p
   rlpDecode x = error ("Missing case in rlpDecode for NodeData: " ++ show x)
-
-
-
-
-
 
 string2TermNibbleString::String->(Bool, N.NibbleString)
 string2TermNibbleString [] = error "string2TermNibbleString called with empty String"

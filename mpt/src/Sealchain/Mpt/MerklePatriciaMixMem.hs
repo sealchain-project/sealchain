@@ -1,8 +1,15 @@
 
 module Sealchain.Mpt.MerklePatriciaMixMem (
-  putKeyValMixMem, getKeyValMixMem, deleteKeyMixMem, keyExistsMixMem,
-  initializeBlankMixMem,
-  MPMixMem(..)
+  Key, 
+  Val, 
+  MPDB(..), 
+  StateRoot(..),
+  MMModifier,
+  putKeyValMixMem, 
+  getKeyValMixMem, 
+  deleteKeyMixMem, 
+  keyExistsMixMem,
+  initializeBlankMixMem
   ) where
 
 import           Control.Monad.Trans (MonadIO)
@@ -18,18 +25,21 @@ import           Sealchain.Mpt.MerklePatricia.InternalMixMem
 import           Sealchain.Mpt.MerklePatricia.StateRoot
 import           Sealchain.Mpt.MerklePatricia.Utils
 
-putKeyValMixMem::MonadIO m=>MPMixMem
+putKeyValMixMem::MonadIO m=>MPDB
+           ->MMModifier
            ->Key
            ->Val
-           ->m MPMixMem
-putKeyValMixMem db = unsafePutKeyValMixMem db . keyToSafeKey
+           ->m MMModifier
+putKeyValMixMem db mmm key val = do
+  (_, mmm') <- runMixMemMode db mmm $ unsafePutKeyValMixMem (keyToSafeKey key) val
+  return mmm'
 
-
-getKeyValMixMem::MonadIO m=>MPMixMem
-         -> Key
-         -> m (Maybe Val)
-getKeyValMixMem db key = do
-  vals <- unsafeGetKeyValsMixMem db (keyToSafeKey key)
+getKeyValMixMem::MonadIO m=>MPDB
+         ->MMModifier
+         ->Key
+         ->m (Maybe Val)
+getKeyValMixMem db mmm key = do
+  (vals, _) <- runMixMemMode db mmm $ unsafeGetKeyValsMixMem (keyToSafeKey key)
   return $
     if not (null vals)
     then Just $ snd (head vals)
@@ -37,27 +47,27 @@ getKeyValMixMem db key = do
          -- for vals to have more than one item
     else Nothing
 
-deleteKeyMixMem::MonadIO m=>MPMixMem
+deleteKeyMixMem::MonadIO m=>MPDB
+         ->MMModifier
          ->Key
-         ->m MPMixMem
-deleteKeyMixMem db = unsafeDeleteKeyMixMem db . keyToSafeKey
+         ->m MMModifier
+deleteKeyMixMem db mmm key = do
+  (_, mmm') <- runMixMemMode db mmm $ unsafeDeleteKeyMixMem (keyToSafeKey key)
+  return mmm'
 
-keyExistsMixMem::MonadIO m=>MPMixMem
+keyExistsMixMem::MonadIO m=>MPDB
+         ->MMModifier
          ->Key
          ->m Bool
-keyExistsMixMem db key = isJust <$> getKeyValMixMem db key
+keyExistsMixMem db mmm key = isJust <$> getKeyValMixMem db mmm key
 
 initializeBlankMixMem::MonadResource m=>MPDB -- ^ The object containing the current stateRoot.
-               ->m MPMixMem
+               ->m MMModifier
 initializeBlankMixMem db = do
     let bytes = rlpSerialize $ rlpEncode (0::Integer)
         StateRoot key = emptyTriePtr
 
     DB.put (rdb db) DB.defaultWriteOptions key bytes
-    return $ MPMixMem {
-             mpmStateRoot = StateRoot bytes,
-             mpmDB = db,
-             mpmMap = Map.empty
-           }
+    return Map.empty
 
 

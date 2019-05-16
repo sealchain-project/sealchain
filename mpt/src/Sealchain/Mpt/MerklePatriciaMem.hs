@@ -13,7 +13,6 @@ import           Data.Maybe(isJust)
 import           Blockchain.Data.RLP
 import           Sealchain.Mpt.MerklePatricia.NodeData
 import           Sealchain.Mpt.MerklePatricia.InternalMem
-import           Sealchain.Mpt.MerklePatricia.StateRoot
 import           Sealchain.Mpt.MerklePatricia.Utils
 
 putKeyValMem::Monad m=>MPMem
@@ -53,8 +52,8 @@ initializeBlankMem =
         key = convert $ (Crypto.hash bytes :: Crypto.Digest Crypto.Keccak_256)
     in
       MPMem {
-        mpMap = Map.insert key bytes Map.empty,
-        mpStateRoot = StateRoot bytes
+        mpMap  = Map.insert key bytes Map.empty,
+        mpRoot = bytes
       }
 
 
