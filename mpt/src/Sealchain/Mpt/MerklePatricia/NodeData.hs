@@ -3,6 +3,7 @@
 module Sealchain.Mpt.MerklePatricia.NodeData (
   Key,
   Val,
+  Ptr,
   NodeData(..),
   NodeRef(..),
   emptyRef,
@@ -30,9 +31,12 @@ type Key = N.NibbleString
 -- | The type of the values in the database
 type Val = RLPObject
 
+-- | The type of the ptr in the database
+type Ptr = B.ByteString
+
 -------------------------
 
-data NodeRef = SmallRef B.ByteString | PtrRef B.ByteString deriving (Show, Eq)
+data NodeRef = SmallRef B.ByteString | PtrRef Ptr deriving (Show, Eq)
 
 emptyRef::NodeRef
 emptyRef = SmallRef $ B.pack [0x80]

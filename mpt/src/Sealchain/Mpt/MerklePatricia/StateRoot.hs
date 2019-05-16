@@ -5,11 +5,11 @@
 
 module Sealchain.Mpt.MerklePatricia.StateRoot (
   StateRoot(..),
+  Ptr,
   emptyTriePtr,
   sha2StateRoot,
   unboxStateRoot,
   formatStateRoot,
-  getRootByteString
   ) where
 
 import           Control.Monad
@@ -27,6 +27,8 @@ import           Blockchain.Data.RLP
 
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
+import           Sealchain.Mpt.MerklePatricia.NodeData
+
 import           GHC.Generics
 
 -- | Internal nodes are indexed in the underlying database by their 256-bit SHA3 hash.
@@ -36,13 +38,10 @@ import           GHC.Generics
 -- (ie- the pointer to the full set of key/value pairs at a particular time in history), and
 -- will be of interest if you need to refer to older or parallel version of the data.
 
-newtype StateRoot = StateRoot B.ByteString deriving (Show, Eq, Read, Generic, IsString)
+newtype StateRoot = StateRoot Ptr deriving (Show, Eq, Read, Generic, IsString)
 
 formatStateRoot :: StateRoot -> String
 formatStateRoot (StateRoot sr) = T.unpack .  decodeUtf8 . B16.encode $ sr
-
-getRootByteString :: StateRoot -> B.ByteString
-getRootByteString (StateRoot bs) = bs
 
 instance Pretty StateRoot where
   pretty = text . formatStateRoot

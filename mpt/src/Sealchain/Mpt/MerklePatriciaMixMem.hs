@@ -2,6 +2,7 @@
 module Sealchain.Mpt.MerklePatriciaMixMem (
   Key, 
   Val, 
+  Ptr,
   MPDB(..), 
   StateRoot(..),
   MMModifier,
@@ -29,10 +30,9 @@ putKeyValMixMem::MonadIO m=>MPDB
            ->MMModifier
            ->Key
            ->Val
-           ->m MMModifier
+           ->m (Ptr, MMModifier)
 putKeyValMixMem db mmm key val = do
-  (_, mmm') <- runMixMemMode db mmm $ unsafePutKeyValMixMem (keyToSafeKey key) val
-  return mmm'
+  runMixMemMode db mmm $ unsafePutKeyValMixMem (keyToSafeKey key) val
 
 getKeyValMixMem::MonadIO m=>MPDB
          ->MMModifier
@@ -50,10 +50,9 @@ getKeyValMixMem db mmm key = do
 deleteKeyMixMem::MonadIO m=>MPDB
          ->MMModifier
          ->Key
-         ->m MMModifier
+         ->m (Ptr, MMModifier)
 deleteKeyMixMem db mmm key = do
-  (_, mmm') <- runMixMemMode db mmm $ unsafeDeleteKeyMixMem (keyToSafeKey key)
-  return mmm'
+  runMixMemMode db mmm $ unsafeDeleteKeyMixMem (keyToSafeKey key)
 
 keyExistsMixMem::MonadIO m=>MPDB
          ->MMModifier

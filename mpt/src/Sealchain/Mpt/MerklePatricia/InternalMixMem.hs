@@ -37,30 +37,28 @@ type MixMemMode m = ReaderT MPDB (StateT MMModifier m)
 runMixMemMode::MPDB->MMModifier->MixMemMode m a->m (a,MMModifier)
 runMixMemMode db modifier action = runStateT (runReaderT action db) modifier
 
-unsafePutKeyValMixMem::MonadIO m=>Key->Val->MixMemMode m ()
+unsafePutKeyValMixMem::MonadIO m=>Key->Val->MixMemMode m Ptr
 unsafePutKeyValMixMem key val = do
   db <- ask
-  dbNodeData <- getNodeData (PtrRef $ getRootByteString $ stateRoot db)
+  dbNodeData <- getNodeData (PtrRef $ unboxStateRoot $ stateRoot db)
   dbPutNodeData <- putKV_NodeData key val dbNodeData
-  _ <- putNodeData dbPutNodeData
-  return ()
+  putNodeData dbPutNodeData
 
 unsafeGetKeyValsMixMem::MonadIO m=>Key->MixMemMode m [(Key, Val)]
 unsafeGetKeyValsMixMem key = do
   db <- ask
-  let dbNodeRef = PtrRef $ getRootByteString $ stateRoot db
+  let dbNodeRef = PtrRef $ unboxStateRoot $ stateRoot db
   getKeyVals_NodeRef dbNodeRef key 
 
 unsafeGetAllKeyValsMixMem::MonadIO m=>MixMemMode m [(Key, Val)]
 unsafeGetAllKeyValsMixMem = unsafeGetKeyValsMixMem N.empty
 
-unsafeDeleteKeyMixMem::MonadIO m=>Key->MixMemMode m ()
+unsafeDeleteKeyMixMem::MonadIO m=>Key->MixMemMode m Ptr
 unsafeDeleteKeyMixMem key = do
   db <- ask
-  dbNodeData <- getNodeData (PtrRef $ getRootByteString $ stateRoot db)
+  dbNodeData <- getNodeData (PtrRef $ unboxStateRoot $ stateRoot db)
   dbDeleteNodeData <- deleteKey_NodeData key dbNodeData
-  _ <- putNodeData dbDeleteNodeData
-  return ()
+  putNodeData dbDeleteNodeData
 
 putKV_NodeData::MonadIO m=>Key->Val->NodeData->MixMemMode m NodeData
 
