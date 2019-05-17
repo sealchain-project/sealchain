@@ -10,21 +10,19 @@ module Sealchain.Mpt.MerklePatricia.InternalMixMem (
   unsafeDeleteKeyMixMem,
   ) where
 
+import           Universum
+import           Universum.Unsafe ((!!))
+
 import           Control.Monad.Trans (MonadIO)
-import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Reader
-import           Control.Monad.Trans.State
 import           Data.ByteArray(convert)
 import           Crypto.Hash as Crypto
 import qualified Data.ByteString as B
-import           Data.Function
-import           Data.List
 import qualified Data.Map as Map
-import           Data.Maybe
 import qualified Data.NibbleString as N
 import qualified Database.RocksDB as DB
 
-import           Blockchain.Data.RLP
+import qualified Pos.Binary.Class as Bi
+
 import           Sealchain.Mpt.MerklePatricia.MPDB
 import           Sealchain.Mpt.MerklePatricia.NodeData
 import           Sealchain.Mpt.MerklePatricia.StateRoot
@@ -37,30 +35,30 @@ type MixMemMode m = ReaderT MPDB (StateT MMModifier m)
 runMixMemMode::MPDB->MMModifier->MixMemMode m a->m (a,MMModifier)
 runMixMemMode db modifier action = runStateT (runReaderT action db) modifier
 
-unsafePutKeyValMixMem::MonadIO m=>Key->Val->MixMemMode m Ptr
+unsafePutKeyValMixMem::MonadIO m=>MPKey->MPVal->MixMemMode m MPPtr
 unsafePutKeyValMixMem key val = do
   db <- ask
   dbNodeData <- getNodeData (PtrRef $ unboxStateRoot $ stateRoot db)
   dbPutNodeData <- putKV_NodeData key val dbNodeData
   putNodeData dbPutNodeData
 
-unsafeGetKeyValsMixMem::MonadIO m=>Key->MixMemMode m [(Key, Val)]
+unsafeGetKeyValsMixMem::MonadIO m=>MPKey->MixMemMode m [(MPKey, MPVal)]
 unsafeGetKeyValsMixMem key = do
   db <- ask
   let dbNodeRef = PtrRef $ unboxStateRoot $ stateRoot db
   getKeyVals_NodeRef dbNodeRef key 
 
-unsafeGetAllKeyValsMixMem::MonadIO m=>MixMemMode m [(Key, Val)]
+unsafeGetAllKeyValsMixMem::MonadIO m=>MixMemMode m [(MPKey, MPVal)]
 unsafeGetAllKeyValsMixMem = unsafeGetKeyValsMixMem N.empty
 
-unsafeDeleteKeyMixMem::MonadIO m=>Key->MixMemMode m Ptr
+unsafeDeleteKeyMixMem::MonadIO m=>MPKey->MixMemMode m MPPtr
 unsafeDeleteKeyMixMem key = do
   db <- ask
   dbNodeData <- getNodeData (PtrRef $ unboxStateRoot $ stateRoot db)
   dbDeleteNodeData <- deleteKey_NodeData key dbNodeData
   putNodeData dbDeleteNodeData
 
-putKV_NodeData::MonadIO m=>Key->Val->NodeData->MixMemMode m NodeData
+putKV_NodeData::MonadIO m=>MPKey->MPVal->NodeData->MixMemMode m NodeData
 
 putKV_NodeData key val EmptyNodeData =
   return $ ShortcutNodeData key (Right val)
@@ -119,7 +117,7 @@ putKV_NodeData key1 val1 (ShortcutNodeData key2 val2)
 
 -----
 
-getKeyVals_NodeData::MonadIO m=>NodeData->Key->MixMemMode m [(Key, Val)]
+getKeyVals_NodeData::MonadIO m=>NodeData->MPKey->MixMemMode m [(MPKey, MPVal)]
 
 getKeyVals_NodeData EmptyNodeData _ = return []
 
@@ -148,7 +146,7 @@ getKeyVals_NodeData ShortcutNodeData{nextNibbleString=s, nextVal=Right val} key 
 
 -----
 
-deleteKey_NodeData::MonadIO m=>Key->NodeData->MixMemMode m NodeData
+deleteKey_NodeData::MonadIO m=>MPKey->NodeData->MixMemMode m NodeData
 
 deleteKey_NodeData _ EmptyNodeData = return EmptyNodeData
 
@@ -178,28 +176,28 @@ deleteKey_NodeData key1 nd@(ShortcutNodeData key2 (Left ref))
 
 -----
 
-putKV_NodeRef::MonadIO m=>Key->Val->NodeRef->MixMemMode m NodeRef
+putKV_NodeRef::MonadIO m=>MPKey->MPVal->NodeRef->MixMemMode m NodeRef
 putKV_NodeRef key val nodeRef = do
   nodeData <- getNodeData nodeRef
   newNodeData <- putKV_NodeData key val nodeData
   nodeData2NodeRef newNodeData
 
 
-getKeyVals_NodeRef::MonadIO m=>NodeRef->Key->MixMemMode m [(Key, Val)]
+getKeyVals_NodeRef::MonadIO m=>NodeRef->MPKey->MixMemMode m [(MPKey, MPVal)]
 getKeyVals_NodeRef ref key = do
   nodeData <- getNodeData ref
   getKeyVals_NodeData nodeData key
 
 --TODO- This is looking like a lift, I probably should make NodeRef some sort of Monad....
 
-deleteKey_NodeRef::MonadIO m=>Key->NodeRef->MixMemMode m NodeRef
+deleteKey_NodeRef::MonadIO m=>MPKey->NodeRef->MixMemMode m NodeRef
 deleteKey_NodeRef key nodeRef =
   nodeData2NodeRef =<< deleteKey_NodeData key =<< getNodeData nodeRef
 
 -----
 
 getNodeData::MonadIO m=>NodeRef->MixMemMode m NodeData
-getNodeData (SmallRef x) = return $ rlpDecode $ rlpDeserialize x
+getNodeData (SmallRef x) = return $ justRight $ Bi.decodeFull' x
 getNodeData ptr@(PtrRef p) = do
     modifier <- lift $ get
     bytes <- case (Map.lookup p modifier) of
@@ -207,17 +205,17 @@ getNodeData ptr@(PtrRef p) = do
       Nothing -> do
         db <- ask
         fromMaybe
-          (error $ "Missing StateRoot in call to getNodeData: " ++ formatNodeRef ptr) <$>
+          (error $ "Missing StateRoot in call to getNodeData: " <> formatNodeRef ptr) <$>
           DB.get (rdb db) DB.defaultReadOptions p
     return $ bytes2NodeData bytes
   where
     bytes2NodeData::B.ByteString->NodeData
     bytes2NodeData bytes | B.null bytes = EmptyNodeData
-    bytes2NodeData bytes = rlpDecode $ rlpDeserialize bytes
+    bytes2NodeData bytes = justRight $ Bi.decodeFull' bytes
 
 putNodeData::MonadIO m=>NodeData->MixMemMode m B.ByteString
 putNodeData nd = do
-  let bytes = rlpSerialize $ rlpEncode nd
+  let bytes = Bi.serialize' nd
       ptr = convert $ (Crypto.hash bytes :: Crypto.Digest Crypto.Keccak_256)
 
   lift $ modify' (Map.insert ptr bytes) 
@@ -252,12 +250,12 @@ simplify_NodeData x = return x
 
 -----
 
-newShortcut::MonadIO m=>Key->Either NodeRef Val-> MixMemMode m NodeRef
+newShortcut::MonadIO m=>MPKey->Either NodeRef MPVal-> MixMemMode m NodeRef
 newShortcut "" (Left ref) = return ref
 newShortcut key val       = nodeData2NodeRef $ ShortcutNodeData key val
 
 nodeData2NodeRef::MonadIO m=>NodeData->MixMemMode m NodeRef
 nodeData2NodeRef nodeData =
-  case rlpSerialize $ rlpEncode nodeData of
+  case Bi.serialize' nodeData of
     bytes | B.length bytes < 32 -> return $ SmallRef bytes
     _                           -> PtrRef <$> putNodeData nodeData

@@ -1,14 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Sealchain.Mpt.MerklePatricia.NodeData (
-  Key,
-  Val,
-  Ptr,
+  MPKey,
+  MPVal,
+  MPPtr,
   NodeData(..),
   NodeRef(..),
   emptyRef,
   formatNodeRef
   ) where
+
+import           Universum
 
 import           Data.Bits
 import qualified Data.ByteString as B
@@ -16,37 +19,30 @@ import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as BC
 import           Data.ByteString.Internal
 import qualified Data.NibbleString as N
-import qualified Data.Text as T
-import           Data.Text.Encoding (decodeUtf8)
-import           Numeric
-import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
-import           Blockchain.Data.RLP
+import           Pos.Binary.Class
 
 -------------------------
 
 -- | The type of the database key
-type Key = N.NibbleString
+type MPKey = N.NibbleString
 
 -- | The type of the values in the database
-type Val = RLPObject
+type MPVal = B.ByteString
 
 -- | The type of the ptr in the database
-type Ptr = B.ByteString
+type MPPtr = B.ByteString
 
 -------------------------
 
-data NodeRef = SmallRef B.ByteString | PtrRef Ptr deriving (Show, Eq)
+data NodeRef = SmallRef B.ByteString | PtrRef MPPtr deriving (Show, Eq)
 
 emptyRef::NodeRef
 emptyRef = SmallRef $ B.pack [0x80]
 
-formatNodeRef :: NodeRef -> String
-formatNodeRef (SmallRef bs) = T.unpack .  decodeUtf8 . B16.encode $ bs
-formatNodeRef (PtrRef bs)   = T.unpack .  decodeUtf8 . B16.encode $ bs
-
-instance Pretty NodeRef where
-  pretty = text . formatNodeRef
+formatNodeRef :: NodeRef -> Text
+formatNodeRef (SmallRef bs) = decodeUtf8 . B16.encode $ bs
+formatNodeRef (PtrRef bs)   = decodeUtf8 . B16.encode $ bs
 
 -------------------------
 
@@ -55,74 +51,58 @@ data NodeData = EmptyNodeData
                  -- Why not make choices a map (choices::M.Map N.Nibble NodeRef)?  Because this type tends to be created
                  -- more than items are looked up in it....  It would actually slow things down to use it.
                  choices :: [NodeRef],
-                 nodeVal :: Maybe Val
+                 nodeVal :: Maybe MPVal
                 }
               | ShortcutNodeData {
-                  nextNibbleString :: Key,
-                  nextVal          :: Either NodeRef Val
+                  nextNibbleString :: MPKey,
+                  nextVal          :: Either NodeRef MPVal
                 }
               deriving (Show, Eq)
 
-formatVal::Maybe RLPObject->Doc
-formatVal Nothing  = red $ text "NULL"
-formatVal (Just x) = green $ pretty x
+instance Bi NodeRef where
+  encode x = case x of
+        (SmallRef b) -> encodeListLen 2 <> encode (0 :: Word8) <> encode b
+        (PtrRef s) -> encodeListLen 2 <> encode (1 :: Word8) <> encode s
+  decode = do
+      enforceSize "NodeRef" 2
+      tag <- decode @Word8
+      case tag of
+          0 -> SmallRef <$> decode
+          1 -> PtrRef <$> decode
+          _ -> cborError "Found invalid tag while getting NodeRef" 
 
-instance Pretty NodeData where
-  pretty EmptyNodeData = text "    <EMPTY>"
-  pretty (ShortcutNodeData s (Left p)) = text $ "    " ++ show (pretty s) ++ " -> " ++ show (pretty p)
-  pretty (ShortcutNodeData s (Right val)) = text $ "    " ++ show (pretty s) ++ " -> " ++ show (green $ pretty val)
-  pretty (FullNodeData cs val) = text "    val: " </> formatVal val </> text "\n        " </> vsep (showChoice <$> zip ([0..]::[Int]) cs)
-    where
-      showChoice::(Int, NodeRef)->Doc
-      showChoice (v, SmallRef "") = blue (text $ showHex v "") </> text ": " </> red (text "NULL")
-      showChoice (v, p)           = blue (text $ showHex v "") </> text ": " </> green (pretty p)
-
-instance RLPSerializable NodeData where
-  rlpEncode EmptyNodeData = RLPString ""
-  rlpEncode (FullNodeData {choices=cs, nodeVal=val}) = RLPArray ((encodeChoice <$> cs) ++ [encodeVal val])
-    where
-      encodeChoice::NodeRef->RLPObject
-      encodeChoice (SmallRef "")          = rlpEncode (0::Integer)
-      encodeChoice (PtrRef x)             = rlpEncode x
-      encodeChoice (SmallRef o)           = rlpDeserialize o
-      encodeVal::Maybe Val->RLPObject
-      encodeVal Nothing  = rlpEncode (0::Integer)
-      encodeVal (Just x) = x
-  rlpEncode (ShortcutNodeData {nextNibbleString=s, nextVal=val}) =
-    RLPArray[rlpEncode $ BC.unpack $ termNibbleString2String terminator s, encodeVal val]
-    where
-      terminator =
-        case val of
-          Left _  -> False
-          Right _ -> True
-      encodeVal::Either NodeRef Val->RLPObject
-      encodeVal (Left (PtrRef x))   = rlpEncode x
-      encodeVal (Left (SmallRef x)) = rlpDeserialize x
-      encodeVal (Right x)           = x
-
-  rlpDecode (RLPString "") = EmptyNodeData
-  rlpDecode (RLPScalar 0) = EmptyNodeData
-  rlpDecode (RLPArray [a, val])
-      | terminator = ShortcutNodeData s $ Right val
-      | B.length (rlpSerialize val) >= 32 =
-          ShortcutNodeData s (Left $ PtrRef (BC.pack $ rlpDecode val))
-      | otherwise =
-          ShortcutNodeData s (Left $ SmallRef $ rlpSerialize val)
-    where
-      (terminator, s) = string2TermNibbleString $ rlpDecode a
-  rlpDecode (RLPArray x) | length x == 17 =
-    FullNodeData (getPtr <$> childPointers) val
-    where
-      childPointers = init x
-      val = case last x of
-        RLPScalar 0  -> Nothing
-        RLPString "" -> Nothing
-        x'           -> Just x'
-      getPtr::RLPObject->NodeRef
-      getPtr o | B.length (rlpSerialize o) < 32 = SmallRef $ rlpSerialize o
-      --getPtr o@(RLPArray [_, _]) = SmallRef $ rlpSerialize o
-      getPtr p = PtrRef $ rlpDecode p
-  rlpDecode x = error ("Missing case in rlpDecode for NodeData: " ++ show x)
+instance Bi NodeData where
+  encode x = case x of 
+      (EmptyNodeData) ->
+        encodeListLen 3 <> encode (0 :: Word8) <> encode () <> encode ()
+      (FullNodeData {choices=cs, nodeVal=val}) ->
+        encodeListLen 3 <> encode (1 :: Word8) <> encode cs <> encode val
+      (ShortcutNodeData {nextNibbleString=s, nextVal=val}) ->
+        encodeListLen 3 <> encode (2 :: Word8) <> encode (BC.unpack (termNibbleString2String terminator s))<> encode val
+        where 
+          terminator =
+            case val of
+              Left _  -> False
+              Right _ -> True
+  decode = do
+      enforceSize "NodeData" 3
+      tag <- decode @Word8
+      case tag of 
+        0 -> do
+             _ <- decode @() 
+             _ <- decode @()
+             return EmptyNodeData
+        1 -> do
+             cs <- decode
+             val <- decode
+             return $ FullNodeData cs val
+        2 -> do
+             ns <- decode
+             val <- decode
+             let (_, s) =  string2TermNibbleString ns
+             return  $ ShortcutNodeData s val
+        _ -> cborError "Found invalid tag while getting NodeData"     
+  
 
 string2TermNibbleString::String->(Bool, N.NibbleString)
 string2TermNibbleString [] = error "string2TermNibbleString called with empty String"

@@ -5,6 +5,9 @@ module Sealchain.Mpt.MerklePatriciaMem (
   MPMem(..)
   ) where
 
+import           Universum
+import qualified Universum.Unsafe as Unsafe
+
 import           Data.ByteArray(convert)
 import           Crypto.Hash as Crypto
 import qualified Data.Map as Map
@@ -16,31 +19,31 @@ import           Sealchain.Mpt.MerklePatricia.InternalMem
 import           Sealchain.Mpt.MerklePatricia.Utils
 
 putKeyValMem::Monad m=>MPMem
-           ->Key
-           ->Val
+           ->MPKey
+           ->MPVal
            ->m MPMem
 putKeyValMem db = unsafePutKeyValMem db . keyToSafeKey
 
 
 getKeyValMem::Monad m=>MPMem
-         -> Key
-         -> m (Maybe Val)
+         -> MPKey
+         -> m (Maybe MPVal)
 getKeyValMem db key = do
   vals <- unsafeGetKeyValsMem db (keyToSafeKey key)
   return $
     if not (null vals)
-    then Just $ snd (head vals)
+    then Just $ snd (Unsafe.head vals)
          -- Since we hash the keys, it's impossible
          -- for vals to have more than one item
     else Nothing
 
 deleteKeyMem::Monad m=>MPMem
-         ->Key
+         ->MPKey
          ->m MPMem
 deleteKeyMem db = unsafeDeleteKeyMem db . keyToSafeKey
 
 keyExistsMem::Monad m=>MPMem
-         ->Key
+         ->MPKey
          ->m Bool
 keyExistsMem db key = isJust <$> getKeyValMem db key
 

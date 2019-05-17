@@ -10,16 +10,16 @@ module Sealchain.Mpt.MerklePatricia.InternalMem (
   putNodeDataMem,
   ) where
 
+import           Universum
+import           Universum.Unsafe ((!!))
+
 import qualified Data.ByteString as B
 import           Data.ByteArray (convert)
 import           Crypto.Hash as Crypto
-import           Data.Function
-import           Data.List
 import qualified Data.Map as Map
-import           Data.Maybe
 import qualified Data.NibbleString as N
 
-import           Blockchain.Data.RLP
+import qualified Pos.Binary.Class as Bi
 import           Sealchain.Mpt.MerklePatricia.NodeData
 import           Sealchain.Mpt.MerklePatricia.Utils
 
@@ -31,21 +31,21 @@ data MPMem = MPMem {
   } deriving Show
 
 
-unsafePutKeyValMem::Monad m=>MPMem->Key->Val->m MPMem
+unsafePutKeyValMem::Monad m=>MPMem->MPKey->MPVal->m MPMem
 unsafePutKeyValMem db key val = do
   dbNodeData <- getNodeDataMem db (PtrRef $ mpRoot db)
   dbPutNodeData <- putKV_NodeDataMem db key val dbNodeData
   putNodeDataMem (fst dbPutNodeData) (snd dbPutNodeData)
 
-unsafeGetKeyValsMem::Monad m=>MPMem->Key->m [(Key,Val)]
+unsafeGetKeyValsMem::Monad m=>MPMem->MPKey->m [(MPKey,MPVal)]
 unsafeGetKeyValsMem db =
   let dbNodeRef = PtrRef $ mpRoot db
   in getKeyVals_NodeRefMem db dbNodeRef
 
-unsafeGetAllKeyValsMem::Monad m=>MPMem->m [(Key,Val)]
+unsafeGetAllKeyValsMem::Monad m=>MPMem->m [(MPKey,MPVal)]
 unsafeGetAllKeyValsMem db = unsafeGetKeyValsMem db N.empty
 
-unsafeDeleteKeyMem::Monad m=>MPMem->Key->m MPMem
+unsafeDeleteKeyMem::Monad m=>MPMem->MPKey->m MPMem
 unsafeDeleteKeyMem db key = do
   dbNodeData <- getNodeDataMem db (PtrRef $ mpRoot db)
   dbDeleteNodeData <- deleteKey_NodeDataMem db key dbNodeData
@@ -53,7 +53,7 @@ unsafeDeleteKeyMem db key = do
 
 -----
 
-putKV_NodeDataMem::Monad m=>MPMem->Key->Val->NodeData-> m (MPMem,NodeData)
+putKV_NodeDataMem::Monad m=>MPMem->MPKey->MPVal->NodeData-> m (MPMem,NodeData)
 
 putKV_NodeDataMem db key val EmptyNodeData =
   return $ (db,ShortcutNodeData key (Right val))
@@ -117,7 +117,7 @@ putKV_NodeDataMem db key1 val1 (ShortcutNodeData key2 val2)
 
 -----
 
-getKeyVals_NodeDataMem::Monad m=>MPMem->NodeData->Key->m [(Key, Val)]
+getKeyVals_NodeDataMem::Monad m=>MPMem->NodeData->MPKey->m [(MPKey, MPVal)]
 
 getKeyVals_NodeDataMem _ EmptyNodeData _ = return []
 
@@ -146,7 +146,7 @@ getKeyVals_NodeDataMem _ ShortcutNodeData{nextNibbleString=s, nextVal=Right val}
 
 -----
 
-deleteKey_NodeDataMem::Monad m=>MPMem->Key->NodeData-> m (MPMem,NodeData)
+deleteKey_NodeDataMem::Monad m=>MPMem->MPKey->NodeData-> m (MPMem,NodeData)
 
 deleteKey_NodeDataMem db _ EmptyNodeData = return (db,EmptyNodeData)
 
@@ -176,21 +176,21 @@ deleteKey_NodeDataMem db key1 nd@(ShortcutNodeData key2 (Left ref))
 
 -----
 
-putKV_NodeRefMem::Monad m=>MPMem->Key->Val->NodeRef->m (MPMem,NodeRef)
+putKV_NodeRefMem::Monad m=>MPMem->MPKey->MPVal->NodeRef->m (MPMem,NodeRef)
 putKV_NodeRefMem db key val nodeRef = do
   nodeData <- getNodeDataMem db nodeRef
   db' <- putKV_NodeDataMem db key val nodeData
   nodeData2NodeRefMem (fst db') (snd db')
 
 
-getKeyVals_NodeRefMem::Monad m=>MPMem->NodeRef->Key->m [(Key, Val)]
+getKeyVals_NodeRefMem::Monad m=>MPMem->NodeRef->MPKey->m [(MPKey, MPVal)]
 getKeyVals_NodeRefMem db ref key = do
   nodeData <- getNodeDataMem db ref
   getKeyVals_NodeDataMem db nodeData key
 
 --TODO- This is looking like a lift, I probably should make NodeRef some sort of Monad....
 
-deleteKey_NodeRefMem::Monad m=>MPMem->Key->NodeRef->m (MPMem,NodeRef)
+deleteKey_NodeRefMem::Monad m=>MPMem->MPKey->NodeRef->m (MPMem,NodeRef)
 deleteKey_NodeRefMem db key nodeRef = do
   ref <- getNodeDataMem db nodeRef
   db'<- deleteKey_NodeDataMem db key ref
@@ -200,20 +200,20 @@ deleteKey_NodeRefMem db key nodeRef = do
 -----
 
 getNodeDataMem::Monad m=>MPMem->NodeRef->m NodeData
-getNodeDataMem _ (SmallRef x) = return $ rlpDecode $ rlpDeserialize x
+getNodeDataMem _ (SmallRef x) = return $ justRight $ Bi.decodeFull' x
 getNodeDataMem db ptr@(PtrRef bs) = do
-  let bytes = fromMaybe (error $ "Missing StateRoot in call to getNodeData: " ++ formatNodeRef ptr)
+  let bytes = fromMaybe (error $ "Missing StateRoot in call to getNodeData: " <> formatNodeRef ptr)
                         (Map.lookup bs (mpMap db))
 
   return $ bytes2NodeData bytes
     where
       bytes2NodeData::B.ByteString->NodeData
       bytes2NodeData bytes | B.null bytes = EmptyNodeData
-      bytes2NodeData bytes = rlpDecode $ rlpDeserialize bytes
+      bytes2NodeData bytes = justRight $ Bi.decodeFull' bytes
 
 putNodeDataMem::Monad m=>MPMem->NodeData->m MPMem
 putNodeDataMem db nd = do
-  let bytes = rlpSerialize $ rlpEncode nd
+  let bytes = Bi.serialize' nd
       ptr = convert (Crypto.hash bytes :: Crypto.Digest Crypto.Keccak_256)
       map' = Map.insert ptr bytes (mpMap db)
   return $ MPMem { mpMap = map', mpRoot = ptr }
@@ -233,13 +233,13 @@ simplify_NodeDataMem db (FullNodeData options Nothing) = do
       _ -> return $ (db,FullNodeData options Nothing)
 simplify_NodeDataMem db x = return (db,x)
 
-newShortcutMem::Monad m=>MPMem->Key->Either NodeRef Val->m (MPMem,NodeRef)
+newShortcutMem::Monad m=>MPMem->MPKey->Either NodeRef MPVal->m (MPMem,NodeRef)
 newShortcutMem db "" (Left ref) = return (db,ref)
 newShortcutMem db key val       = nodeData2NodeRefMem db $ ShortcutNodeData key val
 
 nodeData2NodeRefMem::Monad m=>MPMem->NodeData->m (MPMem,NodeRef)
 nodeData2NodeRefMem db nodeData =
-  case rlpSerialize $ rlpEncode nodeData of
+  case Bi.serialize' nodeData of
     bytes | B.length bytes < 32 -> return $ (db,SmallRef bytes)
     _ -> do
       new <- putNodeDataMem db nodeData

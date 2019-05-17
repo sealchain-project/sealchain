@@ -5,13 +5,14 @@ module Sealchain.Mpt.MerklePatricia.MPDB (
   openMPDB
   ) where
 
+import           Universum
+
 import           Control.Monad.Trans.Resource
-import           Data.Binary
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as BL
 import qualified Database.RocksDB as Rocks
 
 import           Sealchain.Mpt.MerklePatricia.StateRoot
+import qualified Pos.Binary.Class as Bi
 
 -- | This is the database reference type, contianing both the handle to the underlying database, as well
 -- as the stateRoot to the current tree holding the data.
@@ -30,7 +31,7 @@ openMPDB::String -- ^ The filepath with the location of the underlying database.
         ->ResourceT IO MPDB
 openMPDB path = do
     rdb' <- Rocks.open options
-    Rocks.put rdb' Rocks.defaultWriteOptions (BL.toStrict $ encode emptyTriePtr) B.empty
+    Rocks.put rdb' Rocks.defaultWriteOptions (Bi.serialize' emptyTriePtr) B.empty
     return MPDB{ rdb=rdb', stateRoot=emptyTriePtr }
   where options = (Rocks.defaultOptions path)
           { Rocks.optionsCreateIfMissing = True

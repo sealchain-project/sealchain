@@ -12,24 +12,20 @@ module Sealchain.Mpt.MerklePatricia.StateRoot (
   formatStateRoot,
   ) where
 
-import           Control.Monad
+import           Universum
+
 import qualified Data.ByteString.Base16 as B16
 import           Data.ByteArray(convert)
 import           Crypto.Hash as Crypto
 
 
-import           Data.Binary
 import qualified Data.ByteString as B
-import           Data.String
 import qualified Data.Text as T
-import           Data.Text.Encoding (decodeUtf8)
-import           Blockchain.Data.RLP
-
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
+import           Pos.Binary.Class (Bi)
+import qualified Pos.Binary.Class as Bi
 import           Sealchain.Mpt.MerklePatricia.NodeData
-
-import           GHC.Generics
 
 -- | Internal nodes are indexed in the underlying database by their 256-bit SHA3 hash.
 -- This types represents said hash.
@@ -38,7 +34,7 @@ import           GHC.Generics
 -- (ie- the pointer to the full set of key/value pairs at a particular time in history), and
 -- will be of interest if you need to refer to older or parallel version of the data.
 
-newtype StateRoot = StateRoot Ptr deriving (Show, Eq, Read, Generic, IsString)
+newtype StateRoot = StateRoot MPPtr deriving (Show, Eq, Read, Generic, IsString)
 
 formatStateRoot :: StateRoot -> String
 formatStateRoot (StateRoot sr) = T.unpack .  decodeUtf8 . B16.encode $ sr
@@ -46,19 +42,15 @@ formatStateRoot (StateRoot sr) = T.unpack .  decodeUtf8 . B16.encode $ sr
 instance Pretty StateRoot where
   pretty = text . formatStateRoot
 
-instance Binary StateRoot where
-  put (StateRoot x) = sequence_ $ put <$> B.unpack x
-  get = StateRoot <$> B.pack <$> replicateM 32 get
-
-instance RLPSerializable StateRoot where
-    rlpEncode (StateRoot x) = rlpEncode x
-    rlpDecode x = StateRoot $ rlpDecode x
+instance Bi StateRoot where
+  encode (StateRoot bs) = Bi.encode bs 
+  decode = StateRoot <$> Bi.decode
 
 -- | The stateRoot of the empty database.
 emptyTriePtr::StateRoot
 emptyTriePtr =
-  let root = rlpEncode (0::Integer)
-      rootHash = convert $ (Crypto.hash . rlpSerialize $ root :: Crypto.Digest Crypto.Keccak_256)
+  let root = (0::Integer)
+      rootHash = convert $ (Crypto.hash . Bi.serialize' $ root :: Crypto.Digest Crypto.Keccak_256)
   in StateRoot rootHash
 
 sha2StateRoot::Digest Crypto.Keccak_256 -> StateRoot

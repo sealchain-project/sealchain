@@ -1,69 +1,99 @@
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Sealchain.Mpt.MerklePatriciaMixMem (
-  Key, 
-  Val, 
-  Ptr,
+  MPKey, 
+  MPVal, 
+  MPPtr,
   MPDB(..), 
   StateRoot(..),
   MMModifier,
   putKeyValMixMem, 
   getKeyValMixMem, 
+  getAllKeyValsMixMem,
   deleteKeyMixMem, 
   keyExistsMixMem,
   initializeBlankMixMem
   ) where
 
+import           Universum
+
 import           Control.Monad.Trans (MonadIO)
-import           Control.Monad.Trans.Resource (MonadResource)
+import qualified Data.ByteString as B
 import qualified Data.Map as Map
-import           Data.Maybe(isJust)
 import qualified Database.RocksDB as DB
 
-import           Blockchain.Data.RLP
+import           Pos.Binary.Class (Bi)
+import qualified Pos.Binary.Class as Bi
+
+import           Sealchain.Mpt.Utils
 import           Sealchain.Mpt.MerklePatricia.MPDB
 import           Sealchain.Mpt.MerklePatricia.NodeData
 import           Sealchain.Mpt.MerklePatricia.InternalMixMem
 import           Sealchain.Mpt.MerklePatricia.StateRoot
 import           Sealchain.Mpt.MerklePatricia.Utils
 
+data RichValue = RichValue 
+  { _rvKey :: B.ByteString
+  , _rvVal :: B.ByteString
+  }
+
+instance Bi RichValue where
+    encode rv = Bi.encodeListLen 2
+                <> Bi.encode (_rvKey rv)
+                <> Bi.encode (_rvVal rv)
+    decode = do
+        Bi.enforceSize "RichValue" 2
+        RichValue <$> Bi.decode <*> Bi.decode
+
+richValueToPair :: RichValue -> (B.ByteString, B.ByteString)
+richValueToPair RichValue{..} = (_rvKey, _rvVal)
+
 putKeyValMixMem::MonadIO m=>MPDB
            ->MMModifier
-           ->Key
-           ->Val
-           ->m (Ptr, MMModifier)
+           ->B.ByteString
+           ->B.ByteString
+           ->m (MPPtr, MMModifier)
 putKeyValMixMem db mmm key val = do
-  runMixMemMode db mmm $ unsafePutKeyValMixMem (keyToSafeKey key) val
+  runMixMemMode db mmm $ unsafePutKeyValMixMem (byteStringToSafeKey key) (Bi.serialize' $ RichValue key val)
 
 getKeyValMixMem::MonadIO m=>MPDB
          ->MMModifier
-         ->Key
-         ->m (Maybe Val)
+         ->B.ByteString
+         ->m (Maybe B.ByteString)
 getKeyValMixMem db mmm key = do
-  (vals, _) <- runMixMemMode db mmm $ unsafeGetKeyValsMixMem (keyToSafeKey key)
-  return $
-    if not (null vals)
-    then Just $ snd (head vals)
-         -- Since we hash the keys, it's impossible
-         -- for vals to have more than one item
-    else Nothing
+  (keyVals, _) <- runMixMemMode db mmm $ unsafeGetKeyValsMixMem (byteStringToSafeKey key)
+  case keyVals of
+    []     -> return Nothing
+    (x:_)  -> do
+      let RichValue _ val = justRight $ Bi.decodeFull' $ snd x
+      return $ Just val
+
+getAllKeyValsMixMem::MonadIO m=>MPDB
+         ->MMModifier
+         ->m [(B.ByteString, B.ByteString)]
+getAllKeyValsMixMem db mmm = do
+  (keyVals, _) <- runMixMemMode db mmm $ unsafeGetAllKeyValsMixMem
+  let actualKeyVals = map (richValueToPair . justRight . Bi.decodeFull' . snd) keyVals 
+  return actualKeyVals
 
 deleteKeyMixMem::MonadIO m=>MPDB
          ->MMModifier
-         ->Key
-         ->m (Ptr, MMModifier)
+         ->B.ByteString
+         ->m (MPPtr, MMModifier)
 deleteKeyMixMem db mmm key = do
-  runMixMemMode db mmm $ unsafeDeleteKeyMixMem (keyToSafeKey key)
+  runMixMemMode db mmm $ unsafeDeleteKeyMixMem (byteStringToSafeKey key)
 
 keyExistsMixMem::MonadIO m=>MPDB
          ->MMModifier
-         ->Key
+         ->B.ByteString
          ->m Bool
 keyExistsMixMem db mmm key = isJust <$> getKeyValMixMem db mmm key
 
-initializeBlankMixMem::MonadResource m=>MPDB -- ^ The object containing the current stateRoot.
+initializeBlankMixMem::MonadIO m=>MPDB -- ^ The object containing the current stateRoot.
                ->m MMModifier
 initializeBlankMixMem db = do
-    let bytes = rlpSerialize $ rlpEncode (0::Integer)
+    let bytes = Bi.serialize' (0::Integer)
         StateRoot key = emptyTriePtr
 
     DB.put (rdb db) DB.defaultWriteOptions key bytes

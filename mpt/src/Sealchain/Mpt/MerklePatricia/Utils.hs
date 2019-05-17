@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Sealchain.Mpt.MerklePatricia.Utils (
+  justRight,
   keyToSafeKey,
   getCommonPrefix,
   replace,
@@ -10,11 +11,18 @@ module Sealchain.Mpt.MerklePatricia.Utils (
   options2List
   ) where
 
+import           Universum
+
 import           Data.ByteArray(convert)
+import qualified Data.Text as T
 import           Crypto.Hash as Crypto
 import qualified Data.NibbleString as N
 
 import           Sealchain.Mpt.MerklePatricia.NodeData
+
+justRight :: Either Text a -> a
+justRight (Right a) = a
+justRight _ = error "Data curruption"
 
 keyToSafeKey::N.NibbleString->N.NibbleString
 keyToSafeKey key =
@@ -25,7 +33,7 @@ keyToSafeKey key =
 list2Options::N.Nibble->[(N.Nibble, NodeRef)]->[NodeRef]
 list2Options start [] = replicate (fromIntegral $ 0x10 - start) emptyRef
 list2Options start x | start > 15 =
-  error $
+  error . T.pack $
   "value of 'start' in list2Option is greater than 15, it is: " ++ show start
   ++ ", second param is " ++ show x
 list2Options start ((firstNibble, firstPtr):rest) =
@@ -34,11 +42,11 @@ list2Options start ((firstNibble, firstPtr):rest) =
 options2List::[NodeRef]->[(N.Nibble, NodeRef)]
 options2List theList = filter ((/= emptyRef) . snd) $ zip [0..] theList
 
-prependToKey::Key->(Key, Val)->(Key, Val)
+prependToKey::MPKey->(MPKey, MPVal)->(MPKey, MPVal)
 prependToKey prefix (key, val) = (prefix `N.append` key, val)
 
 replace::Integral i=>[a]->i->a->[a]
-replace lst i newVal = left ++ [newVal] ++ right
+replace lst i newMPVal = left ++ [newMPVal] ++ right
             where
               (left, _:right) = splitAt (fromIntegral i) lst
 

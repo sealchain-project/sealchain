@@ -14,8 +14,10 @@ description:
 library
     default-language: Haskell2010
     build-depends: base >= 4 && < 5
+                 , universum
                  , base16-bytestring
                  , binary
+                 , sealchain-binary
                  , bytestring
                  , cryptonite
                  , data-default
@@ -32,6 +34,7 @@ library
     exposed-modules: Sealchain.Mpt.MerklePatricia
                    , Sealchain.Mpt.MerklePatriciaMem
                    , Sealchain.Mpt.MerklePatriciaMixMem
+                   , Sealchain.Mpt.Utils
                    , Sealchain.Mpt.MerklePatricia.Internal
                    , Sealchain.Mpt.MerklePatricia.InternalMem
                    , Sealchain.Mpt.MerklePatricia.InternalMixMem
@@ -44,6 +47,7 @@ library
                  -fwarn-unused-imports
     buildable: True
     hs-source-dirs: src
+    default-extensions: NoImplicitPrelude
 
 
 test-suite test-merkle-patricia-db

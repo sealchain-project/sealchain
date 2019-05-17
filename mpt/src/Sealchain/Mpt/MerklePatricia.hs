@@ -19,11 +19,14 @@
 -- Patricia Merkle Tree.
 
 module Sealchain.Mpt.MerklePatricia (
-  Key, Val, MPDB(..), StateRoot(..),
+  MPKey, MPVal, MPDB(..), StateRoot(..),
   openMPDB, emptyTriePtr, sha2StateRoot, unboxStateRoot,
   putKeyVal, getKeyVal, deleteKey, keyExists,
   initializeBlank
   ) where
+
+import           Universum
+import qualified Universum.Unsafe as Unsafe
 
 import           Control.Monad.Trans(MonadIO)
 import           Data.Maybe(isJust)
@@ -39,20 +42,20 @@ import           Sealchain.Mpt.MerklePatricia.Utils
 
 -- | Adds a new key/value pair.
 putKeyVal::MonadIO m=>MPDB -- ^ The object containing the current stateRoot.
-           ->Key -- ^ Key of the data to be inserted.
-           ->Val -- ^ Value of the new data
+           ->MPKey -- ^ Key of the data to be inserted.
+           ->MPVal -- ^ Value of the new data
            ->m MPDB -- ^ The object containing the stateRoot to the data after the insert.
 putKeyVal db = unsafePutKeyVal db . keyToSafeKey
 
 -- | Retrieves all key/value pairs whose key starts with the given parameter.
 getKeyVal::MonadIO m=>MPDB -- ^ Object containing the current stateRoot.
-         -> Key -- ^ Key of the data to be inserted.
-         -> m (Maybe Val) -- ^ The requested value.
+         -> MPKey -- ^ Key of the data to be inserted.
+         -> m (Maybe MPVal) -- ^ The requested value.
 getKeyVal db key = do
   vals <- unsafeGetKeyVals db (keyToSafeKey key)
   return $
     if not (null vals)
-    then Just $ snd (head vals)
+    then Just $ snd (Unsafe.head vals)
          -- Since we hash the keys, it's impossible
          -- for vals to have more than one item
     else Nothing
@@ -62,13 +65,13 @@ getKeyVal db key = do
 -- Note that the key/value pair will still be present in the history, and
 -- can be accessed by using an older 'MPDB' object.
 deleteKey::MonadIO m=>MPDB -- ^ The object containing the current stateRoot.
-         ->Key -- ^ The key to be deleted.
+         ->MPKey -- ^ The key to be deleted.
          ->m MPDB -- ^ The object containing the stateRoot to the data after the delete.
 deleteKey db = unsafeDeleteKey db . keyToSafeKey
 
 -- | Returns True is a key exists.
 keyExists::MonadIO m=>MPDB -- ^ The object containing the current stateRoot.
-         ->Key -- ^ The key to be deleted.
+         ->MPKey -- ^ The key to be deleted.
          ->m Bool -- ^ True if the key exists
 keyExists db key = isJust <$> getKeyVal db key
 
