@@ -13,7 +13,10 @@ module Sealchain.Mpt.MerklePatriciaMixMem (
   getAllKeyValsMixMem,
   deleteKeyMixMem, 
   keyExistsMixMem,
-  initializeBlankMixMem
+  initializeBlankMixMem,
+  justRight,
+  emptyTriePtr,
+  unboxStateRoot
   ) where
 
 import           Universum

@@ -9,7 +9,7 @@ module Pact.Persist
   (Persist,
    Table(..),DataTable,TxTable,
    TableId(..),tableId,
-   PactKey,PactValue,
+   PactKey (..),PactValue,
    DataKey(..),TxKey(..),
    KeyCmp(..),cmpToOp,
    KeyConj(..),conjToOp,
@@ -19,10 +19,12 @@ module Pact.Persist
    Text
    ) where
 
-import Data.Aeson
-import Data.String
-import Data.Hashable
-import Data.Typeable
+import           Data.Aeson
+import qualified Data.ByteString.Char8 as B
+import           Data.String
+import           Data.Hashable
+import           Data.Text.Encoding
+import           Data.Typeable
 
 import Pact.Types.Runtime
 
@@ -107,10 +109,17 @@ compileQuery keyfield (Just kq) = ("WHERE " <> qs,pms)
                 (rq,rps) = compile False r
 {-# INLINE compileQuery #-}
 
+class (Ord k,Show k,Eq k,Hashable k,Typeable k) => PactKey k where
+  toByteString :: k -> B.ByteString
+  fromByteString :: B.ByteString -> k
 
-class (Ord k,Show k,Eq k,Hashable k) => PactKey k
-instance PactKey TxKey
-instance PactKey DataKey
+instance PactKey TxKey where
+  toByteString (TxKey t) = B.pack $ show t
+  fromByteString b = TxKey ((read $ B.unpack b) :: Integer)
+
+instance PactKey DataKey where
+  toByteString (DataKey t) = encodeUtf8 t
+  fromByteString b = DataKey $ decodeUtf8 b
 
 class (Eq v,Show v,ToJSON v,FromJSON v,Typeable v) => PactValue v
 instance PactValue v => PactValue (TxLog v)

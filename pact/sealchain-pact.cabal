@@ -97,6 +97,7 @@ library
       Pact.MockDb
       Pact.Persist.MockPersist
       Pact.Persist.SQLite
+      Pact.Persist.MPTree
       Pact.PersistPactDb.Regression
       Pact.ReplTools
       Pact.Server.ApiServer
@@ -156,6 +157,8 @@ library
   if !impl(ghcjs)
     build-depends:
         async
+      , sealchain-binary
+      , sealchain-mpt
       , criterion >= 1.1.4 && < 1.5
       , crypto-api
       , cryptonite
