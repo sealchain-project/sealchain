@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -31,11 +32,13 @@ import Data.Aeson
 import Data.String
 import Data.Default
 import GHC.Generics (Generic)
-import qualified Text.PrettyPrint.ANSI.Leijen as PP
-import Text.PrettyPrint.ANSI.Leijen hiding ((<>),(<$>))
 import Control.DeepSeq
+#if !defined(ghcjs_HOST_OS)
+import Data.SBV (Mergeable (symbolicMerge))
+#endif
 
 import Pact.Types.Orphans ()
+import Pact.Types.Pretty
 import Pact.Types.Util
 
 --import Pact.Types.Crypto (Hash(..))
@@ -56,9 +59,10 @@ newtype Code = Code { _unCode :: Text }
   deriving (Eq,Ord,IsString,ToJSON,FromJSON,Semigroup,Monoid,Generic,NFData,AsString)
 instance Show Code where show = unpack . _unCode
 instance Pretty Code where
-  pretty (Code c) | T.compareLength c maxLen == GT =
-                      text $ unpack (T.take maxLen c <> "...")
-                  | otherwise = text $ unpack c
+  pretty (Code c)
+    | T.compareLength c maxLen == GT
+    = pretty $ T.take maxLen c <> "..."
+    | otherwise = pretty c
     where maxLen = 30
 
 -- | For parsed items, original code and parse info;
@@ -81,6 +85,13 @@ instance Ord Info where
   _ <= Info Nothing = False
 
 instance Default Info where def = Info Nothing
+
+#if !defined(ghcjs_HOST_OS)
+instance Mergeable Info where
+  -- Because Info values have no effect on execution we just take the max
+  -- (which could possibly have more info)
+  symbolicMerge _ _ a b = max a b
+#endif
 
 
 -- renderer for line number output.

@@ -9,6 +9,7 @@ import Pact.Types.Runtime
 import Control.Lens
 import Control.Arrow
 import Data.Word
+import Pact.Types.Pretty
 
 -- | Compute gas for some application or evaluation.
 computeGas :: Either (Info,Text) FunApp -> GasArgs -> Eval e Gas
@@ -20,7 +21,7 @@ computeGas i args = do
     g1 = g0 + runGasModel _geGasModel name args
   evalGas .= g1
   if g1 > fromIntegral _geGasLimit then
-    throwErr GasError info $ "Gas limit (" <> tShow _geGasLimit <> ") exceeded: " <> tShow g1
+    throwErr GasError info $ "Gas limit (" <> pretty _geGasLimit <> ") exceeded: " <> pretty g1
     else return g1
 
 
@@ -38,4 +39,7 @@ freeGasEnv = GasEnv 0 0.0 (constGasModel 0)
 
 -- | Gas model that charges a fixed (positive) rate per tracked operation.
 constGasModel :: Word64 -> GasModel
-constGasModel r = GasModel $ \_ _ -> fromIntegral r
+constGasModel r = GasModel
+  { gasModelName = "fixed " <> tShow r
+  , gasModelDesc = "constant rate gas model with fixed rate " <> tShow r
+  , runGasModel = \_ _ -> fromIntegral r }

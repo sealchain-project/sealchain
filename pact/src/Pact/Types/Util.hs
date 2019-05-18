@@ -26,19 +26,19 @@ import qualified Data.ByteString.Lazy.Char8 as BSL8
 import Data.Char
 import Data.Text (Text,pack,unpack)
 import Data.Text.Encoding
-import Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
-import qualified Text.PrettyPrint.ANSI.Leijen as PP
 import Control.Concurrent
-import Control.Lens
+import Control.Lens hiding (Empty)
 import Control.DeepSeq
 import Data.Hashable (Hashable)
 import Data.Serialize (Serialize)
 import qualified Data.Serialize as S
-
+import Pact.Types.Pretty
 
 
 class ParseText a where
   parseText :: Text -> Parser a
+
+
 
 fromText :: ParseText a => Text -> Result a
 fromText = parse parseText
@@ -69,8 +69,11 @@ newtype Hash = Hash { unHash :: ByteString }
   deriving (Eq, Ord, Generic, Hashable)
 instance Show Hash where
   show (Hash h) = show $ B16.encode h
+instance Pretty Hash where
+  pretty = pretty . asString
 instance AsString Hash where asString (Hash h) = decodeUtf8 (B16.encode h)
 instance NFData Hash
+
 
 -- NB: this hash is also used for the bloom filter, which needs 32bit keys
 -- if you want to change this, you need to retool the bloom filter as well
@@ -119,6 +122,9 @@ parseB16Text t = case B16.decode (encodeUtf8 t) of
                                | otherwise -> fail $ "Base16 decode failed: " ++ show t
 {-# INLINE parseB16Text #-}
 
+parseB16TextOnly :: Text -> Either String ByteString
+parseB16TextOnly t = resultToEither $ parse parseB16Text t
+
 toB16JSON :: ByteString -> Value
 toB16JSON s = String $ toB16Text s
 
@@ -128,6 +134,9 @@ toB16Text s = decodeUtf8 $ B16.encode s
 failMaybe :: Monad m => String -> Maybe a -> m a
 failMaybe err m = maybe (fail err) return m
 
+maybeToEither :: String -> Maybe a -> Either String a
+maybeToEither err Nothing = Left err
+maybeToEither _ (Just a)  = Right a
 
 
 -- | Utility for unsafe parse of JSON
@@ -137,19 +146,6 @@ unsafeFromJSON v = case fromJSON v of Success a -> a; Error e -> error ("JSON pa
 -- | Utility for GHCI output of JSON
 outputJSON :: ToJSON a => a -> IO ()
 outputJSON a = BSL8.putStrLn $ encode a
-
-
-data RenderColor = RColor | RPlain
-
-renderString :: Pretty a => (Doc -> SimpleDoc) -> RenderColor -> a -> String
-renderString renderf colors p = displayS (renderf ((case colors of RColor -> id; RPlain -> plain) (pretty p))) ""
-
-renderCompactString :: Pretty a => a -> String
-renderCompactString = renderString renderCompact RPlain
-
-renderPrettyString :: Pretty a => RenderColor -> a -> String
-renderPrettyString = renderString (renderPretty 0.4 100)
-
 
 -- | Provide unquoted string representation.
 class AsString a where asString :: a -> Text
@@ -173,15 +169,6 @@ modifyingMVar mv l f = modifyMVar_ mv $ \ps -> (\b -> set l b ps) <$> f (view l 
 useMVar :: MVar s -> Getting a s a -> IO a
 useMVar e l = view l <$> readMVar e
 {-# INLINE useMVar #-}
-
--- | Prelude-friendly replacement for <$>
-infixr 5 <$$>
-(<$$>) :: Doc -> Doc -> Doc
-(<$$>) = (PP.<$>)
-
--- | Pretty show.
-pshow :: Show a => a -> Doc
-pshow = text . show
 
 tShow :: Show a => a -> Text
 tShow = pack . show

@@ -24,7 +24,6 @@
 module Pact.Types.Server
   ( userSigToPactPubKey, userSigsToPactKeySet
   , CommandConfig(..), ccPersister, ccEntity, ccGasLimit, ccGasRate
-  , CommandPact(..), cpTxId, cpContinuation, cpStepCount, cpStep, cpYield
   , CommandState(..), csRefStore, csPacts
   , CommandEnv(..), ceEntity, ceMode, ceDbEnv, ceState, ceLogger, ceGasEnv
   , CommandM, runCommand, throwCmdEx
@@ -48,8 +47,8 @@ import Control.Concurrent.Chan
 import Data.Maybe
 import Data.String
 import Data.ByteString (ByteString)
-import qualified Data.Map.Strict as M
-import qualified Data.Set as S
+import qualified Data.Map.Strict         as M
+import qualified Data.Set                as S
 import Data.Text.Encoding
 import Data.Aeson
 
@@ -64,8 +63,10 @@ import Pact.Types.Command
 import Pact.Types.Logger
 import Pact.Interpreter
 
+
 userSigToPactPubKey :: UserSig -> Pact.PublicKey
-userSigToPactPubKey UserSig{..} = Pact.PublicKey $ encodeUtf8 _usPubKey
+userSigToPactPubKey UserSig{..} = Pact.PublicKey $ encodeUtf8 _usAddress
+
 
 userSigsToPactKeySet :: [UserSig] -> S.Set Pact.PublicKey
 userSigsToPactKeySet = S.fromList . fmap userSigToPactPubKey
@@ -80,18 +81,10 @@ data CommandConfig p = CommandConfig {
 $(makeLenses ''CommandConfig)
 
 
-data CommandPact = CommandPact
-  { _cpTxId :: TxId
-  , _cpContinuation :: Term Name
-  , _cpStepCount :: Int
-  , _cpStep :: Int
-  , _cpYield :: Maybe (Term Name)
-  } deriving Show
-$(makeLenses ''CommandPact)
 
 data CommandState = CommandState {
        _csRefStore :: RefStore
-     , _csPacts :: M.Map TxId CommandPact -- comment copied from Kadena code: TODO need hashable for TxId mebbe
+     , _csPacts :: M.Map PactId PactExec
      } deriving Show
 $(makeLenses ''CommandState)
 

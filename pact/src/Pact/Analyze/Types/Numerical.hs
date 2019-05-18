@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
@@ -5,49 +6,73 @@
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE Rank2Types                 #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeOperators              #-}
+
 {-# OPTIONS_GHC -Wno-redundant-constraints #-} -- coerceSBV requires Coercible
+{-# OPTIONS_GHC -fno-warn-orphans #-} -- Num, etc instances for Decimal
+
+-- | Type definitions specific to symbolic analysis of numeric (integer and
+-- decimal) expressions.
 module Pact.Analyze.Types.Numerical where
 
-import           Control.Lens                (Prism')
-import           Data.Coerce                 (Coercible)
-import qualified Data.Decimal                as Decimal
-import           Data.SBV                    (HasKind (kindOf),
-                                              Kind (KUnbounded),
-                                              SDivisible (..), SymWord (..),
-                                              bnot, oneIf, (&&&), (.==), (.>),
-                                              (.^), (|||))
-import           Data.SBV.Control            (SMTValue (sexprToVal))
-import           Data.SBV.Dynamic            (svAbs, svPlus, svTimes, svUNeg)
-import           Data.SBV.Internals          (CW (..), CWVal (CWInteger),
-                                              SBV (SBV), SVal (SVal),
-                                              genMkSymVar, normCW)
-import qualified Data.SBV.Internals          as SBVI
-import           Data.Text                   (Text)
-import           GHC.Real                    ((%))
+import           Control.Lens                 (Iso', Prism', from, iso, view)
+import           Data.Coerce                  (Coercible)
+import qualified Data.Decimal                 as Decimal
+import           Data.SBV                     (HasKind (kindOf), SDivisible (..),
+                                               SymVal (..), oneIf, sNot, (.&&),
+                                               (.==), (.>), (.^), (.||))
+import           Data.SBV.Control             (SMTValue (sexprToVal))
+import           Data.SBV.Dynamic             (svAbs, svPlus, svTimes, svUNeg)
+import           Data.SBV.Internals           (CV (..), CVal (CInteger),
+                                               SBV (SBV), SVal (SVal),
+                                               genMkSymVar, normCV)
+import qualified Data.SBV.Internals           as SBVI
+import           Data.Text                    (Text)
+import           GHC.Real                     ((%))
 
-import           Pact.Types.Util             (tShow)
+import           Pact.Analyze.Feature         hiding (Constraint, dec)
+import           Pact.Analyze.Types.Types
+import           Pact.Types.Pretty            (Pretty(..), parensSep, viaShow)
 
-import           Pact.Analyze.Feature        hiding (dec)
-import           Pact.Analyze.Types.UserShow
 
+newtype PactIso a b = PactIso {unPactIso :: Iso' a b}
+
+fromPact :: PactIso a b -> a -> b
+fromPact = view . unPactIso
+
+toPact :: PactIso a b -> b -> a
+toPact = view . from . unPactIso
 
 -- We model decimals as integers. The value of a decimal is the value of the
 -- integer, shifted right 255 decimal places.
 newtype Decimal = Decimal { unDecimal :: Integer }
   deriving (Enum, Eq, Ord, Show)
 
-forceConcrete :: SymWord a => SBV a -> a
+decimalIso :: PactIso Decimal.Decimal Decimal
+decimalIso = PactIso $ iso mkDecimal unMkDecimal
+  where
+    unMkDecimal :: Decimal -> Decimal.Decimal
+    unMkDecimal (Decimal dec) = case Decimal.eitherFromRational (dec % 10 ^ decimalPrecision) of
+      Left err -> error err
+      Right d  -> d
+
+    mkDecimal :: Decimal.Decimal -> Decimal
+    mkDecimal (Decimal.Decimal places mantissa)
+      = lShiftD (decimalPrecision - fromIntegral places) (Decimal mantissa)
+
+forceConcrete :: SymVal a => SBV a -> a
 forceConcrete sbva = case unliteral sbva of
   Just result -> result
   Nothing     -> error "this computation must be concrete"
 
-liftSBV :: (SymWord a, SymWord b) => (SBV a -> SBV b) -> a -> b
+liftSBV :: (SymVal a, SymVal b) => (SBV a -> SBV b) -> a -> b
 liftSBV f = forceConcrete . f . literal
 
-liftSBV2 :: (SymWord a, SymWord b, SymWord c)
+liftSBV2 :: (SymVal a, SymVal b, SymVal c)
   => (SBV a -> SBV b -> SBV c)
   -> a -> b -> c
 liftSBV2 f a b = forceConcrete $ f (literal a) (literal b)
@@ -127,12 +152,12 @@ roundingDiv num denom =
 
       exactlyBetweenNumbers = abs fractionalPart * 2 .== abs denom
       roundsUp              = abs fractionalPart * 2 .>  abs denom
-      wholePartIsOdd        = bnot $ wholePart `sMod` 2 .== 0
+      wholePartIsOdd        = sNot $ wholePart `sMod` 2 .== 0
 
     -- We're working in the space of integers 10^255 times bigger than the
     -- decimals they represent. Possibly add an adjustment to jump to the next
     -- decimal, then convert to a decimal.
-  in wholePart + oneIf (roundsUp ||| exactlyBetweenNumbers &&& wholePartIsOdd)
+  in wholePart + oneIf (roundsUp .|| exactlyBetweenNumbers .&& wholePartIsOdd)
 
 instance SymbolicDecimal (SBV Decimal) where
   type IntegerOf (SBV Decimal) = SBV Integer
@@ -166,22 +191,22 @@ coerceSBV = SBVI.SBV . SBVI.unSBV
 unsafeCoerceSBV :: SBV a -> SBV b
 unsafeCoerceSBV = SBVI.SBV . SBVI.unSBV
 
-instance HasKind Decimal where kindOf _ = KUnbounded
-instance SymWord Decimal where
-  mkSymWord  = genMkSymVar KUnbounded
-  literal a  = SBV . SVal KUnbounded . Left . normCW $ CW KUnbounded (CWInteger (unDecimal a))
-  fromCW (CW _ (CWInteger x)) = Decimal x
-  fromCW x = error $ "in instance SymWord Decimal: expected CWInteger, found: " ++ show x
+instance HasKind Decimal where kindOf _ = SBVI.KUnbounded
+instance SymVal Decimal where
+  mkSymVal  = genMkSymVar SBVI.KUnbounded
+  literal a = SBV . SVal SBVI.KUnbounded . Left . normCV $ CV SBVI.KUnbounded (CInteger (unDecimal a))
+  fromCV (CV _ (CInteger x)) = Decimal x
+  fromCV x = error $ "in instance SymVal Decimal: expected CWInteger, found: " ++ show x
 
 instance SMTValue Decimal where sexprToVal = fmap Decimal . sexprToVal
 
-instance UserShow Decimal where
-  userShowsPrec _ (Decimal dec) =
+instance Pretty Decimal where
+  pretty (Decimal dec) =
     case Decimal.eitherFromRational (dec % (10 ^ decimalPrecision)) of
       Left err                    -> error err
       -- Make sure to show ".0":
-      Right (Decimal.Decimal 0 i) -> tShow $ Decimal.Decimal 1 (i * 10 :: Integer)
-      Right d                     -> tShow d
+      Right (Decimal.Decimal 0 i) -> viaShow $ Decimal.Decimal 1 (i * 10 :: Integer)
+      Right d                     -> viaShow d
 
 -- Operations that apply to a pair of either integer or decimal, resulting in
 -- the same:
@@ -210,8 +235,8 @@ arithOpP = mkOpNamePrism
   , (SLogarithm,      Log)
   ]
 
-instance UserShow ArithOp where
-  userShowsPrec _ = toText arithOpP
+instance Pretty ArithOp where
+  pretty = toDoc arithOpP
 
 -- integer -> integer
 -- decimal -> decimal
@@ -236,8 +261,8 @@ unaryArithOpP = mkOpNamePrism
   -- explicitly no signum
   ]
 
-instance UserShow UnaryArithOp where
-  userShowsPrec _ = toText unaryArithOpP
+instance Pretty UnaryArithOp where
+  pretty = toDoc unaryArithOpP
 
 -- decimal -> integer -> decimal
 -- decimal -> decimal
@@ -255,8 +280,8 @@ roundingLikeOpP = mkOpNamePrism
   , (SFloorRound,   Floor)
   ]
 
-instance UserShow RoundingLikeOp where
-  userShowsPrec _ = toText roundingLikeOpP
+instance Pretty RoundingLikeOp where
+  pretty = toDoc roundingLikeOpP
 
 -- | Arithmetic ops
 --
@@ -281,29 +306,29 @@ instance UserShow RoundingLikeOp where
 -- - RoundingLikeOp2: Rounding decimals to decimals with a specified level of
 --   precision.
 --   - Operations: { round floor ceiling }
-data Numerical t a where
-  DecArithOp      :: ArithOp        -> t Decimal -> t Decimal -> Numerical t Decimal
-  IntArithOp      :: ArithOp        -> t Integer -> t Integer -> Numerical t Integer
-  DecUnaryArithOp :: UnaryArithOp   -> t Decimal ->              Numerical t Decimal
-  IntUnaryArithOp :: UnaryArithOp   -> t Integer ->              Numerical t Integer
-  DecIntArithOp   :: ArithOp        -> t Decimal -> t Integer -> Numerical t Decimal
-  IntDecArithOp   :: ArithOp        -> t Integer -> t Decimal -> Numerical t Decimal
-  ModOp           :: t Integer      -> t Integer ->              Numerical t Integer
-  RoundingLikeOp1 :: RoundingLikeOp -> t Decimal ->              Numerical t Integer
-  RoundingLikeOp2 :: RoundingLikeOp -> t Decimal -> t Integer -> Numerical t Decimal
+data Numerical t (a :: Ty) where
+  DecArithOp      :: ArithOp         -> t 'TyDecimal -> t 'TyDecimal -> Numerical t 'TyDecimal
+  IntArithOp      :: ArithOp         -> t 'TyInteger -> t 'TyInteger -> Numerical t 'TyInteger
+  DecUnaryArithOp :: UnaryArithOp    -> t 'TyDecimal ->                 Numerical t 'TyDecimal
+  IntUnaryArithOp :: UnaryArithOp    -> t 'TyInteger ->                 Numerical t 'TyInteger
+  DecIntArithOp   :: ArithOp         -> t 'TyDecimal -> t 'TyInteger -> Numerical t 'TyDecimal
+  IntDecArithOp   :: ArithOp         -> t 'TyInteger -> t 'TyDecimal -> Numerical t 'TyDecimal
+  ModOp           :: t 'TyInteger    -> t 'TyInteger ->                 Numerical t 'TyInteger
+  RoundingLikeOp1 :: RoundingLikeOp  -> t 'TyDecimal ->                 Numerical t 'TyInteger
+  RoundingLikeOp2 :: RoundingLikeOp  -> t 'TyDecimal -> t 'TyInteger -> Numerical t 'TyDecimal
 
-instance (UserShow (t Integer), UserShow (t Decimal))
-  => UserShow (Numerical t a) where
-  userShowsPrec _ = parenList . \case
-    DecArithOp op a b      -> [userShow op, userShow a, userShow b]
-    IntArithOp op a b      -> [userShow op, userShow a, userShow b]
-    DecUnaryArithOp op a   -> [userShow op, userShow a]
-    IntUnaryArithOp op a   -> [userShow op, userShow a]
-    DecIntArithOp op a b   -> [userShow op, userShow a, userShow b]
-    IntDecArithOp op a b   -> [userShow op, userShow a, userShow b]
-    ModOp a b              -> [SModulus, userShow a, userShow b]
-    RoundingLikeOp1 op a   -> [userShow op, userShow a]
-    RoundingLikeOp2 op a b -> [userShow op, userShow a, userShow b]
+instance (Pretty (t 'TyInteger), Pretty (t 'TyDecimal))
+  => Pretty (Numerical t a) where
+  pretty = parensSep . \case
+    DecArithOp op a b      -> [pretty op, pretty a, pretty b]
+    IntArithOp op a b      -> [pretty op, pretty a, pretty b]
+    DecUnaryArithOp op a   -> [pretty op, pretty a]
+    IntUnaryArithOp op a   -> [pretty op, pretty a]
+    DecIntArithOp op a b   -> [pretty op, pretty a, pretty b]
+    IntDecArithOp op a b   -> [pretty op, pretty a, pretty b]
+    ModOp a b              -> [pretty SModulus, pretty a, pretty b]
+    RoundingLikeOp1 op a   -> [pretty op, pretty a]
+    RoundingLikeOp2 op a b -> [pretty op, pretty a, pretty b]
 
-deriving instance (Show (t Decimal), Show (t Integer), Show a) => Show (Numerical t a)
-deriving instance (Eq (t Decimal), Eq (t Integer), Eq a) => Eq (Numerical t a)
+deriving instance (Eq   (t 'TyDecimal), Eq   (t 'TyInteger)) => Eq   (Numerical t a)
+deriving instance (Show (t 'TyDecimal), Show (t 'TyInteger)) => Show (Numerical t a)

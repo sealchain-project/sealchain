@@ -42,6 +42,7 @@ import GHC.Generics
 import qualified Data.Map.Strict as M
 import Data.Maybe
 
+import Pact.Types.Pretty
 import Pact.Types.Runtime
 import Pact.Persist as P
 import Pact.Types.Logger
@@ -65,12 +66,16 @@ initDbEnv loggers funrec p = DbEnv {
   _txId = Nothing
   }
 
-data UserTableInfo = UserTableInfo {
-  utModule :: ModuleName,
-  utKeySet :: KeySetName
+data UserTableInfo = UserTableInfo
+  { utModule :: ModuleName
   } deriving (Eq,Show,Generic,Typeable)
-instance PactValue UserTableInfo
 
+instance Pretty UserTableInfo where
+  pretty (UserTableInfo mod') = "UserTableInfo " <> commaBraces
+    [ "module: " <> pretty mod'
+    ]
+
+instance PactValue UserTableInfo
 instance FromJSON UserTableInfo
 instance ToJSON UserTableInfo
 
@@ -90,6 +95,8 @@ keysetsTable :: TableId
 keysetsTable = "SYS_keysets"
 modulesTable :: TableId
 modulesTable = "SYS_modules"
+namespacesTable :: TableId
+namespacesTable = "SYS_namespaces"
 userTableInfo :: TableId
 userTableInfo = "SYS_usertables"
 
@@ -112,14 +119,16 @@ pactdb :: PactDb (DbEnv p)
 pactdb = PactDb
   { _readRow = \d k e ->
        case d of
-           KeySets -> readSysTable e (DataTable keysetsTable) (asString k)
-           Modules -> readSysTable e (DataTable modulesTable) (asString k)
+           KeySets    -> readSysTable e (DataTable keysetsTable) (asString k)
+           Modules    -> readSysTable e (DataTable modulesTable) (asString k)
+           Namespaces -> readSysTable e (DataTable namespacesTable) (asString k)
            (UserTables t) -> readUserTable e t k
 
  , _writeRow = \wt d k v e ->
        case d of
-           KeySets -> writeSys e wt keysetsTable k v
-           Modules -> writeSys e wt modulesTable k v
+           KeySets    -> writeSys e wt keysetsTable k v
+           Modules    -> writeSys e wt modulesTable k v
+           Namespaces -> writeSys e wt namespacesTable k v
            (UserTables t) -> writeUser e wt t k v
 
  , _keys = \tn e -> runMVState e
@@ -131,8 +140,8 @@ pactdb = PactDb
        (\p -> queryKeys p (userTxRecord tn) (Just (KQKey KGTE (fromIntegral tid)))))
 
 
- , _createUserTable = \tn mn ksn e ->
-       createUserTable' e tn mn ksn
+ , _createUserTable = \tn mn e ->
+       createUserTable' e tn mn
 
  , _getUserTableInfo = \tn e -> getUserTableInfo' e tn
 
@@ -176,11 +185,12 @@ getLogs :: FromJSON v => Domain k v -> TxId -> MVState p [TxLog v]
 getLogs d tid = mapM convLog . fromMaybe [] =<< doPersist (\p -> readValue p (tn d) (fromIntegral tid))
   where
     tn :: Domain k v -> TxTable
-    tn KeySets = TxTable keysetsTable
-    tn Modules = TxTable modulesTable
+    tn KeySets    = TxTable keysetsTable
+    tn Modules    = TxTable modulesTable
+    tn Namespaces = TxTable namespacesTable
     tn (UserTables t) = userTxRecord t
     convLog tl = case fromJSON (_txValue tl) of
-      Error s -> throwDbError $ "Unexpected value, unable to deserialize log: " ++ s
+      Error s -> throwDbError $ "Unexpected value, unable to deserialize log: " <> pretty s
       Success v -> return $ set txValue v tl
 {-# INLINE getLogs #-}
 
@@ -238,29 +248,29 @@ writeUser s wt tn rk row = runMVState s $ do
       finish row' = record tt rk row'
   case (olds,wt) of
     (Nothing,Insert) -> ins
-    (Just _,Insert) -> throwDbError $ "Insert: row found for key " ++ show rk
+    (Just _,Insert) -> throwDbError $ "Insert: row found for key " <> pretty rk
     (Nothing,Write) -> ins
     (Just old,Write) -> upd old
     (Just old,Update) -> upd old
-    (Nothing,Update) -> throwDbError $ "Update: no row found for key " ++ show rk
+    (Nothing,Update) -> throwDbError $ "Update: no row found for key " <> pretty rk
 {-# INLINE writeUser #-}
 
 record :: (AsString k, PactValue v) => TxTable -> k -> v -> MVState p ()
 record tt k v = txRecord %= M.insertWith (flip (++)) tt [TxLog (asString (tableId tt)) (asString k) (toJSON v)]
 {-# INLINE record #-}
 
-getUserTableInfo' :: MVar (DbEnv p) -> TableName -> IO (ModuleName, KeySetName)
+getUserTableInfo' :: MVar (DbEnv p) -> TableName -> IO ModuleName
 getUserTableInfo' e tn = runMVState e $ do
   r <- doPersist $ \p -> readValue p (DataTable userTableInfo) (DataKey $ asString tn)
   case r of
-    (Just (UserTableInfo mn ksn)) -> return (mn,ksn)
-    Nothing -> throwDbError $ "getUserTableInfo: no such table: " ++ show tn
+    (Just (UserTableInfo mn)) -> return mn
+    Nothing -> throwDbError $ "getUserTableInfo: no such table: " <> pretty tn
 {-# INLINE getUserTableInfo' #-}
 
 
-createUserTable' :: MVar (DbEnv p) -> TableName -> ModuleName -> KeySetName -> IO ()
-createUserTable' s tn mn ksn = runMVState s $ do
-  let uti = UserTableInfo mn ksn
+createUserTable' :: MVar (DbEnv p) -> TableName -> ModuleName -> IO ()
+createUserTable' s tn mn = runMVState s $ do
+  let uti = UserTableInfo mn
   doPersist $ \p -> writeValue p (DataTable userTableInfo) Insert (DataKey $ asString tn) uti
   record (TxTable userTableInfo) tn uti
   createTable' (userTable tn)
@@ -278,4 +288,5 @@ createSchema e = runMVState e $ do
   createTable' userTableInfo
   createTable' keysetsTable
   createTable' modulesTable
+  createTable' namespacesTable
   doPersist P.commitTx

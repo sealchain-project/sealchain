@@ -24,6 +24,7 @@ import           Pos.Binary.Class (Bi)
 import qualified Pos.Binary.Class as Bi
 import           Sealchain.Mpt.MerklePatriciaMixMem
 import           Pact.Types.Logger hiding (Logging (..))
+import           Pact.Types.Pretty (viaShow)
 
 data MPTreeDB = MPTreeDB 
   { _mpdb         :: !MPDB
@@ -76,7 +77,7 @@ createTable_ table mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
   let tableKey = getTableKey table
   tableRootM <- getKeyValMixMem workMpdb workModifier tableKey 
   case tableRootM of
-    Just _  -> throwDbError $ "Table already exists: " ++ show table 
+    Just _  -> throwDbError $ "Table already exists: " <> viaShow table 
     Nothing -> do
       (newStateRoot, modifier') <- putKeyValMixMem workMpdb workModifier tableKey $ 
                                  unboxStateRoot emptyTriePtr
@@ -88,7 +89,7 @@ unsafeGetTableRoot table (MPTreeDB _ _ workMpdb workModifier _) = do
   tableRootM <- getKeyValMixMem workMpdb workModifier tableKey 
   case tableRootM of
     Just tableRoot -> return tableRoot
-    Nothing        -> throwDbError $ "Table does not exists: " ++ show table
+    Nothing        -> throwDbError $ "Table does not exists: " <> viaShow table
 
 beginTx_ :: MPTreeDB -> IO (MPTreeDB, ())
 beginTx_ mptDB@(MPTreeDB mpdb modifier _ _ _) = 
@@ -126,8 +127,8 @@ writeValue_ table wt pactKey pactValue mptDB@(MPTreeDB _ _ workMpdb workModifier
 
   rowValM <- getKeyValMixMem tableMpdb workModifier bsKey
   case (wt, rowValM) of
-    (Insert, Just _)  -> throwDbError $ "Key already exists: " ++ show pactKey
-    (Update, Nothing) -> throwDbError $ "Key does not exists: " ++ show pactKey
+    (Insert, Just _)  -> throwDbError $ "Key already exists: " <> viaShow pactKey
+    (Update, Nothing) -> throwDbError $ "Key does not exists: " <> viaShow pactKey
     _                 -> do
       (newTableRoot, modifier') <- putKeyValMixMem tableMpdb workModifier bsKey $ encodePactVal pactValue
       (newStateRoot, modifier'') <- putKeyValMixMem workMpdb modifier' tableKey $ unboxStateRoot newTableRoot

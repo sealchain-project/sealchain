@@ -4,28 +4,35 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE TemplateHaskell       #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
+-- | Types related to parsing from 'Exp' to 'Prop' and 'Invariant'.
 module Pact.Analyze.Parse.Types where
 
-import           Control.Lens               (makeLenses)
+import           Control.Lens               (makeLenses, (<&>))
 import           Control.Monad.Except       (MonadError (throwError))
+import           Control.Monad.Fail
 import           Control.Monad.Reader       (ReaderT)
 import           Control.Monad.State.Strict (StateT)
 import qualified Data.HashMap.Strict        as HM
 import           Data.Map                   (Map)
+import qualified Data.Map                   as Map
 import           Data.Set                   (Set)
 import           Data.Text                  (Text)
 import qualified Data.Text                  as T
 import           Prelude                    hiding (exp)
 
-import           Pact.Types.Lang            (AtomExp (..), Exp (..),
+import           Pact.Types.Lang            (AtomExp (..),
+                                             Exp (EAtom, ELiteral, ESeparator),
                                              ListDelimiter (..), ListExp (..),
                                              Literal (LString), LiteralExp (..),
                                              Separator (..), SeparatorExp (..))
 import qualified Pact.Types.Lang            as Pact
 import           Pact.Types.Typecheck       (UserType)
-import           Pact.Types.Util            (tShow)
+import           Pact.Types.Pretty
 
-import           Pact.Analyze.Feature       hiding (Type, Var, ks, obj, str)
+import           Pact.Analyze.Feature       hiding (Doc, Type, Var, ks, obj,
+                                             str)
 import           Pact.Analyze.Types
 
 -- @PreProp@ stands between @Exp@ and @Prop@.
@@ -38,6 +45,7 @@ data PreProp
   | PreDecimalLit Decimal
   | PreTimeLit    Time
   | PreBoolLit    Bool
+  | PreListLit    [PreProp]
 
   -- identifiers
   | PreAbort
@@ -58,49 +66,54 @@ data PreProp
   -- applications
   | PreApp Text [PreProp]
 
-  | PreAt Text PreProp
+  | PreAt PreProp PreProp
   | PrePropRead PreProp PreProp PreProp
   | PreLiteralObject (Map Text PreProp)
   deriving (Eq, Show)
 
-instance UserShow PreProp where
-  userShowsPrec prec = \case
-    PreIntegerLit i   -> tShow i
-    PreStringLit t    -> tShow t
-    PreDecimalLit d   -> userShow d
-    PreTimeLit t      -> tShow (Pact.LTime (toPact timeIso t))
-    PreBoolLit b      -> tShow (Pact.LBool b)
-
-    PreAbort          -> STransactionAborts
-    PreSuccess        -> STransactionSucceeds
-    PreResult         -> SFunctionResult
-    PreVar _id name   -> name
-    PreGlobalVar name -> name
+instance Pretty PreProp where
+  pretty = \case
+    PreIntegerLit i   -> pretty i
+    PreStringLit t    -> dquotes $ pretty t
+    PreDecimalLit d   -> pretty d
+    PreTimeLit t      -> pretty (Pact.LTime (toPact timeIso t))
+    PreBoolLit True   -> "true"
+    PreBoolLit False  -> "false"
+    PreListLit lst    -> commaBrackets $ fmap pretty lst
+    PreAbort          -> pretty STransactionAborts
+    PreSuccess        -> pretty STransactionSucceeds
+    PreResult         -> pretty SFunctionResult
+    PreVar _id name   -> pretty name
+    PreGlobalVar name -> pretty name
 
     PreForall _vid name qty prop ->
-      "(" <> SUniversalQuantification <> " (" <> name <> ":" <> userShow qty <>
-        ") " <> userShow prop <> ")"
+      "(" <> pretty SUniversalQuantification <> " (" <> pretty name <> ":" <>
+        pretty qty <> ") " <> pretty prop <> ")"
     PreExists _vid name qty prop ->
-      "(" <> SExistentialQuantification <> " (" <> name <> ":" <>
-        userShow qty <> ") " <> userShow prop <> ")"
+      "(" <> pretty SExistentialQuantification <> " (" <> pretty name <> ":" <>
+        pretty qty <> ") " <> pretty prop <> ")"
     PreApp name applicands ->
-      "(" <> name <> " " <> T.unwords (map userShow applicands) <> ")"
+      "(" <> pretty name <> " " <> hsep (map pretty applicands) <> ")"
     PreAt objIx obj ->
-      "(" <> SObjectProjection <> " '" <> objIx <> " " <> userShow obj <> ")"
+      "(" <> pretty SObjectProjection <> " " <> pretty objIx <> " " <>
+        pretty obj <> ")"
     PrePropRead tn rk ba ->
-      "(" <> SPropRead <> " '" <> userShow tn <> " " <> userShow rk <> " " <>
-        userShow ba <> ")"
-    PreLiteralObject obj ->
-      userShowsPrec prec obj
+      "(" <> pretty SPropRead <> " '" <> pretty tn <> " " <> pretty rk <> " " <>
+        pretty ba <> ")"
+    PreLiteralObject obj -> commaBraces $ Map.toList obj <&> \(k, v) ->
+      pretty k <> " := " <> pretty v
 
 
 throwErrorT :: MonadError String m => Text -> m a
 throwErrorT = throwError . T.unpack
 
+throwErrorD :: MonadError String m => Doc -> m a
+throwErrorD = throwError . renderCompactString'
+
 -- TODO(joel): add location info
-throwErrorIn :: (MonadError String m, UserShow a) => a -> Text -> m b
-throwErrorIn exp text = throwError $ T.unpack $
-  "in " <> userShow exp <> ", " <> text
+throwErrorIn :: (MonadError String m, Pretty a) => a -> Doc -> m b
+throwErrorIn exp msg = throwError $ renderCompactString' $
+  "in " <> pretty exp <> ", " <> msg
 
 textToQuantifier
   :: Text -> Maybe (VarId -> Text -> QType -> PreProp -> PreProp)
@@ -133,13 +146,13 @@ type InvariantParse = ReaderT [(Pact.Arg UserType, VarId)] (Either String)
 makeLenses ''PropCheckEnv
 
 pattern ParenList :: [Exp t] -> Exp t
-pattern ParenList elems <- EList (ListExp elems Parens _i)
+pattern ParenList elems <- Pact.EList (ListExp elems Parens _i)
 
 pattern BraceList :: [Exp t] -> Exp t
-pattern BraceList elems <- EList (ListExp elems Braces _i)
+pattern BraceList elems <- Pact.EList (ListExp elems Braces _i)
 
 pattern SquareList :: [Exp t] -> Exp t
-pattern SquareList elems <- EList (ListExp elems Brackets _i)
+pattern SquareList elems <- Pact.EList (ListExp elems Brackets _i)
 
 pattern EAtom' :: Text -> Exp t
 pattern EAtom' name <- EAtom (AtomExp name [] _i)
@@ -152,3 +165,6 @@ pattern EStrLiteral' lit <- ELiteral (LiteralExp (LString lit) _i)
 
 pattern Colon' :: Exp t
 pattern Colon' <- ESeparator (SeparatorExp Colon _i)
+
+instance MonadFail (Either e) where
+  fail = error

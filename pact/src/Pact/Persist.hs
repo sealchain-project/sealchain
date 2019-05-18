@@ -9,7 +9,7 @@ module Pact.Persist
   (Persist,
    Table(..),DataTable,TxTable,
    TableId(..),tableId,
-   PactKey (..),PactValue,
+   PactKey(..),PactValue,
    DataKey(..),TxKey(..),
    KeyCmp(..),cmpToOp,
    KeyConj(..),conjToOp,
@@ -20,28 +20,29 @@ module Pact.Persist
    ) where
 
 import           Data.Aeson
-import qualified Data.ByteString.Char8 as B
 import           Data.String
+import qualified Data.ByteString.Char8 as B
 import           Data.Hashable
 import           Data.Text.Encoding
 import           Data.Typeable
 
+import Pact.Types.Pretty
 import Pact.Types.Runtime
 
 type Persist s a = s -> IO (s,a)
 
 newtype DataKey = DataKey Text
-  deriving (Eq,Ord,IsString,AsString,Hashable)
+  deriving (Eq,Ord,IsString,AsString,Hashable,Pretty)
 instance Show DataKey where show (DataKey k) = show k
 newtype TxKey = TxKey Integer
-  deriving (Eq,Ord,Num,Enum,Real,Integral,Hashable)
+  deriving (Eq,Ord,Num,Enum,Real,Integral,Hashable,Pretty)
 instance Show TxKey where show (TxKey k) = show k
 
 type DataTable = Table DataKey
 type TxTable = Table TxKey
 
 newtype TableId = TableId Text
-  deriving (Eq,Show,Ord,IsString,AsString,Hashable)
+  deriving (Eq,Show,Ord,IsString,AsString,Hashable, Pretty)
 
 data Table k where
   DataTable :: !TableId -> DataTable
@@ -58,6 +59,10 @@ deriving instance Ord (Table k)
 instance Hashable k => Hashable (Table k) where
   hashWithSalt s (DataTable t) = s `hashWithSalt` (0::Int) `hashWithSalt` t
   hashWithSalt s (TxTable t) = s `hashWithSalt` (1::Int) `hashWithSalt` t
+
+instance Pretty (Table k) where
+  pretty (DataTable tid) = pretty tid
+  pretty (TxTable tid) = pretty tid
 
 data KeyCmp = KGT|KGTE|KEQ|KNEQ|KLT|KLTE deriving (Eq,Show,Ord,Enum)
 data KeyConj = AND|OR deriving (Eq,Show,Ord,Enum)
@@ -109,7 +114,7 @@ compileQuery keyfield (Just kq) = ("WHERE " <> qs,pms)
                 (rq,rps) = compile False r
 {-# INLINE compileQuery #-}
 
-class (Ord k,Show k,Eq k,Hashable k,Typeable k) => PactKey k where
+class (Ord k,Show k,Eq k,Hashable k,Typeable k,Pretty k) => PactKey k where
   toByteString :: k -> B.ByteString
   fromByteString :: B.ByteString -> k
 
@@ -121,13 +126,14 @@ instance PactKey DataKey where
   toByteString (DataKey t) = encodeUtf8 t
   fromByteString b = DataKey $ decodeUtf8 b
 
-class (Eq v,Show v,ToJSON v,FromJSON v,Typeable v) => PactValue v
+class (Eq v,Show v,ToJSON v,FromJSON v,Typeable v,Pretty v) => PactValue v
 instance PactValue v => PactValue (TxLog v)
 instance PactValue (Columns Persistable)
 instance PactValue a => PactValue [a]
-instance PactValue Module
+instance PactValue (ModuleDef Name)
 instance PactValue KeySet
 instance PactValue Value
+instance PactValue Namespace
 
 data Persister s = Persister {
   createTable :: forall k . PactKey k => Table k -> Persist s ()

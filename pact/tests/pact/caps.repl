@@ -1,0 +1,184 @@
+
+(begin-tx)
+
+(env-data { "kall": ["a" "b" "c"], "kadmin": ["admin"] })
+(define-keyset 'kall)
+(define-keyset 'kadmin)
+
+(env-keys ["admin"])
+
+(module caps 'kadmin
+
+  (defschema guards g:guard)
+  (deftable guard-table:{guards})
+
+  (defschema yieldschema result:integer)
+
+  (defcap GRANTED () true)
+
+  (defcap KALL-CAP () (enforce-keyset 'kall))
+
+  (defun with-kall ()
+    (with-capability (KALL-CAP) 1))
+
+  (defcap KEYSET-ID-CAP (id:string)
+    (enforce-keyset id))
+
+  (defun test-id-cap (id)
+    (with-capability (KEYSET-ID-CAP id) (test-require id)))
+
+  (defun test-require (id)
+    (require-capability (KEYSET-ID-CAP id)) 1)
+
+  (defun get-module-guard ()
+    (create-module-guard "test"))
+
+  (defun msg-keyset-user-guard (key:string)
+    (create-user-guard key "enforce-msg-keyset"))
+
+  (defun enforce-msg-keyset (key:string)
+    (enforce-keyset (read-keyset key)))
+
+  (defpact test-pact-guards (id:string)
+    (step (step1 id))
+    (step (step2 (read-msg "id"))))
+
+  (defun step1 (id:string)
+    (insert guard-table id { "g": (create-pact-guard "test")}))
+
+  (defun step2:object{yieldschema} (id:string)
+    (enforce-guard (get-guard id))
+    (yield { "result": 1 }))
+
+  (defun get-guard (id:string)
+    (at 'g (read guard-table id)))
+
+  (defcap COMPOSING-CAP ()
+    (compose-capability (KALL-CAP)))
+
+  (defun bad-compose-cap ()
+    (compose-capability (KALL-CAP)))
+
+  (defun test-compose-cap ()
+    (with-capability (COMPOSING-CAP)
+       (require-capability (KALL-CAP))))
+
+  (defun test-granted ()
+    (require-capability (GRANTED)))
+
+  (defcap BAD_WITH_CAP ()
+    (with-capability (GRANTED) true))
+
+  (defun bad-with-cap ()
+    (with-capability (BAD_WITH_CAP) true))
+
+  (defun loop (x:integer)
+    (enforce-guard (create-user-guard x "loop")))
+
+)
+
+(create-table guard-table)
+
+(commit-tx)
+
+(begin-tx)
+(module caps-shadow 'kadmin
+  (defcap KEYSET-ID-CAP (id:string) true)
+  (defun bad-shadow-granted (id)
+    (with-capability (KEYSET-ID-CAP id)
+                     (caps.test-require id))))
+(commit-tx)
+
+(typecheck 'caps)
+
+(begin-tx)
+(use caps)
+
+(expect-failure "with-kall should fail w/o kall ks" (with-kall))
+
+(env-keys ["a" "b" "c"])
+
+(expect "with-kall succeeds with kall ks" 1 (with-kall))
+
+(env-data { "k1": ["k1"], "k2": ["k2"] })
+(define-keyset "k1")
+(define-keyset "k2")
+
+(expect-failure "cap k1 fails w/o key" (test-id-cap "k1"))
+(expect-failure "cap k2 fails w/o key" (test-id-cap "k2"))
+
+(env-keys ["k1"])
+(expect "cap k1 succeeds" 1 (test-id-cap "k1"))
+(expect-failure "direct call to test-require fails for k1"
+                (require-capability (KEYSET-ID-CAP "k1")))
+(expect-failure "cap k2 fails w/o key" (test-id-cap "k2"))
+
+(env-keys ["k2"])
+(expect-failure "cap k1 fails w/o key" (test-id-cap "k1"))
+(expect-failure "direct call to test-require fails for k2"
+                (require-capability (KEYSET-ID-CAP "k2")))
+(expect "cap k2 succeeds" 1 (test-id-cap "k2"))
+
+(expect-failure "top-level with-capability fails"
+                (with-capability (KEYSET-ID-CAP "k2") 1))
+
+(expect-failure "module guard fails w/o admin"
+                (enforce-guard (get-module-guard)))
+
+(env-keys ["admin","k2"])
+(enforce-guard (get-module-guard))
+(expect "top-level with-capability succeeds with module admin"
+        1 (with-capability (KEYSET-ID-CAP "k2") 1))
+
+(commit-tx)
+(begin-tx)
+(use caps)
+
+(env-data { "k1": ["k1"], "k2": ["k2"] })
+(env-keys ["k1"])
+(enforce-guard (msg-keyset-user-guard "k1"))
+(expect-failure "user guard reading keyset k2 fails"
+                (enforce-guard (msg-keyset-user-guard "k2")))
+
+(enforce-guard (keyset-ref-guard "k1"))
+(expect-failure "keyset ref guard k2"
+                (enforce-guard (keyset-ref-guard "k2")))
+
+(test-pact-guards "a")
+
+(pact-state true) ;;clears pact state
+(let ((g (get-guard "a"))) ;; doing let so db failure doesn't confuse below
+  (expect-failure "enforcing pact guard outside of pact" (enforce-guard g)))
+
+(env-data { "id": "a"})
+(continue-pact 4 1)
+(expect "pact enforce succeeds" 1 (at 'result (at 'yield (pact-state))))
+
+(pact-state true)
+(test-pact-guards "b")
+(expect-failure "pact enforce fails in pact 5 for id 'a'" (continue-pact 5 1))
+
+(env-keys ["a" "b" "c"])
+(expect-failure "cannot compose caps at toplevel" (compose-capability (KALL-CAP)))
+(expect-failure "cannot compose caps in defun" (bad-compose-cap))
+;compose test will validate that KALL-CAP was acquired
+(test-compose-cap)
+;now validate that KALL-CAP is gone
+(expect-failure "KALL-CAP composed cap is revoked" (require-capability KALL-CAP))
+; defuns requiring magic capabilities should not work
+(expect-failure "functions requiring restricted governance should fail" (test-granted))
+; bring magical capabilities into scope at repl scope
+(test-capability (GRANTED))
+; defuns requiring magic capabilities should now work
+(expect "functions requiring restricted governance should succeed after 'test-capability'" true (test-granted))
+(commit-tx)
+
+(use caps)
+; revocation now makes functions requiring certain caps to now fail
+(expect-failure "functions requiring restricted governance should fail after revocation" (test-granted))
+
+(expect-failure "nested with-capability fails" (bad-with-cap))
+
+(expect-failure "shadowed cap fails" (caps-shadow.bad-shadow-granted "k1"))
+
+(expect-failure "loop in guard detected" (loop 1))

@@ -19,13 +19,33 @@
 -- functionality.
 --
 
-module Pact.Repl where
+module Pact.Repl
+  ( errToUnit
+  , execScript
+  , execScript'
+  , evalPact
+  , evalRepl
+  , evalRepl'
+  , evalString
+  , handleCompile
+  , handleParse
+  , initPureEvalEnv
+  , initReplState
+  , isPactFile
+  , parsedCompileEval
+  , rSuccess
+  , repl
+  , runPipedRepl
+  , setReplLib
+  , unsetReplLib
+  , utf8BytesLength
+  ) where
 
 import Control.Applicative
 import Control.Lens hiding (op)
 import Control.Monad.Catch
 import Control.Monad.State.Strict
-import Data.Aeson hiding ((.=))
+import Data.Aeson hiding ((.=),Object)
 import qualified Data.Aeson as A
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.UTF8 as BS
@@ -33,6 +53,7 @@ import Data.Char
 import Data.Default
 import Data.List
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Map.Strict as M
 import Prelude hiding (exp)
 import Text.Trifecta as TF hiding (line,err,try,newline)
 import qualified Data.Text as Text
@@ -47,6 +68,7 @@ import System.FilePath
 import Pact.Compile
 import Pact.Parse
 import Pact.Eval
+import Pact.Types.Pretty hiding (line)
 import Pact.Types.Runtime
 import Pact.Native
 import Pact.Repl.Lib
@@ -60,7 +82,7 @@ repl :: IO (Either () (Term Name))
 repl = repl' Interactive
 
 repl' :: ReplMode -> IO (Either () (Term Name))
-repl' m = initReplState m >>= \s -> runPipedRepl' (m == Interactive) s stdin
+repl' m = initReplState m Nothing >>= \s -> runPipedRepl' (m == Interactive) s stdin
 
 isPactFile :: String -> Bool
 isPactFile fp = endsWith fp ".pact"
@@ -75,14 +97,21 @@ runPipedRepl' :: Bool -> ReplState -> Handle -> IO (Either () (Term Name))
 runPipedRepl' p s@ReplState{..} h =
     evalStateT (useReplLib >> pipeLoop p h Nothing) s
 
-initReplState :: MonadIO m => ReplMode -> m ReplState
-initReplState m = liftIO initPureEvalEnv >>= \e -> return (ReplState e def m def def def)
+initReplState :: MonadIO m => ReplMode -> Maybe String -> m ReplState
+initReplState m verifyUri =
+  liftIO (initPureEvalEnv verifyUri) >>= \e -> return (ReplState e def m def def def)
 
-initPureEvalEnv :: IO (EvalEnv LibState)
-initPureEvalEnv = do
-  mv <- initLibState neverLog >>= newMVar
-  return $ EvalEnv (RefStore nativeDefs mempty) def Null (Just 0) def def mv repldb def initialHash freeGasEnv
+initPureEvalEnv :: Maybe String -> IO (EvalEnv LibState)
+initPureEvalEnv verifyUri = do
+  mv <- initLibState neverLog verifyUri >>= newMVar
+  return $ EvalEnv (RefStore nativeDefs mempty) def Null (Just 0)
+    def def mv repldb def initialHash freeGasEnv permissiveNamespacePolicy (SPVSupport $ spv mv)
 
+
+spv :: MVar (LibState) -> Text -> Object Name -> IO (Either Text (Object Name))
+spv mv ty pay = readMVar mv >>= \LibState{..} -> case M.lookup (SPVMockKey (ty,pay)) _rlsMockSPV of
+  Nothing -> return $ Left $ "SPV verification failure"
+  Just o -> return $ Right o
 
 errToUnit :: Functor f => f (Either e a) -> f (Either () a)
 errToUnit a = either (const (Left ())) Right <$> a
@@ -121,8 +150,9 @@ getDelta = do
 handleParse :: TF.Result [Exp Parsed] -> ([Exp Parsed] -> Repl (Either String a)) -> Repl (Either String a)
 handleParse (TF.Failure e) _ = do
   mode <- use rMode
-  outStrLn HErr (renderPrettyString (colors mode) (_errDoc e))
-  return (Left (renderCompactString $ _errDoc e))
+  let errDoc = _errDoc e
+  outStrLn HErr $ renderPrettyString' (colors mode) $ unAnnotate $ fromAnsiWlPprint errDoc
+  return $ Left $ renderCompactString' $ unAnnotate $ fromAnsiWlPprint errDoc
 handleParse (TF.Success es) a = a es
 
 colors :: ReplMode -> RenderColor
@@ -145,10 +175,9 @@ handleCompile src exp a =
             Just (_,d) -> do
                         mode <- use rMode
                         outStr HErr (renderPrettyString (colors mode) (_pDelta d))
-                        outStrLn HErr $ ": error: " ++ unpack (peText er)
-            Nothing -> outStrLn HErr $ "[No location]: " ++ unpack (peText er)
-          return (Left $ show er)
-
+                        outStrLn HErr $ ": error: " ++ renderCompactString' (peDoc er)
+            Nothing -> outStrLn HErr $ "[No location]: " ++ renderCompactString' (peDoc er)
+          Left <$> renderErr er
 
 compileEval :: String -> Exp Parsed -> Repl (Either String (Term Name))
 compileEval src exp = handleCompile src exp $ \e -> pureEval (_tInfo e) (eval e)
@@ -159,12 +188,16 @@ pureEval ei e = do
   (ReplState evalE evalS _ _ _ _) <- get
   er <- try (liftIO $ runEval' evalS evalE e)
   let (r,es) = case er of
-                 Left (SomeException ex) -> (Left (PactError EvalError def def (pack $ show ex)),evalS)
+                 Left (SomeException ex) -> (Left (PactError EvalError def def (pretty (show ex))),evalS)
                  Right v -> v
   mode <- use rMode
   case r of
     Right a -> do
         doOut ei mode a
+        case _evalPactExec es of
+          Nothing -> return ()
+          Just pe -> do
+            use (rEnv.eePactDbVar) >>= \mv -> liftIO $ modifyMVar_ mv $ return . over rlsPacts (M.insert (_pePactId pe) pe)
         rEvalState .= es
         updateForOp a
     Left err -> do
@@ -195,7 +228,7 @@ doOut ei mode a = case mode of
   Script True _ -> lineOut
   _ -> return ()
   where
-    plainOut = outStrLn HOut (show a)
+    plainOut = outStrLn HOut $ show $ pretty a
     lineOut = do
       outStrLn HErr $ renderInfo ei ++ ":Trace: " ++ show a
 
@@ -206,8 +239,8 @@ renderErr a
       let i = case m of
                 Script _ f -> Info (Just (mempty,Parsed (Directed (BS.fromString f) 0 0 0 0) 0))
                 _ -> Info (Just (mempty,Parsed (Lines 0 0 0 0) 0))
-      return $ renderInfo i ++ ":" ++ unpack (peText a)
-  | otherwise = return $ renderInfo (peInfo a) ++ ": " ++ unpack (peText a)
+      return $ renderInfo i ++ ":" ++ renderCompactString' (peDoc a)
+  | otherwise = return $ renderInfo (peInfo a) ++ ": " ++ renderCompactString' (peDoc a)
 
 updateForOp :: Term Name -> Repl (Either String (Term Name))
 updateForOp a = do
@@ -220,7 +253,10 @@ updateForOp a = do
       rEnv %= appEndo e
       return (Right a)
     Load fp reset -> do
-                  when reset (initReplState mode >>= put >> void useReplLib)
+                  when reset $ do
+                    replState <- liftIO $ readMVar mv
+                    let verifyUri = _rlsVerifyUri replState
+                    (initReplState mode verifyUri >>= put >> void useReplLib)
                   (a <$) <$> loadFile fp
     TcErrors es -> forM_ es (outStrLn HErr) >> return (Right a)
     Print t -> do
@@ -318,7 +354,7 @@ execScript dolog f = do
 
 execScript' :: ReplMode -> FilePath -> IO (Either String (Term Name),ReplState)
 execScript' m fp = do
-  s <- initReplState m
+  s <- initReplState m Nothing
   runStateT (useReplLib >> loadFile fp) s
 
 
@@ -343,11 +379,11 @@ evalRepl' :: String -> Repl (Either String (Term Name))
 evalRepl' cmd = useReplLib >> evalPact cmd
 
 evalRepl :: ReplMode -> String -> IO (Either String (Term Name))
-evalRepl m cmd = initReplState m >>= evalStateT (evalRepl' cmd)
+evalRepl m cmd = initReplState m Nothing >>= evalStateT (evalRepl' cmd)
 
 evalString :: Bool -> String -> IO Value
 evalString showLog cmd = do
-  (er,s) <- initReplState StringEval >>= runStateT (evalRepl' cmd)
+  (er,s) <- initReplState StringEval Nothing >>= runStateT (evalRepl' cmd)
   return $ object $ case (showLog,er) of
     (False,Right v) -> [ "success" A..= v]
     (True,Right _) -> ["success" A..= trim (_rOut s) ]

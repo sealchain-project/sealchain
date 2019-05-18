@@ -25,6 +25,7 @@ import Pact.Types.Logger
 import System.CPUTime
 import Pact.MockDb
 import qualified Data.Map.Strict as M
+import qualified Crypto.Hash as H
 import Pact.Persist.MockPersist
 import Pact.Persist
 import Unsafe.Coerce
@@ -56,7 +57,9 @@ benchCompile es = bgroup "compile" $ (`map` es) $
 
 benchVerify :: [(String,Command ByteString)] -> Benchmark
 benchVerify cs = bgroup "verify" $ (`map` cs) $
-  \(bname,c) -> bench bname $ nf verifyCommand c
+  \(bname,c) ->
+    bench bname $
+      nf (verifyCommand :: Command ByteString -> ProcessedCommand () ParsedCode) c
 
 eitherDie :: Either String a -> IO a
 eitherDie = either (throwIO . userError) (return $!)
@@ -71,8 +74,10 @@ loadBenchModule db = do
   let md = MsgData S.empty
            (object ["keyset" .= object ["keys" .= ["benchadmin"::Text], "pred" .= (">"::Text)]])
            Nothing
-           initialHash
-  erRefStore <$> evalExec (setupEvalEnv db entity (Transactional 1) md initRefStore freeGasEnv) pc
+           (initialHashTx H.Blake2b_512)
+  let e = setupEvalEnv db entity (Transactional 1) md initRefStore
+          freeGasEnv permissiveNamespacePolicy noSPVSupport
+  _erRefStore <$> evalExec e pc
 
 parseCode :: Text -> IO ParsedCode
 parseCode m = ParsedCode m <$> eitherDie (parseExprs m)
@@ -83,7 +88,9 @@ benchNFIO bname = bench bname . nfIO
 runPactExec :: PactDbEnv e -> RefStore -> ParsedCode -> IO Value
 runPactExec dbEnv refStore pc = do
   t <- Transactional . fromIntegral <$> getCPUTime
-  toJSON . erOutput <$> evalExec (setupEvalEnv dbEnv entity t (initMsgData initialHash) refStore freeGasEnv) pc
+  let e = setupEvalEnv dbEnv entity t (initMsgData (initialHashTx H.Blake2b_512))
+          refStore freeGasEnv permissiveNamespacePolicy noSPVSupport
+  toJSON . _erOutput <$> evalExec e pc
 
 benchKeySet :: KeySet
 benchKeySet = KeySet [PublicKey "benchadmin"] (Name ">" def)
@@ -105,10 +112,17 @@ benchReadValue (DataTable t) _k
 benchReadValue (TxTable _t) _k = rcp Nothing
 
 
+mkBenchCmd :: [SomeKeyPair] -> (String, Text) -> IO (String, Command ByteString)
+mkBenchCmd kps (str, t) = do
+  cmd <- mkCommand' kps (toStrict $ encode (Payload (Exec (ExecMsg t Null)) "nonce" ()))
+  return (str, cmd)
+
+
 main :: IO ()
 main = do
-  !pub <- eitherDie $ fromText' "0c99d911059580819c6f39ca5c203364a20dbf0a02b0b415f8ce7b48ba3a5bad"
-  !priv <- eitherDie $ fromText' "6c938ed95a8abf99f34a1b5edd376f790a2ea8952413526af91b4c3eb0331b3c"
+  !pub <- eitherDie $ parseB16TextOnly "0c99d911059580819c6f39ca5c203364a20dbf0a02b0b415f8ce7b48ba3a5bad"
+  !priv <- eitherDie $ parseB16TextOnly "6c938ed95a8abf99f34a1b5edd376f790a2ea8952413526af91b4c3eb0331b3c"
+  !keyPair <- eitherDie $ importKeyPair defaultScheme (Just $ PubBS pub) (PrivBS priv)
   !parsedExps <- force <$> mapM (mapM (eitherDie . parseExprs)) exps
   !pureDb <- mkPureEnv neverLog
   initSchema pureDb
@@ -121,8 +135,9 @@ main = do
   !mockPersistDb <- mkMockPersistEnv neverLog def { mockReadValue = MockReadValue benchReadValue }
   !mpdbRS <- loadBenchModule mockPersistDb
   print =<< runPactExec mockPersistDb mpdbRS benchCmd
-  !cmds <- return $!! (`fmap` exps) $ fmap $ \t -> mkCommand' [(ED25519,pub,priv)]
-              (toStrict $ encode (Payload (Exec (ExecMsg t Null)) "nonce" Nothing))
+  cmds_ <- traverse (mkBenchCmd [keyPair]) exps
+  !cmds <- return $!! cmds_
+
 
   defaultMain [
     benchParse,

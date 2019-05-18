@@ -23,16 +23,23 @@ module Pact.Types.Runtime
    ModuleData(..), mdModule, mdRefMap,
    RefStore(..),rsNatives,rsModules,updateRefStore,
    EntityName(..),
-   EvalEnv(..),eeRefStore,eeMsgSigs,eeMsgBody,eeTxId,eeEntity,eePactStep,eePactDbVar,eePactDb,eePurity,eeHash,eeGasEnv,
-   Purity(..),PureNoDb,PureSysRead,EnvNoDb(..),EnvSysRead(..),mkNoDbEnv,mkSysReadEnv,
+   EvalEnv(..),eeRefStore,eeMsgSigs,eeMsgBody,eeTxId,eeEntity,eePactStep,eePactDbVar,
+   eePactDb,eePurity,eeHash,eeGasEnv,eeNamespacePolicy,eeSPVSupport,
+   Purity(..),PureNoDb,PureSysRead,EnvNoDb(..),EnvReadOnly(..),mkNoDbEnv,mkReadOnlyEnv,
    StackFrame(..),sfName,sfLoc,sfApp,
-   PactExec(..),peStepCount,peYield,peExecuted,pePactId,peStep,
-   RefState(..),rsLoaded,rsLoadedModules,rsNewModules,
-   EvalState(..),evalRefs,evalCallStack,evalPactExec,evalGas,
+   PactExec(..),peStepCount,peYield,peExecuted,pePactId,peStep,peContinuation,
+   RefState(..),rsLoaded,rsLoadedModules,rsNewModules,rsNamespace,
+   EvalState(..),evalRefs,evalCallStack,evalPactExec,evalGas,evalCapabilities,
    Eval(..),runEval,runEval',
    call,method,
    readRow,writeRow,keys,txids,createUserTable,getUserTableInfo,beginTx,commitTx,rollbackTx,getTxLog,
    KeyPredBuiltins(..),keyPredBuiltins,
+   Capability(..),CapAcquireResult(..),
+   Capabilities(..),capGranted,capComposed,
+   NamespacePolicy(..), nsPolicy,
+   permissiveNamespacePolicy,
+   SPVSupport(..),noSPVSupport,
+   PactContinuation(..),
    module Pact.Types.Lang,
    module Pact.Types.Util,
    module Pact.Types.Persistence,
@@ -40,15 +47,14 @@ module Pact.Types.Runtime
    ) where
 
 import Control.Arrow ((&&&))
-import Control.Lens hiding ((.=))
+import Control.Lens hiding ((.=),DefName)
 import Control.DeepSeq
-import Data.List
 import Control.Monad.Except
 import Control.Monad.State.Strict
 import Control.Monad.Reader
 import qualified Data.Map.Strict as M
 import qualified Data.HashMap.Strict as HM
-import Data.Aeson
+import Data.Aeson hiding (Object)
 import qualified Data.Set as S
 import Data.String
 import Data.Default
@@ -61,8 +67,29 @@ import Pact.Types.Gas
 import Pact.Types.Lang
 import Pact.Types.Orphans ()
 import Pact.Types.Persistence
+import Pact.Types.Pretty
 import Pact.Types.Util
 
+
+data Capability
+  = ModuleAdminCapability ModuleName
+  | UserCapability ModuleName DefName [Term Name]
+  deriving (Eq,Show)
+
+instance Pretty Capability where
+  pretty (ModuleAdminCapability mn) = pretty mn
+  pretty (UserCapability mn name tms)  = parensSep (pretty mn <> colon <> pretty name : fmap pretty tms)
+
+data CapAcquireResult = NewlyAcquired|AlreadyAcquired
+  deriving (Eq,Show)
+
+newtype NamespacePolicy = NamespacePolicy
+  { _nsPolicy :: Maybe Namespace -> Bool
+  }
+makeLenses ''NamespacePolicy
+
+permissiveNamespacePolicy :: NamespacePolicy
+permissiveNamespacePolicy = NamespacePolicy $ const True
 
 data StackFrame = StackFrame {
       _sfName :: !Text
@@ -88,12 +115,12 @@ data PactError = PactError
   { peType :: PactErrorType
   , peInfo :: Info
   , peCallStack :: [StackFrame]
-  , peText :: Text }
+  , peDoc :: Doc }
 
 instance Exception PactError
 
 instance Show PactError where
-    show (PactError t i _ s) = show i ++ ": Failure: " ++ maybe "" (++ ": ") msg ++ unpack s
+    show (PactError t i _ s) = show i ++ ": Failure: " ++ maybe "" (++ ": ") msg ++ show s
       where msg = case t of
               EvalError -> Nothing
               ArgsError -> Nothing
@@ -112,11 +139,6 @@ instance AsString KeyPredBuiltins where
 keyPredBuiltins :: M.Map Name KeyPredBuiltins
 keyPredBuiltins = M.fromList $ map ((`Name` def) . asString &&& id) [minBound .. maxBound]
 
-
-newtype PactId = PactId Text
-    deriving (Eq,Ord,IsString,ToTerm,AsString,ToJSON,FromJSON,Default)
-instance Show PactId where show (PactId s) = show s
-
 -- | Environment setup for pact execution.
 data PactStep = PactStep {
       _psStep :: !Int
@@ -128,7 +150,7 @@ makeLenses ''PactStep
 
 -- | Module ref store
 data ModuleData = ModuleData
-  { _mdModule :: Module
+  { _mdModule :: ModuleDef (Def Ref)
   , _mdRefMap :: HM.HashMap Text Ref
   } deriving (Eq, Show)
 makeLenses ''ModuleData
@@ -145,14 +167,23 @@ newtype EntityName = EntityName Text
   deriving (IsString,AsString,Eq,Ord,Hashable,Serialize,NFData,ToJSON,FromJSON,Default)
 instance Show EntityName where show (EntityName t) = show t
 
+newtype PactContinuation = PactContinuation (App (Term Ref))
+  deriving (Eq,Show)
 
--- | Runtime capture of pact execution.
+-- | Result of evaluation of a 'defpact'.
 data PactExec = PactExec
-  { _peStepCount :: Int
+  { -- | Count of steps in pact (discovered when code is executed)
+    _peStepCount :: Int
+    -- | Yield value if invoked
   , _peYield :: !(Maybe (Term Name))
+    -- | Whether step was executed (in private cases, it can be skipped)
   , _peExecuted :: Bool
+    -- | Step that was executed or skipped
   , _peStep :: Int
+    -- | Pact id. On a new pact invocation, is copied from tx id.
   , _pePactId :: PactId
+    -- | Strict (in arguments) application of pact, for future step invocations.
+  , _peContinuation :: PactContinuation
   } deriving (Eq,Show)
 makeLenses ''PactExec
 
@@ -161,7 +192,7 @@ data Purity =
   -- | No database access at all.
   PNoDb |
   -- | Access to read of module, keyset systables.
-  PSysRead |
+  PReadOnly |
   -- | All database access allowed (normal).
   PImpure
   deriving (Eq,Show,Ord,Bounded,Enum)
@@ -169,10 +200,20 @@ instance Default Purity where def = PImpure
 
 -- | Marker class for 'PNoDb' environments.
 class PureNoDb e
--- | Marker class for 'PSysRead' environments.
+-- | Marker class for 'PReadOnly' environments.
 -- SysRead supports pure operations as well.
 class PureNoDb e => PureSysRead e
 
+-- | Backend for SPV
+newtype SPVSupport = SPVSupport {
+  -- | Attempt to verify an SPV proof of a given type,
+  -- given a payload object. On success, returns the
+  -- specific data represented by the proof.
+  _spvSupport :: Text -> Object Name -> IO (Either Text (Object Name))
+}
+
+noSPVSupport :: SPVSupport
+noSPVSupport = SPVSupport $ \_ _ -> return $ Left $ "SPV verify not supported"
 
 -- | Interpreter reader environment, parameterized over back-end MVar state type.
 data EvalEnv e = EvalEnv {
@@ -198,28 +239,41 @@ data EvalEnv e = EvalEnv {
     , _eeHash :: Hash
       -- | Gas Environment
     , _eeGasEnv :: GasEnv
-    } -- deriving (Eq,Show)
+      -- | Namespace Policy
+    , _eeNamespacePolicy :: NamespacePolicy
+      -- | SPV backend
+    , _eeSPVSupport :: SPVSupport
+    }
 makeLenses ''EvalEnv
 
 
 
 -- | Dynamic storage for namespace-loaded modules, and new modules compiled in current tx.
 data RefState = RefState {
-      -- | Namespace-local defs.
+      -- | Imported Module-local defs and natives.
       _rsLoaded :: HM.HashMap Name Ref
       -- | Modules that were loaded.
-    , _rsLoadedModules :: HM.HashMap ModuleName Module
+    , _rsLoadedModules :: HM.HashMap ModuleName (ModuleDef (Def Ref))
       -- | Modules that were compiled and loaded in this tx.
     , _rsNewModules :: HM.HashMap ModuleName ModuleData
+      -- | Current Namespace
+    , _rsNamespace :: Maybe Namespace
     } deriving (Eq,Show)
 makeLenses ''RefState
-instance Default RefState where def = RefState HM.empty HM.empty HM.empty
+instance Default RefState where def = RefState HM.empty HM.empty HM.empty Nothing
 
 -- | Update for newly-loaded modules and interfaces.
 updateRefStore :: RefState -> RefStore -> RefStore
 updateRefStore RefState {..}
   | HM.null _rsNewModules = id
   | otherwise = over rsModules (HM.union _rsNewModules)
+
+data Capabilities = Capabilities
+  { _capGranted :: [Capability]
+  , _capComposed :: [Capability]
+  } deriving (Show)
+instance Default Capabilities where def = Capabilities def def
+makeLenses ''Capabilities
 
 -- | Interpreter mutable state.
 data EvalState = EvalState {
@@ -231,9 +285,11 @@ data EvalState = EvalState {
     , _evalPactExec :: !(Maybe PactExec)
       -- | Gas tally
     , _evalGas :: Gas
+      -- | Capability list
+    , _evalCapabilities :: Capabilities
     } deriving (Show)
 makeLenses ''EvalState
-instance Default EvalState where def = EvalState def def def 0
+instance Default EvalState where def = EvalState def def def 0 def
 
 -- | Interpreter monad, parameterized over back-end MVar state type.
 newtype Eval e a =
@@ -254,7 +310,7 @@ runEval' :: EvalState -> EvalEnv e -> Eval e a ->
 runEval' s env act =
   runStateT (catches (Right <$> runReaderT (unEval act) env)
               [Handler (\(e :: PactError) -> return $ Left e)
-              ,Handler (\(e :: SomeException) -> return $ Left . PactError EvalError def def . pack . show $ e)
+              ,Handler (\(e :: SomeException) -> return $ Left . PactError EvalError def def . viaShow $ e)
               ]) s
 
 
@@ -263,7 +319,7 @@ call :: StackFrame -> Eval e (Gas,a) -> Eval e a
 call s act = do
   evalCallStack %= (s:)
   (_gas,r) <- act -- TODO opportunity for per-call gas logging here
-  evalCallStack %= \st -> case st of (_:as) -> as; [] -> []
+  evalCallStack %= drop 1
   return r
 {-# INLINE call #-}
 
@@ -271,7 +327,7 @@ call s act = do
 method :: Info -> (PactDb e -> Method e a) -> Eval e a
 method i f = do
   EvalEnv {..} <- ask
-  handleAll (throwErr DbError i . pack . show) (liftIO $ f _eePactDb _eePactDbVar)
+  handleAll (throwErr DbError i . viaShow) (liftIO $ f _eePactDb _eePactDbVar)
 
 
 --
@@ -295,11 +351,11 @@ txids :: Info -> TableName -> TxId -> Eval e [TxId]
 txids i tn tid = method i $ \db -> _txids db tn tid
 
 -- | Invoke '_createUserTable'
-createUserTable :: Info -> TableName -> ModuleName -> KeySetName -> Eval e ()
-createUserTable i t m k = method i $ \db -> _createUserTable db t m k
+createUserTable :: Info -> TableName -> ModuleName -> Eval e ()
+createUserTable i t m = method i $ \db -> _createUserTable db t m
 
 -- | Invoke _getUserTableInfo
-getUserTableInfo :: Info -> TableName -> Eval e (ModuleName,KeySetName)
+getUserTableInfo :: Info -> TableName -> Eval e ModuleName
 getUserTableInfo i t = method i $ \db -> _getUserTableInfo db t
 
 -- | Invoke _beginTx
@@ -333,24 +389,24 @@ getTxLog i d t = method i $ \db -> _getTxLog db d t
 
 
 throwArgsError :: FunApp -> [Term Name] -> Text -> Eval e a
-throwArgsError FunApp {..} args s = throwErr ArgsError _faInfo $ pack $
-  unpack s ++ ", received [" ++ intercalate "," (map abbrev args) ++ "] for " ++
-            showFunTypes _faTypes
+throwArgsError FunApp {..} args s = throwErr ArgsError _faInfo $
+  pretty s <> ", received " <> bracketsSep (map pretty args) <> " for " <>
+            prettyFunTypes _faTypes
 
-throwErr :: PactErrorType -> Info -> Text -> Eval e a
+throwErr :: PactErrorType -> Info -> Doc -> Eval e a
 throwErr ctor i err = get >>= \s -> throwM (PactError ctor i (_evalCallStack s) err)
 
-evalError :: Info -> String -> Eval e a
-evalError i = throwErr EvalError i . pack
+evalError :: Info -> Doc -> Eval e a
+evalError i = throwErr EvalError i
 
-evalError' :: FunApp -> String -> Eval e a
+evalError' :: FunApp -> Doc -> Eval e a
 evalError' = evalError . _faInfo
 
-failTx :: Info -> String -> Eval e a
-failTx i = throwErr TxFailure i . pack
+failTx :: Info -> Doc -> Eval e a
+failTx i = throwErr TxFailure i
 
-throwDbError :: MonadThrow m => String -> m a
-throwDbError s = throwM $ PactError DbError def def (pack s)
+throwDbError :: MonadThrow m => Doc -> m a
+throwDbError = throwM . PactError DbError def def
 
 -- | Throw an error coming from an Except/Either context.
 throwEither :: (MonadThrow m,Exception e) => Either e a -> m a
@@ -361,7 +417,7 @@ argsError :: FunApp -> [Term Name] -> Eval e a
 argsError i as = throwArgsError i as "Invalid arguments"
 
 argsError' :: FunApp -> [Term Ref] -> Eval e a
-argsError' i as = throwArgsError i (map (toTerm.pack.abbrev) as) "Invalid arguments"
+argsError' i as = throwArgsError i (map (toTerm.abbrev) as) "Invalid arguments"
 
 
 --
@@ -372,10 +428,10 @@ newtype EnvNoDb e = EnvNoDb (EvalEnv e)
 
 instance PureNoDb (EnvNoDb e)
 
-newtype EnvSysRead e = EnvSysRead (EvalEnv e)
+newtype EnvReadOnly e = EnvReadOnly (EvalEnv e)
 
-instance PureSysRead (EnvSysRead e)
-instance PureNoDb (EnvSysRead e)
+instance PureSysRead (EnvReadOnly e)
+instance PureNoDb (EnvReadOnly e)
 
 diePure :: Method e a
 diePure _ = throwM $ PactError EvalError def def "Illegal database access in pure context"
@@ -400,7 +456,7 @@ mkPureEnv holder purity readRowImpl env@EvalEnv{..} = do
     , _writeRow = \_ _ _ _ -> diePure
     , _keys = const diePure
     , _txids = \_ _ -> diePure
-    , _createUserTable = \_ _ _ -> diePure
+    , _createUserTable = \_ _ -> diePure
     , _getUserTableInfo = const diePure
     , _beginTx = const diePure
     , _commitTx = diePure
@@ -410,13 +466,13 @@ mkPureEnv holder purity readRowImpl env@EvalEnv{..} = do
     purity
     _eeHash
     _eeGasEnv
+    permissiveNamespacePolicy
+    _eeSPVSupport
 
 
 mkNoDbEnv :: EvalEnv e -> Eval e (EvalEnv (EnvNoDb e))
 mkNoDbEnv = mkPureEnv EnvNoDb PNoDb (\_ _ -> diePure)
 
-mkSysReadEnv :: EvalEnv e -> Eval e (EvalEnv (EnvSysRead e))
-mkSysReadEnv = mkPureEnv EnvSysRead PSysRead $ \d k e -> case d of
-  KeySets -> withMVar e $ \(EnvSysRead EvalEnv {..}) -> _readRow _eePactDb d k _eePactDbVar
-  Modules -> withMVar e $ \(EnvSysRead EvalEnv {..}) -> _readRow _eePactDb d k _eePactDbVar
-  _ -> diePure e
+mkReadOnlyEnv :: EvalEnv e -> Eval e (EvalEnv (EnvReadOnly e))
+mkReadOnlyEnv = mkPureEnv EnvReadOnly PReadOnly $ \d k e ->
+  withMVar e $ \(EnvReadOnly EvalEnv {..}) -> _readRow _eePactDb d k _eePactDbVar

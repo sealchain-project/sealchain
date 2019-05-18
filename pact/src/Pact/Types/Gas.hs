@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- |
 -- Module      :  Pact.Types.Gas
@@ -15,19 +16,22 @@ module Pact.Types.Gas
     ReadValue(..),GasModel(..),GasArgs(..),GasLimit(..)
   ) where
 
-import Control.Lens (makeLenses)
-import Data.Word (Word64)
-import Data.Decimal (Decimal)
 import Control.DeepSeq (NFData)
+import Control.Lens (makeLenses)
+import Data.Decimal (Decimal)
+import qualified Data.Text as T
+import Data.Word (Word64)
 
 import Pact.Types.Lang
 import Pact.Types.Persistence
+import Pact.Types.Pretty
 
 
 -- | Price per 'Gas' unit.
 newtype GasPrice = GasPrice Decimal
-  deriving (Eq,Ord,Num,Real,Fractional,RealFrac,NFData,Enum)
-instance Show GasPrice where show (GasPrice p) = show p
+  deriving (Eq,Ord,Num,Real,Fractional,RealFrac,NFData,Enum,Show)
+instance Pretty GasPrice where
+  pretty (GasPrice p) = viaShow p
 
 -- | DB Read value for per-row gas costing.
 -- Data is included if variable-size.
@@ -40,22 +44,31 @@ data ReadValue
 data GasArgs
   = GPostRead ReadValue
   | GSelect (Maybe [(Info,ColumnId)]) (Term Ref) (Term Name)
+  | GSortFieldLookup Int
   | GUnreduced [Term Ref]
-  | GReduced [Term Name]
+  | GWrite WriteType (Term Name) (Term Name)
   | GUse ModuleName (Maybe Hash)
-  | GModule Module
-  | GInterface Module
-  | GModuleMember Module
-  | GUser
-
+  | GModuleDecl (Module (Term Name))
+  | GInterfaceDecl Interface
+  | GModuleMember (ModuleDef (Term Name))
+  | GUserApp
 
 newtype GasLimit = GasLimit Word64
-  deriving (Eq,Ord,Num,Real,Integral,Enum)
-instance Show GasLimit where show (GasLimit g) = show g
+  deriving (Eq,Ord,Num,Real,Integral,Enum,Show)
+instance Pretty GasLimit where
+  pretty (GasLimit g) = viaShow g
 
+data GasModel = GasModel
+  { gasModelName :: Text
+  , gasModelDesc :: Text
+  , runGasModel :: Text -> GasArgs -> Gas
+  }
 
-newtype GasModel = GasModel { runGasModel :: Text -> GasArgs -> Gas }
-instance Show GasModel where show _ = "[GasModel]"
+instance Show GasModel where
+  show m = "[GasModel: " <> T.unpack (gasModelName m) <> "]"
+
+instance Pretty GasModel where
+  pretty m = viaShow m
 
 data GasEnv = GasEnv
   { _geGasLimit :: GasLimit
