@@ -23,7 +23,7 @@
 --
 module Pact.Types.Server
   ( userSigToPactPubKey, userSigsToPactKeySet
-  , CommandConfig(..), ccSqlite, ccEntity, ccGasLimit, ccGasRate
+  , CommandConfig(..), ccPersister, ccEntity, ccGasLimit, ccGasRate
   , CommandPact(..), cpTxId, cpContinuation, cpStepCount, cpStep, cpYield
   , CommandState(..), csRefStore, csPacts
   , CommandEnv(..), ceEntity, ceMode, ceDbEnv, ceState, ceLogger, ceGasEnv
@@ -60,7 +60,6 @@ import Prelude
 
 import Pact.Types.Runtime as Pact
 import Pact.Types.Orphans ()
-import Pact.Types.SQLite
 import Pact.Types.Command
 import Pact.Types.Logger
 import Pact.Interpreter
@@ -72,8 +71,8 @@ userSigsToPactKeySet :: [UserSig] -> S.Set Pact.PublicKey
 userSigsToPactKeySet = S.fromList . fmap userSigToPactPubKey
 
 
-data CommandConfig = CommandConfig {
-      _ccSqlite :: Maybe SQLiteConfig
+data CommandConfig p = CommandConfig {
+      _ccPersister :: Maybe p
     , _ccEntity :: Maybe EntityName
     , _ccGasLimit :: Maybe Int
     , _ccGasRate :: Maybe Int

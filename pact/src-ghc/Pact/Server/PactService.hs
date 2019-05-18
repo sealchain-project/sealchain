@@ -26,6 +26,9 @@ import Control.Lens (view)
 import Data.Aeson as A
 import Data.Maybe (fromMaybe)
 
+import Sealchain.Mpt.MerklePatricia.MPDB
+
+import Pact.Types.SQLite hiding (exec)
 import Pact.Types.Command
 import Pact.Types.RPC
 import Pact.Types.Runtime hiding (PublicKey)
@@ -35,8 +38,8 @@ import Pact.Gas
 
 import Pact.Interpreter
 
-initPactService :: CommandConfig -> Loggers -> IO (CommandExecInterface (PactRPC ParsedCode))
-initPactService CommandConfig {..} loggers = do
+initPactServiceSQLite :: CommandConfig SQLiteConfig -> Loggers -> IO (CommandExecInterface (PactRPC ParsedCode))
+initPactServiceSQLite CommandConfig {..} loggers = do
   let logger = newLogger loggers "PactService"
       klog s = logLog logger "INIT" s
       gasLimit = fromMaybe 0 _ccGasLimit
@@ -49,13 +52,35 @@ initPactService CommandConfig {..} loggers = do
         return CommandExecInterface
           { _ceiApplyCmd = \eMode cmd -> applyCmd logger _ccEntity p cmdVar gasEnv eMode cmd (verifyCommand cmd)
           , _ceiApplyPPCmd = applyCmd logger _ccEntity p cmdVar gasEnv }
-  case _ccSqlite of
+  case _ccPersister of
     Nothing -> do
       klog "Initializing pure pact"
       mkPureEnv loggers >>= mkCEI
     Just sqlc -> do
       klog "Initializing pact SQLLite"
       mkSQLiteEnv logger True sqlc loggers >>= mkCEI
+
+initPactServiceMPTree :: CommandConfig MPDB -> Loggers -> IO (CommandExecInterface (PactRPC ParsedCode))
+initPactServiceMPTree CommandConfig {..} loggers = do
+  let logger = newLogger loggers "PactService"
+      klog s = logLog logger "INIT" s
+      gasLimit = fromMaybe 0 _ccGasLimit
+      gasRate = fromMaybe 0 _ccGasRate
+      gasEnv = (GasEnv (fromIntegral gasLimit) 0.0 (constGasModel (fromIntegral gasRate)))
+      mkCEI p@PactDbEnv {..} = do
+        cmdVar <- newMVar (CommandState initRefStore M.empty)
+        klog "Creating Pact Schema"
+        initSchema p
+        return CommandExecInterface
+          { _ceiApplyCmd = \eMode cmd -> applyCmd logger _ccEntity p cmdVar gasEnv eMode cmd (verifyCommand cmd)
+          , _ceiApplyPPCmd = applyCmd logger _ccEntity p cmdVar gasEnv }
+  case _ccPersister of
+    Nothing -> do
+      klog "Initializing pure pact"
+      mkPureEnv loggers >>= mkCEI
+    Just mpdb -> do
+      klog "Initializing pact MPTree"
+      mkMPDBEnv mpdb loggers >>= mkCEI
 
 
 applyCmd :: Logger -> Maybe EntityName -> PactDbEnv p -> MVar CommandState -> GasEnv -> ExecutionMode -> Command a ->

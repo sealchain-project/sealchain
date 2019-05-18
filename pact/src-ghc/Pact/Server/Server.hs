@@ -103,9 +103,9 @@ initFastLogger = do
   (tfl,_) <- newTimedFastLogger tc (LogStdout 1000)
   return $ \m -> tfl $ \t -> toLogStr t <> " " <> toLogStr (B8.pack m) <> "\n"
 
-startCmdThread :: CommandConfig -> InboundPactChan -> HistoryChannel -> ReplayFromDisk -> (String -> IO ()) -> IO ()
+startCmdThread :: CommandConfig SQLiteConfig -> InboundPactChan -> HistoryChannel -> ReplayFromDisk -> (String -> IO ()) -> IO ()
 startCmdThread cmdConfig inChan histChan (ReplayFromDisk rp) debugFn = do
-  CommandExecInterface {..} <- initPactService cmdConfig (initLoggers debugFn doLog def)
+  CommandExecInterface {..} <- initPactServiceSQLite cmdConfig (initLoggers debugFn doLog def)
   void $ (`runStateT` (0 :: TxId)) $ do
     -- we wait for the history service to light up, possibly giving us backups from disk to replay
     replayFromDisk' <- liftIO $ takeMVar rp
