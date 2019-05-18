@@ -68,9 +68,8 @@ createTable_ table mptDB@(MPTreeDB _ _ workMpdb workModifier) = do
   case tableRootM of
     Just _  -> throwDbError $ "Table already exists: " ++ show table 
     Nothing -> do
-      (newRootPtr, modifier') <- putKeyValMixMem workMpdb workModifier tableKey $ 
+      (newStateRoot, modifier') <- putKeyValMixMem workMpdb workModifier tableKey $ 
                                  unboxStateRoot emptyTriePtr
-      let newStateRoot = StateRoot newRootPtr
       return (mptDB {_workMpdb = workMpdb{stateRoot=newStateRoot}, _workModifier=modifier'}, ())
 
 unsafeGetTableRoot :: Table k -> MPTreeDB -> IO B.ByteString
@@ -120,12 +119,10 @@ writeValue_ table wt pactKey pactValue mptDB@(MPTreeDB _ _ workMpdb workModifier
     (Insert, Just _)  -> throwDbError $ "Key already exists: " ++ show pactKey
     (Update, Nothing) -> throwDbError $ "Key does not exists: " ++ show pactKey
     _                 -> do
-      (tableRoot', modifier') <- putKeyValMixMem tableMpdb workModifier bsKey $ encodePactVal pactValue
-      (newRootPtr, modifier'') <- putKeyValMixMem workMpdb modifier' tableKey tableRoot'
-      let newStateRoot = StateRoot newRootPtr
+      (newTableRoot, modifier') <- putKeyValMixMem tableMpdb workModifier bsKey $ encodePactVal pactValue
+      (newStateRoot, modifier'') <- putKeyValMixMem workMpdb modifier' tableKey $ unboxStateRoot newTableRoot
       return (mptDB {_workMpdb = workMpdb{stateRoot=newStateRoot}, _workModifier=modifier''}, ())
 
--- 目前先查询全部keys
 queryKeys_ :: (PactKey k) => Table k -> Maybe (KeyQuery k) -> MPTreeDB -> IO (MPTreeDB,[k])
 queryKeys_ table kq mptDB@(MPTreeDB _ _ workMpdb workModifier) = do
   tableRoot <- unsafeGetTableRoot table mptDB

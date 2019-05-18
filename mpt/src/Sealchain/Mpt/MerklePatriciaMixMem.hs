@@ -56,7 +56,7 @@ putKeyValMixMem::MonadIO m=>MPDB
            ->MMModifier
            ->B.ByteString
            ->B.ByteString
-           ->m (MPPtr, MMModifier)
+           ->m (StateRoot, MMModifier)
 putKeyValMixMem db mmm key val = do
   runMixMemMode db mmm $ unsafePutKeyValMixMem (byteStringToSafeKey key) (Bi.serialize' $ RichValue key val)
 
@@ -83,7 +83,7 @@ getAllKeyValsMixMem db mmm = do
 deleteKeyMixMem::MonadIO m=>MPDB
          ->MMModifier
          ->B.ByteString
-         ->m (MPPtr, MMModifier)
+         ->m (StateRoot, MMModifier)
 deleteKeyMixMem db mmm key = do
   runMixMemMode db mmm $ unsafeDeleteKeyMixMem (byteStringToSafeKey key)
 
