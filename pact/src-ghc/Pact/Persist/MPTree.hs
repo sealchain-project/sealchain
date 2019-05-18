@@ -10,6 +10,8 @@ module Pact.Persist.MPTree
   , persister
   ) where
 
+import           Prelude hiding (log)
+
 import           Control.Monad.Reader ()
 import           Data.Aeson
 import qualified Data.ByteString.Char8 as B
@@ -21,16 +23,23 @@ import           Pact.Persist hiding (compileQuery)
 import           Pos.Binary.Class (Bi)
 import qualified Pos.Binary.Class as Bi
 import           Sealchain.Mpt.MerklePatriciaMixMem
+import           Pact.Types.Logger hiding (Logging (..))
 
 data MPTreeDB = MPTreeDB 
   { _mpdb         :: !MPDB
   , _modifier     :: !MMModifier
   , _workMpdb     :: !MPDB
   , _workModifier :: !MMModifier -- | modifier used in transaction
+  , _logger       :: Logger
   }
 
-initMPTreeDB :: MPDB -> MPTreeDB
-initMPTreeDB mpdb = MPTreeDB mpdb Map.empty mpdb Map.empty
+initMPTreeDB :: MPDB -> Loggers -> MPTreeDB
+initMPTreeDB mpdb loggers = 
+  let logger = newLogger loggers "Persist-MPTree"
+  in MPTreeDB mpdb Map.empty mpdb Map.empty logger
+
+log :: MPTreeDB -> String -> String -> IO ()
+log e = logLog (_logger e)
 
 data RowKey k = RowKey 
     { _rkTableId :: Text
@@ -62,7 +71,8 @@ persister = Persister
   }
 
 createTable_ :: Table k -> MPTreeDB -> IO (MPTreeDB, ())
-createTable_ table mptDB@(MPTreeDB _ _ workMpdb workModifier) = do
+createTable_ table mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
+  log mptDB "DDL" $ "createTable: " ++ show table
   let tableKey = getTableKey table
   tableRootM <- getKeyValMixMem workMpdb workModifier tableKey 
   case tableRootM of
@@ -73,7 +83,7 @@ createTable_ table mptDB@(MPTreeDB _ _ workMpdb workModifier) = do
       return (mptDB {_workMpdb = workMpdb{stateRoot=newStateRoot}, _workModifier=modifier'}, ())
 
 unsafeGetTableRoot :: Table k -> MPTreeDB -> IO B.ByteString
-unsafeGetTableRoot table (MPTreeDB _ _ workMpdb workModifier) = do
+unsafeGetTableRoot table (MPTreeDB _ _ workMpdb workModifier _) = do
   let tableKey = getTableKey table
   tableRootM <- getKeyValMixMem workMpdb workModifier tableKey 
   case tableRootM of
@@ -81,19 +91,19 @@ unsafeGetTableRoot table (MPTreeDB _ _ workMpdb workModifier) = do
     Nothing        -> throwDbError $ "Table does not exists: " ++ show table
 
 beginTx_ :: MPTreeDB -> IO (MPTreeDB, ())
-beginTx_ mptDB@(MPTreeDB mpdb modifier _ _) = 
+beginTx_ mptDB@(MPTreeDB mpdb modifier _ _ _) = 
   return (mptDB {_workMpdb = mpdb, _workModifier = modifier}, ())
 
 commitTx_ :: MPTreeDB -> IO (MPTreeDB, ())
-commitTx_ mptDB@(MPTreeDB _ _ workMpdb workModifier) =
+commitTx_ mptDB@(MPTreeDB _ _ workMpdb workModifier _) =
   return (mptDB {_mpdb = workMpdb, _modifier = workModifier}, ()) 
 
 rollbackTx_ :: MPTreeDB -> IO (MPTreeDB,())
-rollbackTx_ mptDB@(MPTreeDB mpdb modifier _ _) = 
+rollbackTx_ mptDB@(MPTreeDB mpdb modifier _ _ _) = 
   return (mptDB {_workMpdb = mpdb, _workModifier = modifier}, ()) 
 
 readValue_ :: (PactKey k, PactValue v) => Table k -> k -> MPTreeDB -> IO (MPTreeDB, (Maybe v))
-readValue_ table packKey mptDB@(MPTreeDB _ _ workMpdb workModifier) = do
+readValue_ table packKey mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
   tableRoot <- unsafeGetTableRoot table mptDB
   let tableMpdb = workMpdb {stateRoot = StateRoot tableRoot}
   let rowKey = newRowKey table packKey 
@@ -106,7 +116,7 @@ readValue_ table packKey mptDB@(MPTreeDB _ _ workMpdb workModifier) = do
       return (mptDB, Just pactValue)
 
 writeValue_ :: (PactKey k, PactValue v) => Table k -> WriteType -> k -> v -> MPTreeDB -> IO (MPTreeDB,())
-writeValue_ table wt pactKey pactValue mptDB@(MPTreeDB _ _ workMpdb workModifier) = do
+writeValue_ table wt pactKey pactValue mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
   let tableKey = getTableKey table
   tableRoot <- unsafeGetTableRoot table mptDB
 
@@ -124,7 +134,7 @@ writeValue_ table wt pactKey pactValue mptDB@(MPTreeDB _ _ workMpdb workModifier
       return (mptDB {_workMpdb = workMpdb{stateRoot=newStateRoot}, _workModifier=modifier''}, ())
 
 queryKeys_ :: (PactKey k) => Table k -> Maybe (KeyQuery k) -> MPTreeDB -> IO (MPTreeDB,[k])
-queryKeys_ table kq mptDB@(MPTreeDB _ _ workMpdb workModifier) = do
+queryKeys_ table kq mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
   tableRoot <- unsafeGetTableRoot table mptDB
   let tableMpdb = workMpdb {stateRoot = StateRoot tableRoot}
   keyVals <- getAllKeyValsMixMem tableMpdb workModifier
@@ -133,7 +143,7 @@ queryKeys_ table kq mptDB@(MPTreeDB _ _ workMpdb workModifier) = do
   return (mptDB, filter filterFunc keys)
 
 query_ :: (PactKey k, PactValue v) => Table k -> Maybe (KeyQuery k) -> MPTreeDB -> IO (MPTreeDB,[(k,v)])
-query_ table kq mptDB@(MPTreeDB _ _ workMpdb workModifier) = do
+query_ table kq mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
     tableRoot <- unsafeGetTableRoot table mptDB
     let tableMpdb = workMpdb {stateRoot = StateRoot tableRoot}
     keyVals <- getAllKeyValsMixMem tableMpdb workModifier
