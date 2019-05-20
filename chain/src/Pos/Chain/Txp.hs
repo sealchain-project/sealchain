@@ -7,6 +7,7 @@ module Pos.Chain.Txp
 import           Pos.Chain.Txp.Base as X
 import           Pos.Chain.Txp.Configuration as X
 import           Pos.Chain.Txp.Error as X
+import           Pos.Chain.Txp.StateRoot as X
 import           Pos.Chain.Txp.GenesisUtxo as X
 import           Pos.Chain.Txp.Toil as X
 import           Pos.Chain.Txp.Topsort as X

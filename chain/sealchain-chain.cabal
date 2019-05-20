@@ -71,6 +71,7 @@ library
                        Pos.Chain.Txp.Configuration
                        Pos.Chain.Txp.Base
                        Pos.Chain.Txp.Error
+                       Pos.Chain.Txp.StateRoot
                        Pos.Chain.Txp.Topsort
                        Pos.Chain.Txp.GenesisUtxo
                        Pos.Chain.Txp.Toil
