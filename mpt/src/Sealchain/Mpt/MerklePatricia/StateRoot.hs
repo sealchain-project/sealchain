@@ -1,11 +1,8 @@
 {-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings          #-}
 
 module Sealchain.Mpt.MerklePatricia.StateRoot (
   StateRoot(..),
-  Ptr,
   emptyTriePtr,
   sha2StateRoot,
   unboxStateRoot,
