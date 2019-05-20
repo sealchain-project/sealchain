@@ -47,6 +47,14 @@ module Pos.Chain.Txp.Toil.Monad
          -- * Conversions
        , utxoMToLocalToilM
        , utxoMToGlobalToilM
+
+        -- * Pact execution
+       , PactExecEnv (..)
+       , PactExecState (..)
+       , PactExecM
+       , peeGasModel
+       , pesRefStore
+       , pesMPTreeDB
        ) where
 
 import           Universum hiding (id)
@@ -57,6 +65,10 @@ import           Control.Monad.Reader (mapReaderT)
 import           Control.Monad.State.Strict (mapStateT)
 import           Data.Default (def)
 import           Fmt ((+|), (|+))
+
+import           Pact.Persist.MPTree (MPTreeDB)
+import           Pact.Types.Gas (GasModel)
+import           Pact.Types.Runtime (RefStore)
 
 import           Pos.Chain.Txp.Toil.Types (MemPool, StakesView, UndoMap,
                      UtxoLookup, UtxoModifier, mpLocalTxs, mpSize, svStakes,
@@ -273,3 +285,25 @@ utxoMToGlobalToilM = mapReaderT f . magnify gteUtxo
     f :: State UtxoModifier
       ~> StateT GlobalToilState (NamedPureLogger (F StakesLookupF))
     f = state . runState . zoom gtsUtxoModifier
+
+----------------------------------------------------------------------------
+-- Monadic actions with Pact.
+----------------------------------------------------------------------------
+
+-- | Immutable environment used in Pact execution.
+data PactExecEnv = PactExecEnv
+    { _peeGasModel :: !GasModel
+    }
+makeLenses ''PactExecEnv
+
+-- | Mutable state used in Pact execution.
+data PactExecState = PactExecState
+    { _pesRefStore :: !RefStore
+    , _pesMPTreeDB :: !MPTreeDB
+    }
+
+makeLenses ''PactExecState
+
+-- | Utility monad which allows to run Pact commands.
+type PactExecM m
+     = ReaderT PactExecEnv (StateT PactExecState m)

@@ -166,6 +166,7 @@ library
                      , sealchain-core
                      , sealchain-crypto
                      , sealchain-util
+                     , sealchain-pact
                      , cborg
                      , cereal
                      , conduit
