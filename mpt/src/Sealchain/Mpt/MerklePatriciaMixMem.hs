@@ -5,7 +5,8 @@ module Sealchain.Mpt.MerklePatriciaMixMem (
   MPKey, 
   MPVal, 
   MPPtr,
-  MPDB(..), 
+  MPDB (..), 
+  KVPersister,
   StateRoot(..),
   MMModifier,
   putKeyValMixMem, 
@@ -24,7 +25,6 @@ import           Universum
 import           Control.Monad.Trans (MonadIO)
 import qualified Data.ByteString as B
 import qualified Data.Map as Map
-import qualified Database.RocksDB as DB
 
 import           Pos.Binary.Class (Bi)
 import qualified Pos.Binary.Class as Bi
@@ -52,7 +52,7 @@ instance Bi RichValue where
 richValueToPair :: RichValue -> (B.ByteString, B.ByteString)
 richValueToPair RichValue{..} = (_rvKey, _rvVal)
 
-putKeyValMixMem::MonadIO m=>MPDB
+putKeyValMixMem::(MonadIO m,KVPersister p)=>MPDB p
            ->MMModifier
            ->B.ByteString
            ->B.ByteString
@@ -60,7 +60,7 @@ putKeyValMixMem::MonadIO m=>MPDB
 putKeyValMixMem db mmm key val = do
   runMixMemMode db mmm $ unsafePutKeyValMixMem (byteStringToSafeKey key) (Bi.serialize' $ RichValue key val)
 
-getKeyValMixMem::MonadIO m=>MPDB
+getKeyValMixMem::(MonadIO m,KVPersister p)=>MPDB p
          ->MMModifier
          ->B.ByteString
          ->m (Maybe B.ByteString)
@@ -72,7 +72,7 @@ getKeyValMixMem db mmm key = do
       let RichValue _ val = justRight $ Bi.decodeFull' $ snd x
       return $ Just val
 
-getAllKeyValsMixMem::MonadIO m=>MPDB
+getAllKeyValsMixMem::(MonadIO m,KVPersister p)=>MPDB p
          ->MMModifier
          ->m [(B.ByteString, B.ByteString)]
 getAllKeyValsMixMem db mmm = do
@@ -80,26 +80,26 @@ getAllKeyValsMixMem db mmm = do
   let actualKeyVals = map (richValueToPair . justRight . Bi.decodeFull' . snd) keyVals 
   return actualKeyVals
 
-deleteKeyMixMem::MonadIO m=>MPDB
+deleteKeyMixMem::(MonadIO m,KVPersister p)=>MPDB p
          ->MMModifier
          ->B.ByteString
          ->m (StateRoot, MMModifier)
 deleteKeyMixMem db mmm key = do
   runMixMemMode db mmm $ unsafeDeleteKeyMixMem (byteStringToSafeKey key)
 
-keyExistsMixMem::MonadIO m=>MPDB
+keyExistsMixMem::(MonadIO m,KVPersister p)=>MPDB p
          ->MMModifier
          ->B.ByteString
          ->m Bool
 keyExistsMixMem db mmm key = isJust <$> getKeyValMixMem db mmm key
 
-initializeBlankMixMem::MonadIO m=>MPDB -- ^ The object containing the current stateRoot.
+initializeBlankMixMem::(MonadIO m,KVPersister p)=>MPDB p -- ^ The object containing the current stateRoot.
                ->m MMModifier
 initializeBlankMixMem db = do
     let bytes = Bi.serialize' (0::Integer)
         StateRoot key = emptyTriePtr
 
-    DB.put (rdb db) DB.defaultWriteOptions key bytes
+    putKV' db key bytes
     return Map.empty
 
 

@@ -5,7 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Pact.Persist.MPTree
-  ( MPTreeDB(..)
+  ( MPTreeDB (..)
   , initMPTreeDB
   , persister
   ) where
@@ -26,20 +26,20 @@ import           Sealchain.Mpt.MerklePatriciaMixMem
 import           Pact.Types.Logger hiding (Logging (..))
 import           Pact.Types.Pretty (viaShow)
 
-data MPTreeDB = MPTreeDB 
-  { _mpdb         :: !MPDB
+data MPTreeDB p = MPTreeDB
+  { _mpdb         :: !(MPDB p)
   , _modifier     :: !MMModifier
-  , _workMpdb     :: !MPDB
+  , _workMpdb     :: !(MPDB p)
   , _workModifier :: !MMModifier -- | modifier used in transaction
   , _logger       :: Logger
   }
 
-initMPTreeDB :: MPDB -> Loggers -> MPTreeDB
+initMPTreeDB :: MPDB p -> Loggers -> MPTreeDB p
 initMPTreeDB mpdb loggers = 
   let logger = newLogger loggers "Persist-MPTree"
   in MPTreeDB mpdb Map.empty mpdb Map.empty logger
 
-log :: MPTreeDB -> String -> String -> IO ()
+log :: MPTreeDB p -> String -> String -> IO ()
 log e = logLog (_logger e)
 
 data RowKey k = RowKey 
@@ -58,7 +58,7 @@ instance (PactKey k) => Bi (RowKey k) where
       _rkPactKey <- fromByteString <$> Bi.decode
       return RowKey{..} 
 
-persister :: Persister MPTreeDB
+persister :: KVPersister p => Persister (MPTreeDB p)
 persister = Persister 
   { createTable = \t s -> createTable_ t s
   , beginTx = \_ s -> beginTx_ s
@@ -71,7 +71,7 @@ persister = Persister
   , refreshConn = return . (,())
   }
 
-createTable_ :: Table k -> MPTreeDB -> IO (MPTreeDB, ())
+createTable_ :: KVPersister p => Table k -> MPTreeDB p -> IO (MPTreeDB p, ())
 createTable_ table mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
   log mptDB "DDL" $ "createTable: " ++ show table
   let tableKey = getTableKey table
@@ -83,7 +83,7 @@ createTable_ table mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
                                  unboxStateRoot emptyTriePtr
       return (mptDB {_workMpdb = workMpdb{stateRoot=newStateRoot}, _workModifier=modifier'}, ())
 
-unsafeGetTableRoot :: Table k -> MPTreeDB -> IO B.ByteString
+unsafeGetTableRoot :: KVPersister p => Table k -> MPTreeDB p -> IO B.ByteString
 unsafeGetTableRoot table (MPTreeDB _ _ workMpdb workModifier _) = do
   let tableKey = getTableKey table
   tableRootM <- getKeyValMixMem workMpdb workModifier tableKey 
@@ -91,19 +91,19 @@ unsafeGetTableRoot table (MPTreeDB _ _ workMpdb workModifier _) = do
     Just tableRoot -> return tableRoot
     Nothing        -> throwDbError $ "Table does not exists: " <> viaShow table
 
-beginTx_ :: MPTreeDB -> IO (MPTreeDB, ())
+beginTx_ :: MPTreeDB p -> IO (MPTreeDB p, ())
 beginTx_ mptDB@(MPTreeDB mpdb modifier _ _ _) = 
   return (mptDB {_workMpdb = mpdb, _workModifier = modifier}, ())
 
-commitTx_ :: MPTreeDB -> IO (MPTreeDB, ())
+commitTx_ :: MPTreeDB p -> IO (MPTreeDB p, ())
 commitTx_ mptDB@(MPTreeDB _ _ workMpdb workModifier _) =
   return (mptDB {_mpdb = workMpdb, _modifier = workModifier}, ()) 
 
-rollbackTx_ :: MPTreeDB -> IO (MPTreeDB,())
+rollbackTx_ :: MPTreeDB p -> IO (MPTreeDB p,())
 rollbackTx_ mptDB@(MPTreeDB mpdb modifier _ _ _) = 
   return (mptDB {_workMpdb = mpdb, _workModifier = modifier}, ()) 
 
-readValue_ :: (PactKey k, PactValue v) => Table k -> k -> MPTreeDB -> IO (MPTreeDB, (Maybe v))
+readValue_ :: (PactKey k, PactValue v, KVPersister p) => Table k -> k -> MPTreeDB p -> IO (MPTreeDB p, (Maybe v))
 readValue_ table packKey mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
   tableRoot <- unsafeGetTableRoot table mptDB
   let tableMpdb = workMpdb {stateRoot = StateRoot tableRoot}
@@ -116,7 +116,7 @@ readValue_ table packKey mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
       let pactValue = decodePactVal val 
       return (mptDB, Just pactValue)
 
-writeValue_ :: (PactKey k, PactValue v) => Table k -> WriteType -> k -> v -> MPTreeDB -> IO (MPTreeDB,())
+writeValue_ :: (PactKey k, PactValue v, KVPersister p) => Table k -> WriteType -> k -> v -> MPTreeDB p -> IO (MPTreeDB p,())
 writeValue_ table wt pactKey pactValue mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
   let tableKey = getTableKey table
   tableRoot <- unsafeGetTableRoot table mptDB
@@ -134,7 +134,7 @@ writeValue_ table wt pactKey pactValue mptDB@(MPTreeDB _ _ workMpdb workModifier
       (newStateRoot, modifier'') <- putKeyValMixMem workMpdb modifier' tableKey $ unboxStateRoot newTableRoot
       return (mptDB {_workMpdb = workMpdb{stateRoot=newStateRoot}, _workModifier=modifier''}, ())
 
-queryKeys_ :: (PactKey k) => Table k -> Maybe (KeyQuery k) -> MPTreeDB -> IO (MPTreeDB,[k])
+queryKeys_ :: (PactKey k, KVPersister p) => Table k -> Maybe (KeyQuery k) -> MPTreeDB p -> IO (MPTreeDB p,[k])
 queryKeys_ table kq mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
   tableRoot <- unsafeGetTableRoot table mptDB
   let tableMpdb = workMpdb {stateRoot = StateRoot tableRoot}
@@ -143,7 +143,7 @@ queryKeys_ table kq mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
   let filterFunc = compileQuery kq
   return (mptDB, filter filterFunc keys)
 
-query_ :: (PactKey k, PactValue v) => Table k -> Maybe (KeyQuery k) -> MPTreeDB -> IO (MPTreeDB,[(k,v)])
+query_ :: (PactKey k, PactValue v, KVPersister p) => Table k -> Maybe (KeyQuery k) -> MPTreeDB p -> IO (MPTreeDB p,[(k,v)])
 query_ table kq mptDB@(MPTreeDB _ _ workMpdb workModifier _) = do
     tableRoot <- unsafeGetTableRoot table mptDB
     let tableMpdb = workMpdb {stateRoot = StateRoot tableRoot}

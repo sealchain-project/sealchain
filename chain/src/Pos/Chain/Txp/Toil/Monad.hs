@@ -297,13 +297,13 @@ data PactExecEnv = PactExecEnv
 makeLenses ''PactExecEnv
 
 -- | Mutable state used in Pact execution.
-data PactExecState = PactExecState
+data PactExecState p = PactExecState
     { _pesRefStore :: !RefStore
-    , _pesMPTreeDB :: !MPTreeDB
+    , _pesMPTreeDB :: !(MPTreeDB p)
     }
 
 makeLenses ''PactExecState
 
 -- | Utility monad which allows to run Pact commands.
-type PactExecM m
-     = ReaderT PactExecEnv (StateT PactExecState m)
+type PactExecM p m
+     = ReaderT PactExecEnv (StateT (PactExecState p) m)

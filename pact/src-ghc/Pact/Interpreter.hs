@@ -24,7 +24,6 @@ module Pact.Interpreter
   , setupEvalEnv
   , initRefStore
   , mkSQLiteEnv
-  , mkMPDBEnv
   , mkPureEnv
   , mkPactDbEnv
   , initSchema
@@ -40,8 +39,6 @@ import Control.Monad.Catch
 import Data.Maybe
 import qualified Data.HashMap.Strict as HM
 
-import Sealchain.Mpt.MerklePatricia.MPDB
-
 import Pact.Types.Term
 import Pact.Types.Runtime
 import Pact.Compile
@@ -51,7 +48,6 @@ import Pact.Types.Command
 import Pact.Native (nativeDefs)
 import Pact.PersistPactDb
 import qualified Pact.Persist.SQLite as PSL
-import qualified Pact.Persist.MPTree as PMP
 import System.Directory
 import Pact.Types.Logger
 import qualified Pact.Persist.Pure as Pure
@@ -136,11 +132,6 @@ mkSQLiteEnv initLog deleteOldFile c loggers = do
       logLog initLog "INIT" "Deleting Existing Pact DB File"
       removeFile (PSL._dbFile c)
   dbe <- initDbEnv loggers PSL.persister <$> PSL.initSQLite c loggers
-  mkPactDbEnv pactdb dbe
-
-mkMPDBEnv :: MPDB -> Loggers -> IO (PactDbEnv (DbEnv PMP.MPTreeDB))
-mkMPDBEnv mpdb loggers = do
-  let dbe = initDbEnv loggers PMP.persister $ PMP.initMPTreeDB mpdb loggers
   mkPactDbEnv pactdb dbe
 
 mkPureEnv :: Loggers -> IO (PactDbEnv (DbEnv Pure.PureDb))

@@ -13,11 +13,11 @@ import           Sealchain.Mpt.MerklePatricia.StateRoot
 
 
 -- Probably the entire MPDB system ought to be in this monad
-type MPReaderM a = ReaderT MPDB a
+type MPReaderM p a = ReaderT (MPDB p) a
 
 data MPChoice = Data NodeData | Ref NodeRef | Value MPVal | None deriving (Eq)
 
-node :: MonadIO m=>MPChoice -> MPReaderM m NodeData
+node :: (MonadIO m,KVPersister p)=>MPChoice -> MPReaderM p m NodeData
 node (Data nd) = return nd
 node (Ref nr) = do
   derefNode <- asks getNodeData
@@ -38,7 +38,7 @@ simplify n@ShortcutNodeData{ nextNibbleString = k, nextVal = v } = None : delta 
       | otherwise = Data n{ nextNibbleString = t }
     (h,t) = (fromIntegral $ N.head k, N.tail k)
 
-enter :: MonadIO m=>MPChoice -> MPReaderM m [MPChoice]
+enter :: (MonadIO m,KVPersister p)=>MPChoice -> MPReaderM p m [MPChoice]
 enter = liftM simplify . node
 
 data DiffOp =
@@ -47,7 +47,7 @@ data DiffOp =
   Delete {key::[N.Nibble], oldVal::MPVal}
   deriving (Show, Eq)
 
-diffChoice :: MonadIO m=>Maybe N.Nibble -> MPChoice -> MPChoice -> MPReaderM m [DiffOp]
+diffChoice :: (MonadIO m,KVPersister p)=>Maybe N.Nibble -> MPChoice -> MPChoice -> MPReaderM p m [DiffOp]
 diffChoice n ch1 ch2 = case (ch1, ch2) of
   (None, Value v) -> return [Create sn v]
   (Value v, None) -> return [Delete sn v]
@@ -62,20 +62,20 @@ diffChoice n ch1 ch2 = case (ch1, ch2) of
       in map (maybe id prepend n)
     pRecurse = liftM prefix .* recurse
 
-diffChoices :: MonadIO m=>[MPChoice] -> [MPChoice] -> MPReaderM m [DiffOp]
+diffChoices :: (MonadIO m,KVPersister p)=>[MPChoice] -> [MPChoice] -> MPReaderM p m [DiffOp]
 diffChoices =
   liftM concat .* sequence .* zipWith3 diffChoice maybeNums
   where maybeNums = Nothing : map Just [0..]
 
-recurse :: MonadIO m=>MPChoice -> MPChoice -> MPReaderM m [DiffOp]
+recurse :: (MonadIO m,KVPersister p)=>MPChoice -> MPChoice -> MPReaderM p m [DiffOp]
 recurse = join .* (liftM2 diffChoices `on` enter)
 
 infixr 9 .*
 (.*) :: (c -> d) -> (a -> b -> c) -> (a -> b -> d)
 (.*) = (.) . (.)
 
-diff :: MonadIO m=>NodeRef -> NodeRef -> MPReaderM m [DiffOp]
+diff :: (MonadIO m,KVPersister p)=>NodeRef -> NodeRef -> MPReaderM p m [DiffOp]
 diff = recurse `on` Ref
 
-dbDiff :: MonadIO m => MPDB -> StateRoot -> StateRoot -> m [DiffOp]
+dbDiff :: (MonadIO m,KVPersister p) => MPDB p -> StateRoot -> StateRoot -> m [DiffOp]
 dbDiff db (StateRoot bs1) (StateRoot bs2) = runReaderT ((diff `on` PtrRef) bs1 bs2) db

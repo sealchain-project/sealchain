@@ -24,8 +24,6 @@ import qualified Data.Map.Strict as M
 import Data.Aeson as A
 import Data.Maybe (fromMaybe)
 
-import Sealchain.Mpt.MerklePatricia.MPDB
-
 import Pact.Types.Command
 import Pact.Types.RPC
 import Pact.Types.Runtime hiding (PublicKey)
@@ -57,27 +55,6 @@ initPactServiceSQLite CommandConfig {..} loggers = do
     Just sqlc -> do
       klog "Initializing pact SQLLite"
       mkSQLiteEnv logger True sqlc loggers >>= mkCEI
-
-initPactServiceMPTree :: CommandConfig MPDB -> Loggers -> IO (CommandExecInterface PublicMeta ParsedCode)
-initPactServiceMPTree CommandConfig {..} loggers = do
-  let logger = newLogger loggers "PactService"
-      klog s = logLog logger "INIT" s
-      gasRate = fromMaybe 0 _ccGasRate
-      gasModel = constGasModel (fromIntegral gasRate)
-      mkCEI p@PactDbEnv {..} = do
-        cmdVar <- newMVar (CommandState initRefStore M.empty)
-        klog "Creating Pact Schema"
-        initSchema p
-        return CommandExecInterface
-          { _ceiApplyCmd = \eMode cmd -> applyCmd logger _ccEntity p cmdVar gasModel eMode cmd (verifyCommand cmd)
-          , _ceiApplyPPCmd = applyCmd logger _ccEntity p cmdVar gasModel }
-  case _ccPersister of
-    Nothing -> do
-      klog "Initializing pure pact"
-      mkPureEnv loggers >>= mkCEI
-    Just sqlc -> do
-      klog "Initializing pact MPTree"
-      mkMPDBEnv sqlc loggers >>= mkCEI
 
 applyCmd :: Logger -> Maybe EntityName -> PactDbEnv p -> MVar CommandState ->
             GasModel -> ExecutionMode -> Command a ->

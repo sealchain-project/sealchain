@@ -22,6 +22,10 @@ module Pos.Chain.Txp.Toil.Types
        , TxMap
        , UndoMap
 
+       , PactState
+       , psRefStore 
+       , psMPTreeDB
+
        , originUtxo
        , gdUtxo
        ) where
@@ -34,6 +38,9 @@ import qualified Data.Map as M (lookup, toList, filter)
 import           Data.Text.Lazy.Builder (Builder)
 import           Formatting (Format, later)
 import           Serokell.Util.Text (mapBuilderJson)
+
+import           Pact.Persist.MPTree (MPTreeDB)
+import           Pact.Types.Runtime (RefStore)
 
 import           Pos.Chain.Txp.Tx (TxId, TxIn, isOriginTxOut, isGDTxOut)
 import           Pos.Chain.Txp.TxAux (TxAux)
@@ -120,6 +127,17 @@ instance Default MemPool where
 ----------------------------------------------------------------------------
 
 type UndoMap = HashMap TxId TxUndo
+
+----------------------------------------------------------------------------
+-- PactState
+----------------------------------------------------------------------------
+
+data PactState p = PactState
+    { _psRefStore :: !RefStore
+    , _psMPTreeDB :: !(MPTreeDB p)
+    }
+
+makeLenses ''PactState
 
 ----------------------------------------------------------------------------
 -- Helper functions 
