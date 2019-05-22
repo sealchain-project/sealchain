@@ -40,7 +40,7 @@ import           Pos.Crypto (ProtocolMagic)
 
 import qualified Test.Pos.Chain.Delegation.Gen as Delegation
 import           Test.Pos.Chain.Ssc.Gen (genSscPayload, genSscProof)
-import           Test.Pos.Chain.Txp.Gen (genTxPayload, genTxProof, genTxpUndo)
+import           Test.Pos.Chain.Txp.Gen (genTxPayload, genTxProof, genTxpUndo, genStateRoot)
 import qualified Test.Pos.Chain.Update.Gen as Update
 import           Test.Pos.Core.Gen (genChainDifficulty, genEpochIndex,
                      genFlatSlotId, genSlotId, genSlotLeaders, genTextHash)
@@ -144,6 +144,7 @@ genMainExtraHeaderData =
     MainExtraHeaderData
         <$> Update.genBlockVersion
         <*> Update.genSoftwareVersion
+        <*> genStateRoot
         <*> genBlockHeaderAttributes
         <*> genAbstractHash genMainExtraBodyData
 

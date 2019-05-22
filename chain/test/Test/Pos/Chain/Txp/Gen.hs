@@ -25,6 +25,7 @@ module Test.Pos.Chain.Txp.Gen
        , genTxUndo
        , genTxWitness
        , genUnknownWitnessType
+       , genStateRoot
        ) where
 
 import           Universum
@@ -40,8 +41,8 @@ import qualified Hedgehog.Range as Range
 import           Pos.Chain.Txp (Tx (..), TxAttributes, TxAux (..), TxId,
                      TxIn (..), TxInWitness (..), TxOut (..), TxOutAux (..),
                      TxPayload, TxProof (..), TxSig, TxSigData (..), TxUndo,
-                     TxValidationRulesConfig (..), TxWitness,
-                     TxpConfiguration (..), TxpUndo, mkTxPayload)
+                     TxValidationRulesConfig (..), TxWitness, StateRoot,
+                     TxpConfiguration (..), TxpUndo, mkTxPayload, emptyStateRoot)
 import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Crypto (Hash, ProtocolMagic, decodeHash, sign)
 
@@ -152,3 +153,6 @@ genTxWitness pm = V.fromList <$> Gen.list (Range.linear 1 10) (genTxInWitness pm
 genUnknownWitnessType :: Gen TxInWitness
 genUnknownWitnessType =
     UnknownWitnessType <$> Gen.word8 (Range.constant 3 maxBound) <*> gen32Bytes
+
+genStateRoot :: Gen StateRoot
+genStateRoot = pure emptyStateRoot

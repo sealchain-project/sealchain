@@ -35,7 +35,7 @@ import           Pos.Chain.Genesis as Genesis (Config (..),
 import           Pos.Chain.Ssc (MonadSscMem, SscPayload, defaultSscPayload,
                      stripSscPayload)
 import           Pos.Chain.Txp (TxAux (..), TxpConfiguration, emptyTxPayload,
-                     mkTxPayload)
+                     mkTxPayload, emptyStateRoot)
 import           Pos.Chain.Update (ConsensusEra (..), UpdateConfiguration,
                      UpdatePayload (..), curSoftwareVersion,
                      lastKnownBlockVersion)
@@ -338,7 +338,7 @@ createMainBlockPure genesisConfig limit prevHeader pske sId sk rawPayload = do
     uc <- view (lensOf @UpdateConfiguration)
     bodyLimit <- execStateT (computeBodyLimit uc) limit
     body <- createMainBody k bodyLimit sId rawPayload
-    pure (mkMainBlock pm (bv uc) (sv uc) (Right prevHeader) sId sk pske body)
+    pure (mkMainBlock pm (bv uc) (sv uc) (Right prevHeader) sId sk pske body emptyStateRoot)
   where
     k = configBlkSecurityParam genesisConfig
     pm = configProtocolMagic genesisConfig
@@ -350,7 +350,7 @@ createMainBlockPure genesisConfig limit prevHeader pske sId sk rawPayload = do
         -- account for block header and serialization overhead, etc;
         let musthaveBody = BC.MainBody emptyTxPayload defSsc def def
         let musthaveBlock =
-                mkMainBlock pm (bv uc) (sv uc) (Right prevHeader) sId sk pske musthaveBody
+                mkMainBlock pm (bv uc) (sv uc) (Right prevHeader) sId sk pske musthaveBody emptyStateRoot
         let mhbSize = biSize musthaveBlock
         when (mhbSize > limit) $ throwError $
             "Musthave block size is more than limit: " <> show mhbSize

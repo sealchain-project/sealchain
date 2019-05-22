@@ -3,12 +3,13 @@
 
 module Pos.Chain.Txp.StateRoot 
   ( StateRoot(..)
-  , genesisStateRoot
+  , emptyStateRoot
   ) where
 
 import           Universum
 
 import           Data.Data (Data)
+import           Data.SafeCopy (base, deriveSafeCopySimple)
 import           Formatting (bprint)
 import qualified Formatting.Buildable
 import           Serokell.Util.Base16 (base16F)
@@ -28,5 +29,7 @@ instance Bi StateRoot where
   encode = Bi.encode . getStatRoot 
   decode = StateRoot <$> Bi.decode
 
-genesisStateRoot :: StateRoot
-genesisStateRoot = StateRoot mempty
+emptyStateRoot :: StateRoot
+emptyStateRoot = StateRoot mempty
+
+deriveSafeCopySimple 0 'base ''StateRoot

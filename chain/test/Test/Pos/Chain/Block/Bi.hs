@@ -20,6 +20,7 @@ import           Pos.Chain.Block (BlockHeader (..), BlockHeaderAttributes,
                      mkGenesisHeader, mkMainHeaderExplicit)
 import           Pos.Chain.Delegation (DlgPayload (..))
 import           Pos.Chain.Genesis (GenesisHash (..))
+import           Pos.Chain.Txp (emptyStateRoot)
 import           Pos.Core (EpochIndex (..))
 import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Crypto (Hash, ProtocolMagic (..), ProtocolMagicId (..),
@@ -323,6 +324,7 @@ exampleMainExtraHeaderData :: MainExtraHeaderData
 exampleMainExtraHeaderData =
     MainExtraHeaderData exampleBlockVersion
                         exampleSoftwareVersion
+                        emptyStateRoot
                         (mkAttributes ())
                         (abstractHash (MainExtraBodyData (mkAttributes ())))
 

@@ -98,6 +98,7 @@ import           Pos.Chain.Genesis.Config as Genesis (Config (..))
 import           Pos.Chain.Genesis.Hash (GenesisHash (..))
 import           Pos.Chain.Ssc.Functions (verifySscPayload)
 import           Pos.Chain.Ssc.Payload (SscPayload)
+import           Pos.Chain.Txp.StateRoot (StateRoot)
 import           Pos.Chain.Txp.Tx (TxValidationRules)
 import           Pos.Chain.Txp.TxPayload (TxPayload)
 import           Pos.Chain.Update (ConsensusEra (..))
@@ -293,6 +294,7 @@ mkMainBlock
     -> SecretKey
     -> ProxySKBlockInfo
     -> MainBody
+    -> StateRoot
     -> MainBlock
 mkMainBlock pm bv sv prevHeader = mkMainBlockExplicit pm bv sv prevHash difficulty
   where
@@ -313,8 +315,9 @@ mkMainBlockExplicit
     -> SecretKey
     -> ProxySKBlockInfo
     -> MainBody
+    -> StateRoot
     -> MainBlock
-mkMainBlockExplicit pm bv sv prevHash difficulty slotId sk pske body =
+mkMainBlockExplicit pm bv sv prevHash difficulty slotId sk pske body stateRoot =
     GenericBlock
         (mkMainHeaderExplicit pm prevHash difficulty slotId sk pske body extraH)
         body
@@ -327,6 +330,7 @@ mkMainBlockExplicit pm bv sv prevHash difficulty slotId sk pske body =
         MainExtraHeaderData
             bv
             sv
+            stateRoot
             (mkAttributes ())
             (hash extraB)
 

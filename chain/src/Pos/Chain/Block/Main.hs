@@ -10,6 +10,7 @@ module Pos.Chain.Block.Main
        , MainExtraHeaderData (..)
        , mehBlockVersion
        , mehSoftwareVersion
+       , mehStateRoot
        , mehAttributes
        , mehEBDataProof
        , verifyMainExtraHeaderData
@@ -46,6 +47,7 @@ import           Pos.Chain.Block.Util (checkBodyProof)
 import           Pos.Chain.Delegation.Payload (DlgPayload, checkDlgPayload)
 import           Pos.Chain.Ssc.Payload (SscPayload, checkSscPayload)
 import           Pos.Chain.Ssc.Proof (SscProof, mkSscProof)
+import           Pos.Chain.Txp.StateRoot (StateRoot)
 import           Pos.Chain.Txp.Tx (Tx, TxValidationRules)
 import           Pos.Chain.Txp.TxPayload (TxPayload, checkTxPayload, txpTxs,
                      txpWitnesses)
@@ -121,6 +123,8 @@ data MainExtraHeaderData = MainExtraHeaderData
       _mehBlockVersion    :: !BlockVersion
     , -- | Software version.
       _mehSoftwareVersion :: !SoftwareVersion
+    , -- | Root state.
+      _mehStateRoot       :: !StateRoot
     , -- | Header attributes
       _mehAttributes      :: !BlockHeaderAttributes
     , -- | Extra body data Hash
@@ -222,8 +226,9 @@ instance Buildable MainExtraBodyData where
 
 deriveSimpleBi ''MainExtraHeaderData [
     Cons 'MainExtraHeaderData [
-        Field [| _mehBlockVersion    :: BlockVersion              |],
-        Field [| _mehSoftwareVersion :: SoftwareVersion           |],
+        Field [| _mehBlockVersion    :: BlockVersion           |],
+        Field [| _mehSoftwareVersion :: SoftwareVersion        |],
+        Field [| _mehStateRoot       :: StateRoot              |],
         Field [| _mehAttributes      :: BlockHeaderAttributes  |],
         Field [| _mehEBDataProof     :: Hash MainExtraBodyData |]
     ]]

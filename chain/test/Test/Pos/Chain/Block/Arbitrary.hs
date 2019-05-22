@@ -38,6 +38,7 @@ import           Pos.Chain.Block (ConsensusEraLeaders (..), HeaderHash,
                      headerLastSlotInfo, mkMainBlock, mkMainBlockExplicit)
 import qualified Pos.Chain.Block as Block
 import qualified Pos.Chain.Delegation as Core
+import qualified Pos.Chain.Txp as Txp
 import           Pos.Chain.Genesis (GenesisHash (..))
 import           Pos.Chain.Update (ConsensusEra (..),
                      ObftConsensusStrictness (..))
@@ -239,7 +240,7 @@ genMainBlock pm prevHash difficulty = do
     slot <- genSlotId dummyEpochSlots
     sk <- arbitrary
     body <- genMainBlockBodyForSlot pm slot
-    pure $ mkMainBlockExplicit pm bv sv prevHash difficulty slot sk Nothing body
+    pure $ mkMainBlockExplicit pm bv sv prevHash difficulty slot sk Nothing body Txp.emptyStateRoot
 
 instance Arbitrary Block.MainBlock where
     arbitrary = do
@@ -251,7 +252,7 @@ instance Arbitrary Block.MainBlock where
         sk <- arbitrary
         BodyDependsOnSlot {..} <- arbitrary :: Gen (BodyDependsOnSlot Block.MainBody)
         body <- genBodyDepsOnSlot slot
-        pure $ mkMainBlock pm bv sv prevHeader slot sk Nothing body
+        pure $ mkMainBlock pm bv sv prevHeader slot sk Nothing body Txp.emptyStateRoot
     shrink = genericShrink
 
 instance Buildable (Block.BlockHeader, PublicKey) where
