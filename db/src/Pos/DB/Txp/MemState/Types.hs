@@ -8,7 +8,7 @@ module Pos.DB.Txp.MemState.Types
 import           Universum
 
 import           Pos.Chain.Block (HeaderHash)
-import           Pos.Chain.Txp (MemPool, UndoMap, UtxoModifier)
+import           Pos.Chain.Txp (MemPool, UndoMap, UtxoModifier, PactState)
 
 -- | LocalData of transactions processing.
 -- There are two invariants which must hold for local data
@@ -26,6 +26,7 @@ data GenericTxpLocalData extra = TxpLocalData
     , txpMemPool      :: !(TVar MemPool)
     , txpUndos        :: !(TVar UndoMap)
     , txpTip          :: !(TVar HeaderHash)
+    , txpPactState    :: !(TVar PactState)
     , txpExtra        :: !(TVar extra)
     }
 

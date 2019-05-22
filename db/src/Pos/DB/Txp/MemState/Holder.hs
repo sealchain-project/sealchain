@@ -26,4 +26,5 @@ mkTxpLocalData = do
     initTip <- getTip
     TxpLocalData <$> newTVarIO mempty <*> newTVarIO def <*> newTVarIO mempty <*>
         newTVarIO initTip <*>
+        newTVarIO def <*>
         newTVarIO def

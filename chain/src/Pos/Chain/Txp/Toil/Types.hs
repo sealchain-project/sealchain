@@ -24,7 +24,8 @@ module Pos.Chain.Txp.Toil.Types
 
        , PactState
        , psRefStore 
-       , psMPTreeDB
+       , psPacts
+       , psModifier
 
        , originUtxo
        , gdUtxo
@@ -33,14 +34,14 @@ module Pos.Chain.Txp.Toil.Types
 import           Universum
 
 import           Control.Lens (makeLenses)
+import           Data.ByteString as B (ByteString)
 import           Data.Default (Default, def)
-import qualified Data.Map as M (lookup, toList, filter)
+import qualified Data.Map as M (Map, lookup, toList, filter, empty)
 import           Data.Text.Lazy.Builder (Builder)
 import           Formatting (Format, later)
 import           Serokell.Util.Text (mapBuilderJson)
 
-import           Pact.Persist.MPTree (MPTreeDB)
-import           Pact.Types.Runtime (RefStore)
+import           Pact.Types.Runtime (RefStore, PactExec, PactId)
 
 import           Pos.Chain.Txp.Tx (TxId, TxIn, isOriginTxOut, isGDTxOut)
 import           Pos.Chain.Txp.TxAux (TxAux)
@@ -132,12 +133,21 @@ type UndoMap = HashMap TxId TxUndo
 -- PactState
 ----------------------------------------------------------------------------
 
-data PactState p = PactState
+data PactState = PactState
     { _psRefStore :: !RefStore
-    , _psMPTreeDB :: !(MPTreeDB p)
+    , _psPacts    :: !(M.Map PactId PactExec)
+    , _psModifier :: !(M.Map B.ByteString B.ByteString)
     }
 
 makeLenses ''PactState
+
+instance Default PactState where
+    def =
+        PactState
+        { _psRefStore = def
+        , _psPacts    = M.empty
+        , _psModifier = M.empty
+        }
 
 ----------------------------------------------------------------------------
 -- Helper functions 
