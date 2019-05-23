@@ -130,13 +130,15 @@ instance Default MemPool where
 type UndoMap = HashMap TxId TxUndo
 
 ----------------------------------------------------------------------------
--- PactState
+-- PactModifier & PactState
 ----------------------------------------------------------------------------
+
+type PactModifier = M.Map B.ByteString B.ByteString
 
 data PactState = PactState
     { _psRefStore :: !RefStore
     , _psPacts    :: !(M.Map PactId PactExec)
-    , _psModifier :: !(M.Map B.ByteString B.ByteString)
+    , _psModifier :: !PactModifier
     }
 
 makeLenses ''PactState
