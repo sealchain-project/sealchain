@@ -4,17 +4,16 @@
 -- | Some monads used in Toil and primitive actions.
 
 module Pos.Chain.Txp.Toil.Monad
-       (
-         -- * Monadic Utxo
-         UtxoM
-       , runUtxoM
-       , evalUtxoM
-       , execUtxoM
+       ( VerifyAndApplyM
+       , VerifyAndApplyEnv (..)
+       , VerifyAndApplyState (..)
+       , vaaeUtxo
+       , vaasUtxoModifier
        , utxoGet
        , utxoPut
        , utxoDel
-
          -- * Monadic local Toil
+       , LocalToilEnv (..)
        , LocalToilState (..)
        , ltsMemPool
        , ltsUtxoModifier
@@ -27,15 +26,14 @@ module Pos.Chain.Txp.Toil.Monad
        , extendLocalToilM
 
          -- * Monadic global Toil
-       , StakesLookupF
        , GlobalToilState (..)
        , gtsUtxoModifier
        , gtsStakesView
        , defGlobalToilState
        , GlobalToilEnv (..)
-       , GlobalToilMBase
        , GlobalToilM
-       , runGlobalToilMBase
+       , gteUtxo
+       , gteTotalStake
        , runGlobalToilM
        , getStake
        , getTotalStake
@@ -44,9 +42,9 @@ module Pos.Chain.Txp.Toil.Monad
        , ExtendedGlobalToilM
        , extendGlobalToilM
 
-         -- * Conversions
-       , utxoMToLocalToilM
-       , utxoMToGlobalToilM
+        -- Convertions
+       , verifyAndApplyMToLocalToilM
+       , verifyAndApplyMToGlobalToilM
 
         -- * Pact execution
        , PactExecEnv (..)
@@ -57,10 +55,9 @@ module Pos.Chain.Txp.Toil.Monad
        , pesMPTreeDB
        ) where
 
-import           Universum hiding (id)
+import           Universum
 
 import           Control.Lens (at, magnify, makeLenses, zoom, (%=), (+=), (.=))
-import           Control.Monad.Free.Church (F (..), foldF)
 import           Control.Monad.Reader (mapReaderT)
 import           Control.Monad.State.Strict (mapStateT)
 import           Data.Default (def)
@@ -83,46 +80,46 @@ import qualified Pos.Util.Modifier as MM
 import           Pos.Util.Wlog (NamedPureLogger, WithLogger, launchNamedPureLog)
 
 ----------------------------------------------------------------------------
--- Monadic actions with Utxo.
+-- Monad used for verify and apply tx.
 ----------------------------------------------------------------------------
 
--- | Utility monad which allows to lookup values in UTXO and modify it.
-type UtxoM = ReaderT UtxoLookup (State UtxoModifier)
+data VerifyAndApplyState = VerifyAndApplyState
+    { _vaasUtxoModifier :: !UtxoModifier
+    }
 
--- | Run 'UtxoM' action using 'UtxoLookup' and 'UtxoModifier'.
-runUtxoM :: UtxoModifier -> UtxoLookup -> UtxoM a -> (a, UtxoModifier)
-runUtxoM modifier getter = usingState modifier . usingReaderT getter
+makeLenses ''VerifyAndApplyState
 
--- | Version of 'runUtxoM' which discards final state.
-evalUtxoM :: UtxoModifier -> UtxoLookup -> UtxoM a -> a
-evalUtxoM = fst ... runUtxoM
+data VerifyAndApplyEnv = VerifyAndApplyEnv
+    { _vaaeUtxo     :: !UtxoLookup
+    }
 
--- | Version of 'runUtxoM' which discards action's result.
-execUtxoM :: UtxoModifier -> UtxoLookup -> UtxoM a -> UtxoModifier
-execUtxoM = snd ... runUtxoM
+makeLenses ''VerifyAndApplyEnv
+
+type VerifyAndApplyM m
+     = ReaderT VerifyAndApplyEnv (StateT VerifyAndApplyState m)
 
 -- | Look up an entry in 'Utxo' considering 'UtxoModifier' stored
 -- inside 'State'.
-utxoGet :: TxIn -> UtxoM (Maybe TxOutAux)
+utxoGet :: (Monad m) => TxIn -> (VerifyAndApplyM m) (Maybe TxOutAux)
 utxoGet txIn = do
-    utxoLookup <- ask
-    MM.lookup utxoLookup txIn <$> use identity
+    utxoLookup <- view vaaeUtxo
+    MM.lookup utxoLookup txIn <$> use vaasUtxoModifier
 
 -- | Add an unspent output to UTXO. If it's already there, throw an 'error'.
-utxoPut :: TxIn -> TxOutAux -> UtxoM ()
-utxoPut id txOut = utxoGet id >>= \case
-    Nothing -> identity %= MM.insert id txOut
+utxoPut :: (Monad m) => TxIn -> TxOutAux -> (VerifyAndApplyM m) ()
+utxoPut txId txOut = utxoGet txId >>= \case
+    Nothing -> vaasUtxoModifier %= MM.insert txId txOut
     Just _  ->
         -- TODO [CSL-2173]: Comment
-        error ("utxoPut: "+|id|+" is already in utxo")
+        error ("utxoPut: "+|txId|+" is already in utxo")
 
 -- | Delete an unspent input from UTXO. If it's not there, throw an 'error'.
-utxoDel :: TxIn -> UtxoM ()
-utxoDel id = utxoGet id >>= \case
-    Just _  -> identity %= MM.delete id
+utxoDel :: (Monad m) => TxIn -> (VerifyAndApplyM m) ()
+utxoDel txId = utxoGet txId >>= \case
+    Just _  -> vaasUtxoModifier %= MM.delete txId
     Nothing ->
         -- TODO [CSL-2173]: Comment
-        error ("utxoDel: "+|id|+" is not in the utxo")
+        error ("utxoDel: "+|txId|+" is not in the utxo")
 
 ----------------------------------------------------------------------------
 -- Monad used for local Toil and some actions.
@@ -137,49 +134,49 @@ data LocalToilState = LocalToilState
 
 makeLenses ''LocalToilState
 
+data LocalToilEnv = LocalToilEnv
+    { _lteUtxo       :: !UtxoLookup
+    }
+
+makeLenses ''LocalToilEnv
+
 -- | Monad in which local Toil happens.
-type LocalToilM = ReaderT UtxoLookup (State LocalToilState)
+type LocalToilM m = ReaderT LocalToilEnv (StateT LocalToilState m)
 
 -- | Check whether Tx with given identifier is stored in the pool.
-hasTx :: TxId -> LocalToilM Bool
-hasTx id = isJust <$> use (ltsMemPool . mpLocalTxs . at id)
+hasTx :: Monad m => TxId -> LocalToilM m Bool
+hasTx tid = isJust <$> use (ltsMemPool . mpLocalTxs . at tid)
 
 -- | Put a transaction with corresponding 'TxUndo' into MemPool.
 -- Transaction must not be in MemPool (but it's checked anyway).
-putTxWithUndo :: TxId -> TxAux -> TxUndo -> LocalToilM ()
-putTxWithUndo id tx undo =
-    unlessM (hasTx id) $ do
-        ltsMemPool . mpLocalTxs . at id .= Just tx
+putTxWithUndo :: Monad m => TxId -> TxAux -> TxUndo -> LocalToilM m ()
+putTxWithUndo tid tx undo =
+    unlessM (hasTx tid) $ do
+        ltsMemPool . mpLocalTxs . at tid .= Just tx
         ltsMemPool . mpSize += 1
-        ltsUndos . at id .= Just undo
+        ltsUndos . at tid .= Just undo
 
 -- | Return the number of transactions contained in the pool.
-memPoolSize :: LocalToilM Int
+memPoolSize :: Monad m => LocalToilM m Int
 memPoolSize = use $ ltsMemPool . mpSize
 
 -- | Extended version of 'LocalToilM'. It allows to put extra data
 -- into reader context, extra state and also adds logging
 -- capabilities. It's needed for explorer which has more complicated
 -- transaction processing.
-type ExtendedLocalToilM extraEnv extraState =
-    ReaderT (UtxoLookup, extraEnv) (
+type ExtendedLocalToilM extraEnv extraState m =
+    ReaderT (LocalToilEnv, extraEnv) (
         StateT (LocalToilState, extraState) (
-            NamedPureLogger Identity
+            NamedPureLogger m
     ))
 
 -- | Natural transformation from 'LocalToilM to 'ExtendedLocalToilM'.
-extendLocalToilM :: LocalToilM a -> ExtendedLocalToilM extraEnv extraState a
+extendLocalToilM :: Monad m => LocalToilM m a -> ExtendedLocalToilM extraEnv extraState m a
 extendLocalToilM = mapReaderT (mapStateT lift . zoom _1) . magnify _1
 
 ----------------------------------------------------------------------------
 -- Monad used for global Toil and some actions.
 ----------------------------------------------------------------------------
-
--- | Type which parameterizes free monad with access to Stakes.
-data StakesLookupF a =
-    StakesLookupF StakeholderId
-                  (Maybe Coin -> a)
-    deriving (Functor)
 
 -- | Mutable state used in global Toil.
 data GlobalToilState = GlobalToilState
@@ -190,101 +187,99 @@ data GlobalToilState = GlobalToilState
 -- | Default 'GlobalToilState'.
 defGlobalToilState :: GlobalToilState
 defGlobalToilState =
-    GlobalToilState {_gtsUtxoModifier = mempty, _gtsStakesView = def}
+    GlobalToilState 
+    { _gtsUtxoModifier = mempty
+    , _gtsStakesView = def
+    }
 
 makeLenses ''GlobalToilState
 
 -- | Immutable environment used in global Toil.
-data GlobalToilEnv = GlobalToilEnv
-    { _gteUtxo       :: !UtxoLookup
-    , _gteTotalStake :: !Coin
+data GlobalToilEnv m = GlobalToilEnv
+    { _gteUtxo        :: !UtxoLookup
+    , _gteTotalStake  :: !Coin
+    , _gteStakeGetter :: (StakeholderId -> m (Maybe Coin)) 
     }
 
 makeLenses ''GlobalToilEnv
 
--- | Base monad in which global Toil happens.
-type GlobalToilMBase = NamedPureLogger (F StakesLookupF)
-
 -- | Monad in which global Toil happens.
-type GlobalToilM
-     = ReaderT GlobalToilEnv (StateT GlobalToilState GlobalToilMBase)
+type GlobalToilM m
+     = ReaderT (GlobalToilEnv m) (StateT GlobalToilState (NamedPureLogger m))
 
--- | Run given action in some monad capable of getting stakeholders'
--- stakes and logging.
-runGlobalToilMBase ::
-       forall m a. (WithLogger m)
-    => (StakeholderId -> m (Maybe Coin))
-    -> GlobalToilMBase a
-    -> m a
-runGlobalToilMBase stakeGetter = launchNamedPureLog foldF'
-  where
-    foldF' :: forall x. F StakesLookupF x -> m x
-    foldF' =
-        foldF $ \case
-            StakesLookupF sId f -> f <$> stakeGetter sId
-
--- | Run 'GlobalToilM' action in some monad capable of getting
--- stakeholders' stakes and logging.
-runGlobalToilM ::
-       forall m a. (WithLogger m)
-    => GlobalToilEnv
+runGlobalToilM 
+    :: forall m a. (WithLogger m)
+    => GlobalToilEnv m
     -> GlobalToilState
-    -> (StakeholderId -> m (Maybe Coin))
-    -> GlobalToilM a
+    -> GlobalToilM m a
     -> m (a, GlobalToilState)
-runGlobalToilM env gts stakeGetter =
-    runGlobalToilMBase stakeGetter . usingStateT gts . usingReaderT env
+runGlobalToilM env gts =
+    launchNamedPureLog id . usingStateT gts . usingReaderT env
 
 -- | Get stake of a given stakeholder.
-getStake :: StakeholderId -> GlobalToilM (Maybe Coin)
-getStake id =
-    (<|>) <$> use (gtsStakesView . svStakes . at id) <*> baseLookup id
-  where
-    baseLookup :: StakeholderId -> GlobalToilM (Maybe Coin)
-    baseLookup i =
-        lift $ lift $ lift $ F $ \kPure kFree -> kFree (StakesLookupF i kPure)
+getStake :: Monad m => StakeholderId -> GlobalToilM m (Maybe Coin)
+getStake shId = do
+    stakeGetter <- view gteStakeGetter
+    (<|>) <$> use (gtsStakesView . svStakes . at shId) <*> (lift . lift . lift $ (stakeGetter shId))
 
 -- | Get total stake of all stakeholders.
-getTotalStake :: GlobalToilM Coin
+getTotalStake :: Monad m => GlobalToilM m Coin
 getTotalStake =
     maybe (view gteTotalStake) pure =<< use (gtsStakesView . svTotal)
 
 -- | Set stake of a given stakeholder.
-setStake :: StakeholderId -> Coin -> GlobalToilM ()
-setStake id c = gtsStakesView . svStakes . at id .= Just c
+setStake :: Monad m => StakeholderId -> Coin -> GlobalToilM m ()
+setStake shId c = gtsStakesView . svStakes . at shId .= Just c
 
 -- | Set total stake of all stakeholders.
-setTotalStake :: Coin -> GlobalToilM ()
+setTotalStake :: Monad m => Coin -> GlobalToilM m ()
 setTotalStake c = gtsStakesView . svTotal .= Just c
 
 -- | Extended version of 'GlobalToilM'. It allows to put extra data
 -- into reader context and extra state. It's needed for explorer which
 -- has more complicated transaction processing.
-type ExtendedGlobalToilM extraEnv extraState =
-    ReaderT (GlobalToilEnv, extraEnv) (
+type ExtendedGlobalToilM extraEnv extraState m =
+    ReaderT (GlobalToilEnv m, extraEnv) (
         StateT (GlobalToilState, extraState) (
-            GlobalToilMBase
+            NamedPureLogger m
     ))
 
 -- | Natural transformation from 'GlobalToilM to 'ExtendedGlobalToilM'.
-extendGlobalToilM :: GlobalToilM ~> ExtendedGlobalToilM extraEnv extraState
+extendGlobalToilM :: Monad m => GlobalToilM m ~> ExtendedGlobalToilM extraEnv extraState m
 extendGlobalToilM = zoom _1 . magnify _1
+
 
 ----------------------------------------------------------------------------
 -- Conversions
 ----------------------------------------------------------------------------
 
--- | Lift 'UtxoM' action to 'LocalToilM'.
-utxoMToLocalToilM :: UtxoM ~> LocalToilM
-utxoMToLocalToilM = zoom ltsUtxoModifier
+verifyAndApplyMToLocalToilM :: forall a m.Monad m => VerifyAndApplyM m a -> LocalToilM m a
+verifyAndApplyMToLocalToilM action = do
+    utxoModifier <- use ltsUtxoModifier
+    utxoLookup <- view lteUtxo
 
--- | Lift 'UtxoM' action to 'GlobalToilM'.
-utxoMToGlobalToilM :: UtxoM ~> GlobalToilM
-utxoMToGlobalToilM = mapReaderT f . magnify gteUtxo
-  where
-    f :: State UtxoModifier
-      ~> StateT GlobalToilState (NamedPureLogger (F StakesLookupF))
-    f = state . runState . zoom gtsUtxoModifier
+    (res, vaas) <- 
+        lift . lift $
+        usingStateT (VerifyAndApplyState utxoModifier) $
+        usingReaderT (VerifyAndApplyEnv utxoLookup) $
+        action
+
+    ltsUtxoModifier .= _vaasUtxoModifier vaas
+    return res
+
+verifyAndApplyMToGlobalToilM :: forall a m.Monad m => VerifyAndApplyM m a -> GlobalToilM m a
+verifyAndApplyMToGlobalToilM action = do
+    utxoModifier <- use gtsUtxoModifier
+    utxoLookup <- view gteUtxo
+
+    (res, vaas) <- 
+        lift . lift . lift $
+        usingStateT (VerifyAndApplyState utxoModifier) $
+        usingReaderT (VerifyAndApplyEnv utxoLookup) $
+        action
+
+    gtsUtxoModifier .= _vaasUtxoModifier vaas
+    return res
 
 ----------------------------------------------------------------------------
 -- Monadic actions with Pact.

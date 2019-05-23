@@ -25,9 +25,9 @@ import           Pos.Chain.Genesis (GenesisWStakeholders)
 import           Pos.Chain.Txp.Configuration (TxpConfiguration (..),
                      memPoolLimitTx)
 import           Pos.Chain.Txp.Toil.Failure (ToilVerFailure (..))
-import           Pos.Chain.Txp.Toil.Monad (GlobalToilM, LocalToilM, UtxoM,
-                     hasTx, memPoolSize, putTxWithUndo, utxoMToGlobalToilM,
-                     utxoMToLocalToilM)
+import           Pos.Chain.Txp.Toil.Monad (GlobalToilM, LocalToilM, VerifyAndApplyM,
+                     hasTx, memPoolSize, putTxWithUndo,
+                     verifyAndApplyMToLocalToilM, verifyAndApplyMToGlobalToilM)
 import           Pos.Chain.Txp.Toil.Stakes (applyTxsToStakes, rollbackTxsStakes)
 import           Pos.Chain.Txp.Toil.Types (TxFee (..))
 import           Pos.Chain.Txp.Toil.Utxo (VerifyTxUtxoRes (..))
@@ -65,30 +65,43 @@ import           Pos.Util (liftEither)
 -- witnesses, addresses, attributes) must be known. Otherwise unknown
 -- data is just ignored.
 verifyToil ::
-       ProtocolMagic
+       Monad m
+    => ProtocolMagic
     -> TxValidationRules
     -> BlockVersionData
     -> Set Address
     -> EpochIndex
     -> Bool
     -> [TxAux]
-    -> ExceptT ToilVerFailure UtxoM TxpUndo
+    -> ExceptT ToilVerFailure (GlobalToilM m) TxpUndo
 verifyToil pm txValRules bvd lockedAssets curEpoch verifyAllIsKnown =
-    mapM (verifyAndApplyTx pm txValRules bvd lockedAssets curEpoch verifyAllIsKnown . withTxId)
+    mapM verifyTx
+  where 
+    verifyTx tx = 
+        mapExceptT verifyAndApplyMToGlobalToilM $
+            verifyAndApplyTx pm txValRules bvd lockedAssets curEpoch verifyAllIsKnown $ withTxId tx
 
 -- | Apply transactions from one block. They must be valid (for
 -- example, it implies topological sort).
-applyToil :: GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM ()
+applyToil :: Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM m ()
 applyToil _ [] = pass
 applyToil bootStakeholders txun = do
     applyTxsToStakes bootStakeholders txun
-    utxoMToGlobalToilM $ mapM_ (applyTxToUtxo' . withTxId . fst) txun
+    mapM_ applyItem txun
+  where
+    applyTx (TxAux{..}, _) = do
+        let txId = hash taTx
+        lift $ Utxo.applyTxToUtxo $ WithHash taTx txId
+
+    applyItem = verifyAndApplyMToGlobalToilM . runExceptT . applyTx
 
 -- | Rollback transactions from one block.
-rollbackToil :: GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM ()
+rollbackToil :: Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM m ()
 rollbackToil bootStakeholders txun = do
     rollbackTxsStakes bootStakeholders txun
-    utxoMToGlobalToilM $ mapM_ Utxo.rollbackTxUtxo $ reverse txun
+    verifyAndApplyMToGlobalToilM $
+        mapM_ Utxo.rollbackTxUtxo $ reverse txun
+    -- only rollback utxo
 
 ----------------------------------------------------------------------------
 -- Local
@@ -97,30 +110,33 @@ rollbackToil bootStakeholders txun = do
 -- | Verify one transaction and also add it to mem pool and apply to utxo
 -- if transaction is valid.
 processTx
-    :: ProtocolMagic
+    :: Monad m
+    => ProtocolMagic
     -> TxValidationRules
     -> TxpConfiguration
     -> BlockVersionData
     -> EpochIndex
     -> (TxId, TxAux)
-    -> ExceptT ToilVerFailure LocalToilM TxUndo
+    -> ExceptT ToilVerFailure (LocalToilM m) TxUndo
 processTx pm txValRules txpConfig bvd curEpoch tx@(id, aux) = do
     whenM (lift $ hasTx id) $ throwError ToilKnown
     whenM ((>= memPoolLimitTx txpConfig) <$> lift memPoolSize) $
         throwError (ToilOverwhelmed $ memPoolLimitTx txpConfig)
-    undo <- mapExceptT utxoMToLocalToilM $ verifyAndApplyTx pm txValRules bvd (tcAssetLockedSrcAddrs txpConfig) curEpoch True tx
+    undo <- mapExceptT verifyAndApplyMToLocalToilM $ 
+            verifyAndApplyTx pm txValRules bvd (tcAssetLockedSrcAddrs txpConfig) curEpoch True tx
     undo <$ lift (putTxWithUndo id aux undo)
 
 -- | Get rid of invalid transactions.
 -- All valid transactions will be added to mem pool and applied to utxo.
 normalizeToil
-    :: ProtocolMagic
+    :: forall m.Monad m
+    => ProtocolMagic
     -> TxValidationRules
     -> TxpConfiguration
     -> BlockVersionData
     -> EpochIndex
     -> [(TxId, TxAux)]
-    -> LocalToilM ()
+    -> LocalToilM m ()
 normalizeToil pm txValRules txpConfig bvd curEpoch txs = mapM_ normalize ordered
   where
     -- If there is a cycle in the tx list, topsortTxs returns Nothing.
@@ -130,7 +146,7 @@ normalizeToil pm txValRules txpConfig bvd curEpoch txs = mapM_ normalize ordered
     wHash (i, txAux) = WithHash (taTx txAux) i
     normalize ::
            (TxId, TxAux)
-        -> LocalToilM ()
+        -> LocalToilM m ()
     normalize = void . runExceptT . processTx pm txValRules txpConfig bvd curEpoch
 
 ----------------------------------------------------------------------------
@@ -140,14 +156,15 @@ normalizeToil pm txValRules txpConfig bvd curEpoch txs = mapM_ normalize ordered
 -- Note: it doesn't consider/affect stakes! That's because we don't
 -- care about stakes for local txp.
 verifyAndApplyTx ::
-       ProtocolMagic
+       Monad m
+    => ProtocolMagic
     -> TxValidationRules
     -> BlockVersionData
     -> Set Address
     -> EpochIndex
     -> Bool
     -> (TxId, TxAux)
-    -> ExceptT ToilVerFailure UtxoM TxUndo
+    -> ExceptT ToilVerFailure (VerifyAndApplyM m) TxUndo
 verifyAndApplyTx pm txValRules adoptedBVD lockedAssets curEpoch verifyVersions tx@(_, txAux) = do
     whenLeft (checkTxAux txValRules txAux) (throwError . ToilInconsistentTxAux)
     let ctx = Utxo.VTxContext verifyVersions (makeNetworkMagic pm)
@@ -240,5 +257,5 @@ verifyTxFeePolicy (TxFee txFee) policy txSize = case policy of
 withTxId :: TxAux -> (TxId, TxAux)
 withTxId aux = (hash (taTx aux), aux)
 
-applyTxToUtxo' :: (TxId, TxAux) -> UtxoM ()
+applyTxToUtxo' :: Monad m => (TxId, TxAux) -> VerifyAndApplyM m ()
 applyTxToUtxo' (i, TxAux tx _) = Utxo.applyTxToUtxo (WithHash tx i)

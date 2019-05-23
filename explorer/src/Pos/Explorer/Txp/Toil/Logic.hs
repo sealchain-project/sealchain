@@ -47,16 +47,17 @@ import           Pos.Util.Wlog (logError)
 -- | Apply transactions from one block. They must be valid (for
 -- example, it implies topological sort).
 eApplyToil
-    :: GenesisWStakeholders
+    :: Monad m
+    => GenesisWStakeholders
     -> Maybe Timestamp
     -> [(TxAux, TxUndo)]
     -> HeaderHash
-    -> EGlobalToilM ()
+    -> EGlobalToilM m ()
 eApplyToil bootStakeholders mTxTimestamp txun hh = do
     extendGlobalToilM $ Txp.applyToil bootStakeholders txun
     explorerExtraMToEGlobalToilM $ mapM_ applier $ zip [0..] txun
   where
-    applier :: (Word32, (TxAux, TxUndo)) -> ExplorerExtraM ()
+    applier :: Monad m => (Word32, (TxAux, TxUndo)) -> ExplorerExtraM m ()
     applier (i, (txAux, txUndo)) = do
         let tx = taTx txAux
             id = hash tx
@@ -68,12 +69,12 @@ eApplyToil bootStakeholders mTxTimestamp txun hh = do
         updateUtxoSumFromBalanceUpdate balanceUpdate
 
 -- | Rollback transactions from one block.
-eRollbackToil :: GenesisWStakeholders -> [(TxAux, TxUndo)] -> EGlobalToilM ()
+eRollbackToil :: forall m.Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> EGlobalToilM m ()
 eRollbackToil bootStakeholders txun = do
     extendGlobalToilM $ Txp.rollbackToil bootStakeholders txun
     explorerExtraMToEGlobalToilM $ mapM_ extraRollback $ reverse txun
   where
-    extraRollback :: (TxAux, TxUndo) -> ExplorerExtraM ()
+    extraRollback :: (TxAux, TxUndo) -> ExplorerExtraM m ()
     extraRollback (txAux, txUndo) = do
         delTxExtraWithHistory (hash (taTx txAux)) $
           getTxRelatedAddrs txAux txUndo
@@ -92,14 +93,15 @@ eRollbackToil bootStakeholders txun = do
 -- | Verify one transaction and also add it to mem pool and apply to utxo
 -- if transaction is valid.
 eProcessTx
-    :: ProtocolMagic
+    :: Monad m
+    => ProtocolMagic
     -> TxValidationRules
     -> TxpConfiguration
     -> BlockVersionData
     -> EpochIndex
     -> (TxId, TxAux)
     -> (TxUndo -> TxExtra)
-    -> ExceptT ToilVerFailure ELocalToilM ()
+    -> ExceptT ToilVerFailure (ELocalToilM m) ()
 eProcessTx pm txValRules txpConfig bvd curEpoch tx@(id, aux) createExtra = do
     undo <- mapExceptT extendLocalToilM $ Txp.processTx pm txValRules txpConfig bvd curEpoch tx
     lift $ explorerExtraMToELocalToilM $ do
@@ -112,13 +114,14 @@ eProcessTx pm txValRules txpConfig bvd curEpoch tx@(id, aux) createExtra = do
 -- | Get rid of invalid transactions.
 -- All valid transactions will be added to mem pool and applied to utxo.
 eNormalizeToil
-    :: ProtocolMagic
+    :: Monad m
+    => ProtocolMagic
     -> TxValidationRules
     -> TxpConfiguration
     -> BlockVersionData
     -> EpochIndex
     -> [(TxId, (TxAux, TxExtra))]
-    -> ELocalToilM ()
+    -> ELocalToilM m ()
 eNormalizeToil pm txValRules txpConfig bvd curEpoch txs = mapM_ normalize ordered
   where
     ordered = fromMaybe txs $ topsortTxs wHash txs
@@ -135,22 +138,22 @@ data BalanceUpdate = BalanceUpdate
     , plusBalance  :: [(Address, CoinPair)]
     }
 
-modifyAddrHistory :: (AddrHistory -> AddrHistory) -> Address -> ExplorerExtraM ()
+modifyAddrHistory :: Monad m => (AddrHistory -> AddrHistory) -> Address -> ExplorerExtraM m ()
 modifyAddrHistory f addr = updateAddrHistory addr . f =<< getAddrHistory addr
 
-putTxExtraWithHistory :: TxId -> TxExtra -> [Address] -> ExplorerExtraM ()
+putTxExtraWithHistory :: Monad m => TxId -> TxExtra -> [Address] -> ExplorerExtraM m ()
 putTxExtraWithHistory id extra addrs = do
     putTxExtra id extra
     for_ addrs $ modifyAddrHistory $
         NewestFirst . (id :) . getNewestFirst
 
-delTxExtraWithHistory :: TxId -> [Address] -> ExplorerExtraM ()
+delTxExtraWithHistory :: Monad m => TxId -> [Address] -> ExplorerExtraM m ()
 delTxExtraWithHistory id addrs = do
     delTxExtra id
     for_ addrs $ modifyAddrHistory $
         NewestFirst . delete id . getNewestFirst
 
-updateUtxoSumFromBalanceUpdate :: BalanceUpdate -> ExplorerExtraM ()
+updateUtxoSumFromBalanceUpdate :: Monad m => BalanceUpdate -> ExplorerExtraM m ()
 updateUtxoSumFromBalanceUpdate balanceUpdate = do
     let plusCoin  = sumCoins $ map (fst . snd) $ plusBalance  balanceUpdate
         minusCoin = sumCoins $ map (fst . snd) $ minusBalance balanceUpdate
@@ -178,10 +181,10 @@ combineBalanceUpdates BalanceUpdate {..} =
                         HM.fromListWith unsafeAddCoinPair minusBalance
     in plusCombined <> minusCombined
 
-updateAddrBalances :: BalanceUpdate -> ExplorerExtraM ()
+updateAddrBalances :: forall m.Monad m => BalanceUpdate -> ExplorerExtraM m ()
 updateAddrBalances (combineBalanceUpdates -> updates) = mapM_ updater updates
   where
-    updater :: (Address, (Sign, CoinPair)) -> ExplorerExtraM ()
+    updater :: (Address, (Sign, CoinPair)) -> ExplorerExtraM m ()
     updater (addr, (Plus, plus)) = do
         currentBalance <- fromMaybe (mkCoin 0, mkGoldDollar 0) <$> getAddrBalance addr
         let newBalance = unsafeAddCoinPair currentBalance plus

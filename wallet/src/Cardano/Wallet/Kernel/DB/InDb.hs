@@ -283,6 +283,14 @@ instance SC.SafeCopy (InDb Txp.TxInWitness) where
             SC.safePut (a :: Word8)
             SC.safePut (b :: B.ByteString)
 
+instance SC.SafeCopy (InDb Txp.StateRoot) where
+    getCopy = SC.contain $ do
+       bs :: ByteString <- SC.safeGet
+       pure (InDb (Txp.StateRoot bs))
+    putCopy (InDb (Txp.StateRoot bs)) = SC.contain $ do
+       SC.safePut (bs :: ByteString)
+
+
 instance SC.SafeCopy (InDb Core.AddrType) where
     getCopy = SC.contain $ fmap InDb $ do
         SC.safeGet >>= \case
@@ -610,17 +618,20 @@ instance SC.SafeCopy (InDb Core.MainExtraHeaderData) where
     getCopy = SC.contain $ do
         blockVers <- SC.safeGet
         softVers <- SC.safeGet
+        stateRoot <- SC.safeGet
         attrs <- SC.safeGet
         ebDataProof <- SC.safeGet
         pure $ Core.MainExtraHeaderData
             <$> blockVers
             <*> softVers
+            <*> stateRoot
             <*> attrs
             <*> ebDataProof
 
-    putCopy (InDb (Core.MainExtraHeaderData b s a e)) = SC.contain $ do
+    putCopy (InDb (Core.MainExtraHeaderData b s r a e)) = SC.contain $ do
         safePutDb b
         safePutDb s
+        safePutDb r
         safePutDb a
         safePutDb e
 

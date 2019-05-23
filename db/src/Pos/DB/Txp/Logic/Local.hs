@@ -19,21 +19,19 @@ module Pos.DB.Txp.Logic.Local
 
 import           Universum
 
-import qualified Control.Concurrent.STM as STM
 import           Control.Monad.Except (mapExceptT, runExceptT, throwError)
-import           Control.Monad.Morph (generalize, hoist)
 import           Data.Default (Default (def))
 import qualified Data.HashMap.Strict as HM
 import           Formatting (build, sformat, (%))
 
 import           Pos.Chain.Block (HeaderHash)
 import           Pos.Chain.Genesis as Genesis (Config (..), configEpochSlots)
-import           Pos.Chain.Txp (ExtendedLocalToilM, LocalToilState (..),
-                     MemPool, ToilVerFailure (..), TxAux (..), TxId, TxUndo,
-                     TxValidationRules (..), TxpConfiguration (..), UndoMap,
-                     Utxo, UtxoLookup, UtxoModifier, extendLocalToilM,
-                     mkLiveTxValidationRules, mpLocalTxs, normalizeToil,
-                     processTx, topsortTxs, utxoToLookup)
+import           Pos.Chain.Txp (ExtendedLocalToilM, LocalToilEnv (..), 
+                     LocalToilState (..), MemPool, ToilVerFailure (..), 
+                     TxAux (..), TxId, TxUndo, TxValidationRules (..), 
+                     TxpConfiguration (..), UndoMap, Utxo, UtxoModifier, 
+                     extendLocalToilM, mkLiveTxValidationRules, mpLocalTxs, 
+                     normalizeToil, processTx, topsortTxs, utxoToLookup)
 import           Pos.Chain.Update (BlockVersionData)
 import           Pos.Core (EpochIndex, SlotCount, siEpoch)
 import           Pos.Core.JsonLog (CanJsonLog (..))
@@ -49,9 +47,9 @@ import           Pos.DB.GState.Lock (Priority (..), StateLock, StateLockMetrics,
                      withStateLock)
 import           Pos.DB.Txp.Logic.Common (buildUtxo)
 import           Pos.DB.Txp.MemState (GenericTxpLocalData (..), MempoolExt,
-                     MonadTxpMem, TxpLocalWorkMode, getLocalTxsMap,
+                     MonadTxpMem, TxpLocalWorkMode, getLocalTxsMap, getTxpTip,
                      getLocalUndos, getMemPool, getTxpExtra, getUtxoModifier,
-                     setTxpLocalData, withTxpLocalData, withTxpLocalDataLog)
+                     setTxpLocalData, withTxpLocalData)
 import           Pos.Util.Util (HasLens')
 import           Pos.Util.Wlog (NamedPureLogger, WithLogger, launchNamedPureLog,
                      logDebug, logError, logWarning)
@@ -101,7 +99,7 @@ txProcessTransactionNoLock genesisConfig txpConfig = txProcessTransactionAbstrac
         -> TxValidationRules
         -> EpochIndex
         -> (TxId, TxAux)
-        -> ExceptT ToilVerFailure (ExtendedLocalToilM () ()) TxUndo
+        -> ExceptT ToilVerFailure (ExtendedLocalToilM () () m) TxUndo
     processTxHoisted bvd txValRules = do
         mapExceptT extendLocalToilM
             ... (processTx (configProtocolMagic genesisConfig) txValRules txpConfig bvd)
@@ -112,7 +110,7 @@ txProcessTransactionAbstract ::
     => SlotCount
     -> Genesis.Config
     -> (Utxo -> TxAux -> m extraEnv)
-    -> (BlockVersionData -> TxValidationRules -> EpochIndex -> (TxId, TxAux) -> ExceptT ToilVerFailure (ExtendedLocalToilM extraEnv extraState) a)
+    -> (BlockVersionData -> TxValidationRules -> EpochIndex -> (TxId, TxAux) -> ExceptT ToilVerFailure (ExtendedLocalToilM extraEnv extraState m) a)
     -> (TxId, TxAux)
     -> m (Either ToilVerFailure ())
 txProcessTransactionAbstract epochSlots genesisConfig buildEnv txAction itw@(txId, txAux) = reportTipMismatch $ runExceptT $ do
@@ -136,54 +134,55 @@ txProcessTransactionAbstract epochSlots genesisConfig buildEnv txAction itw@(txI
     utxo <- buildUtxo utxoModifier [txAux]
     extraEnv <- lift $ buildEnv utxo txAux
     bvd <- gsAdoptedBVData
-    let env = (utxoToLookup utxo, extraEnv)
     currentEpoch <- epochOrSlotToEpochIndex . getEpochOrSlot <$> getTipHeader
     let txValRulesConfig = configTxValRules $ genesisConfig
         txValRules = mkLiveTxValidationRules currentEpoch txValRulesConfig
-    pRes <- lift . withTxpLocalDataLog $ \txpData -> do
-        mp <- lift $ getMemPool txpData
-        undo <- lift $ getLocalUndos txpData
-        tip <- lift $ STM.readTVar (txpTip txpData)
-        extra <- lift $ getTxpExtra txpData
-        tm <- hoist generalize $
-                  processTransactionPure
-                  bvd
-                  txValRules
-                  epoch
-                  env
-                  tipDB
-                  itw
-                  (utxoModifier, mp, undo, tip, extra)
-        forM tm $ lift . setTxpLocalData txpData
-    -- We report 'ToilTipsMismatch' as an error, because usually it
-    -- should't happen. If it happens, it's better to look at logs.
+
+    mp <- withTxpLocalData getMemPool
+    undo <- withTxpLocalData getLocalUndos
+    tip <- withTxpLocalData getTxpTip
+    extra <- withTxpLocalData getTxpExtra
+    pRes <- lift $ launchNamedPureLog id $ 
+                processTransactionPure
+                bvd
+                txValRules
+                epoch
+                utxo
+                extraEnv
+                tipDB
+                itw
+                (utxoModifier, mp, undo, tip, extra)
     case pRes of
         Left er -> do
             logDebug $ sformat ("Transaction processing failed: " %build) txId
             throwError er
-        Right _ ->
+        Right txpData -> do
             logDebug
                 (sformat ("Transaction is processed successfully: " %build) txId)
+            lift $ withTxpLocalData $ flip setTxpLocalData txpData
+
   where
     processTransactionPure
         :: BlockVersionData
         -> TxValidationRules
         -> EpochIndex
-        -> (UtxoLookup, extraEnv)
+        -> Utxo
+        -> extraEnv
         -> HeaderHash
         -> (TxId, TxAux)
         -> (UtxoModifier, MemPool, UndoMap, HeaderHash, extraState)
-        -> NamedPureLogger Identity (Either ToilVerFailure (UtxoModifier, MemPool, UndoMap, HeaderHash, extraState))
-    processTransactionPure bvd txValRules curEpoch env tipDB tx (um, mp, undo, tip, extraState)
+        -> NamedPureLogger m (Either ToilVerFailure (UtxoModifier, MemPool, UndoMap, HeaderHash, extraState))
+    processTransactionPure bvd txValRules curEpoch utxo extraEnv tipDB tx (um, mp, undo, tip, extraState)
         | tipDB /= tip = pure . Left $ ToilTipsMismatch tipDB tip
         | otherwise = do
+            let initialEnv = LocalToilEnv { _lteUtxo = (utxoToLookup utxo) }
             let initialState = LocalToilState { _ltsMemPool = mp
                                               , _ltsUtxoModifier = um
                                               , _ltsUndos = undo
                                               }
             res :: (Either ToilVerFailure a, (LocalToilState, extraState)) <-
                     usingStateT (initialState, extraState) $
-                    usingReaderT env $
+                    usingReaderT (initialEnv, extraEnv) $
                     runExceptT $
                     txAction bvd txValRules curEpoch tx
             case res of
@@ -219,7 +218,7 @@ txNormalize genesisConfig txValRules txpConfig = do
         -> BlockVersionData
         -> EpochIndex
         -> HashMap TxId TxAux
-        -> ExtendedLocalToilM () () ()
+        -> ExtendedLocalToilM () () m ()
     normalizeToilHoisted txValRules' bvd epoch txs =
         extendLocalToilM
             $ normalizeToil (configProtocolMagic genesisConfig) txValRules' txpConfig bvd epoch
@@ -229,7 +228,7 @@ txNormalizeAbstract ::
        (TxpLocalWorkMode ctx m, MempoolExt m ~ extraState)
     => SlotCount
     -> (Utxo -> [TxAux] -> m extraEnv)
-    -> (BlockVersionData -> EpochIndex -> HashMap TxId TxAux -> ExtendedLocalToilM extraEnv extraState ())
+    -> (BlockVersionData -> EpochIndex -> HashMap TxId TxAux -> ExtendedLocalToilM extraEnv extraState m ())
     -> m ()
 txNormalizeAbstract epochSlots buildEnv normalizeAction =
     getCurrentSlot epochSlots >>= \case
@@ -244,6 +243,7 @@ txNormalizeAbstract epochSlots buildEnv normalizeAction =
             utxo <- buildUtxo mempty txAuxes
             extraEnv <- buildEnv utxo txAuxes
             bvd <- gsAdoptedBVData
+            let initialEnv = LocalToilEnv { _lteUtxo = (utxoToLookup utxo) }
             let initialState =
                     LocalToilState
                         { _ltsMemPool = def
@@ -251,11 +251,11 @@ txNormalizeAbstract epochSlots buildEnv normalizeAction =
                         , _ltsUndos = mempty
                         }
             (LocalToilState {..}, newExtraState) <-
-                launchNamedPureLog generalize $
+                launchNamedPureLog id $
                 execStateT
                     (runReaderT
                          (normalizeAction bvd epoch localTxs)
-                         (utxoToLookup utxo, extraEnv))
+                         (initialEnv, extraEnv))
                     (initialState, def)
             withTxpLocalData $ flip setTxpLocalData
                 ( _ltsUtxoModifier

@@ -11,17 +11,18 @@ extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     UTxO.DSL
-                       UTxO.Bootstrap
-                       UTxO.Context
-                       UTxO.Crypto
-                       UTxO.Generator
-                       UTxO.IntTrans
-                       UTxO.Translate
+  exposed-modules:     
+                      --  UTxO.DSL
+                      --  UTxO.Bootstrap
+                      --  UTxO.Context
+                      --  UTxO.Crypto
+                      --  UTxO.Generator
+                      --  UTxO.IntTrans
+                      --  UTxO.Translate
                        UTxO.Util
-                       UTxO.Verify
+                      --  UTxO.Verify
 
-                       Data.Validated
+                      --  Data.Validated
   -- other-modules:
   build-depends:       base >=4.10 && <4.12
                      , QuickCheck

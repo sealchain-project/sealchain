@@ -31,11 +31,11 @@ import           Pos.Chain.Txp (ExtendedGlobalToilM, GlobalToilEnv (..),
                      GlobalToilM, GlobalToilState (..), StakesView (..),
                      ToilVerFailure, TxAux, TxUndo, TxValidationRules (..),
                      TxValidationRulesConfig (..), TxpConfiguration (..),
-                     TxpUndo, Utxo, UtxoM, UtxoModifier, applyToil,
+                     TxpUndo, Utxo, UtxoModifier, applyToil,
                      defGlobalToilState, flattenTxPayload, gtsUtxoModifier,
-                     mkLiveTxValidationRules, rollbackToil, runGlobalToilMBase,
-                     runUtxoM, utxoToLookup, verifyToil)
-import           Pos.Core (epochIndexL)
+                     mkLiveTxValidationRules, rollbackToil, runGlobalToilM,
+                     utxoToLookup, verifyToil)
+import           Pos.Core (epochIndexL, mkCoin)
 import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..))
 import           Pos.Core.Exception (assertionFailed)
 import           Pos.Core.Slotting (epochOrSlotToEpochIndex, getEpochOrSlot)
@@ -51,6 +51,7 @@ import           Pos.DB.Txp.Stakes (StakesOp (..))
 import           Pos.DB.Txp.Utxo (UtxoOp (..))
 import           Pos.Util.AssertMode (inAssertMode)
 import qualified Pos.Util.Modifier as MM
+import           Pos.Util.Wlog (launchNamedPureLog)
 
 ----------------------------------------------------------------------------
 -- Settings
@@ -86,7 +87,7 @@ verifyBlocks ::
     -> m $ Either ToilVerFailure $ OldestFirst NE TxpUndo
 verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $ do
     bvd <- gsAdoptedBVData
-    let verifyPure :: TxValidationRules -> [TxAux] -> UtxoM (Either ToilVerFailure TxpUndo)
+    let verifyPure :: TxValidationRules -> [TxAux] -> GlobalToilM m (Either ToilVerFailure TxpUndo)
         verifyPure txValRules = runExceptT
             . verifyToil pm txValRules bvd (tcAssetLockedSrcAddrs txpConfig) epoch verifyAllIsKnown
         foldStep
@@ -98,10 +99,21 @@ verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $
             currentEpoch <- epochOrSlotToEpochIndex . getEpochOrSlot <$> lift getTipHeader
             baseUtxo <- utxoToLookup <$> buildUtxo modifier txAuxes
             let txValRules = mkLiveTxValidationRules currentEpoch tvrc
-            case runUtxoM modifier baseUtxo (verifyPure txValRules txAuxes) of
-                (Left err, _) -> throwError err
-                (Right txpUndo, newModifier) ->
-                    return (newModifier, txpUndo : undos)
+            let gte = GlobalToilEnv { _gteUtxo = baseUtxo
+                                    , _gteTotalStake = (mkCoin 0) 
+                                    -- ^ because we do not need stakes while verifying
+                                    , _gteStakeGetter = getRealStake
+                                    }
+            let gts = GlobalToilState { _gtsUtxoModifier = modifier
+                                      , _gtsStakesView = def 
+                                      -- ^ because we do not need stakes while verifying
+                                      }
+            res <- lift $ runGlobalToilM gte gts (verifyPure txValRules txAuxes)
+            case res of
+                (Left err, _)         -> throwError err
+                (Right txpUndo, gts') ->
+                    return 
+                      ( gts' ^. gtsUtxoModifier, (txpUndo : undos))
         -- 'NE.fromList' is safe here, because there will be at least
         -- one 'foldStep' (since 'newChain' is not empty) and it will
         -- either fail (and then 'convertRes' will not be called) or
@@ -121,7 +133,7 @@ verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $
 ----------------------------------------------------------------------------
 
 data ProcessBlundsSettings extraEnv extraState m = ProcessBlundsSettings
-    { pbsProcessSingle   :: TxpBlund -> m (ExtendedGlobalToilM extraEnv extraState ())
+    { pbsProcessSingle   :: TxpBlund -> m (ExtendedGlobalToilM extraEnv extraState m ())
     , pbsCreateEnv       :: Utxo -> [TxAux] -> m extraEnv
     , pbsExtraOperations :: extraState -> SomeBatchOp
     , pbsIsRollback      :: !Bool
@@ -158,20 +170,20 @@ processBlunds ProcessBlundsSettings {..} blunds = do
                (GlobalToilState, extraState)
             -> TxpBlund
             -> m (GlobalToilState, extraState)
-        step st txpBlund = do
+        step gts txpBlund = do
             processSingle <- pbsProcessSingle txpBlund
             let txAuxesAndUndos = blundToAuxNUndo txpBlund
                 txAuxes = fst <$> txAuxesAndUndos
-            baseUtxo <- buildBaseUtxo (st ^. _1 . gtsUtxoModifier) txAuxes
+            baseUtxo <- buildBaseUtxo (gts ^. _1 . gtsUtxoModifier) txAuxes
             extraEnv <- pbsCreateEnv baseUtxo txAuxes
-            let gte =
-                    GlobalToilEnv
+            let gte = GlobalToilEnv
                         { _gteUtxo = utxoToLookup baseUtxo
                         , _gteTotalStake = totalStake
+                        , _gteStakeGetter = getRealStake
                         }
             let env = (gte, extraEnv)
-            runGlobalToilMBase getRealStake . flip execStateT st .
-                usingReaderT env $
+            launchNamedPureLog id $ 
+                flip execStateT gts . usingReaderT env $
                 processSingle
     toBatchOp <$> foldM step (defGlobalToilState, def) blunds
 
@@ -200,7 +212,7 @@ applyBlocksWith pm genesisConfig txpConfig settings blunds = do
 processBlundsSettings ::
        forall m. Monad m
     => Bool
-    -> ([(TxAux, TxUndo)] -> GlobalToilM ())
+    -> ([(TxAux, TxUndo)] -> GlobalToilM m ())
     -> ProcessBlundsSettings () () m
 processBlundsSettings isRollback pureAction =
     ProcessBlundsSettings
@@ -210,7 +222,7 @@ processBlundsSettings isRollback pureAction =
         , pbsIsRollback = isRollback
         }
   where
-    processSingle :: TxpBlund -> ExtendedGlobalToilM () () ()
+    processSingle :: TxpBlund -> ExtendedGlobalToilM () () m ()
     processSingle = zoom _1 . magnify _1 . pureAction . blundToAuxNUndo
 
 rollbackBlocks ::

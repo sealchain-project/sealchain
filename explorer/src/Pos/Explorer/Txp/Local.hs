@@ -83,7 +83,7 @@ eTxProcessTransactionNoLock genesisConfig txpConfig itw = getCurrentSlot epochSl
         -> TxValidationRules
         -> EpochIndex
         -> (TxId, TxAux)
-        -> ExceptT ToilVerFailure ELocalToilM ()
+        -> ExceptT ToilVerFailure (ELocalToilM m) ()
     processTx' mTxTimestamp bvd txValRules epoch tx = eProcessTx
         (configProtocolMagic genesisConfig)
         txValRules
@@ -114,7 +114,7 @@ eTxNormalize genesisConfig txValRules txpConfig = do
         -> BlockVersionData
         -> EpochIndex
         -> HashMap TxId TxAux
-        -> ELocalToilM ()
+        -> ELocalToilM m ()
     normalizeToil' extras txValRules' bvd epoch txs =
         let toNormalize = HM.toList $ HM.intersectionWith (,) txs extras
         in eNormalizeToil (configProtocolMagic genesisConfig)

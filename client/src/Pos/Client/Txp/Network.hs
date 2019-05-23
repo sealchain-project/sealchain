@@ -22,7 +22,6 @@ import           Pos.Chain.Txp (Tx, TxAux (..), TxId, TxMsgContents (..),
 import           Pos.Client.Txp.Addresses (MonadAddresses (..))
 import           Pos.Client.Txp.Balances (MonadBalances (..))
 import           Pos.Client.Txp.Failure (TxError (..))
-import           Pos.Client.Txp.History (MonadTxHistory (..))
 import           Pos.Client.Txp.Util (InputSelectionPolicy,
                      PendingAddresses (..), TxCreateMode,
                      createMTx, createUnsignedTx)
@@ -39,7 +38,6 @@ import           Pos.WorkMode.Class (MinWorkMode)
 type TxMode ctx m
     = ( MinWorkMode ctx m
       , MonadBalances m
-      , MonadTxHistory m
       , MonadMask m
       , MonadThrow m
       , TxCreateMode m

@@ -26,8 +26,9 @@ import           Pos.AllSecrets (asSecretKeys, asSpendingData,
                      unInvAddrSpendingData, unInvSecretsMap)
 import           Pos.Chain.Genesis as Genesis (Config (..))
 import           Pos.Chain.Txp (Tx (..), TxAux (..), TxIn (..), TxOut (..),
-                     TxOutAux (..), TxpConfiguration, Utxo, execUtxoM,
+                     TxOutAux (..), TxpConfiguration, Utxo,
                      utxoToLookup)
+import           Pos.Chain.Txp.Toil.Utxo.Monad (execUtxoM, applyTxToUtxo)
 
 import qualified Pos.Chain.Txp as Utxo
 import           Pos.Client.Txp.Failure (TxError (..))
@@ -240,7 +241,7 @@ genTxPayload genesisConfig txpConfig = do
             Right _ -> do
                 utxoLookup <- utxoToLookup <$> use gtdUtxo
                 let utxoModifier = execUtxoM mempty utxoLookup $
-                        Utxo.applyTxToUtxo (WithHash tx txId)
+                        applyTxToUtxo (WithHash tx txId)
                 gtdUtxo %= Modifier.modifyMap utxoModifier
                 gtdUtxoKeys %= V.filter (`notElem` txIns)
                 let outsAsIns =
