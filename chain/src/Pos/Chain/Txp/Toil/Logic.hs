@@ -117,7 +117,7 @@ processTx
     -> BlockVersionData
     -> EpochIndex
     -> (TxId, TxAux)
-    -> ExceptT ToilVerFailure (LocalToilM m) TxUndo
+    -> ExceptT ToilVerFailure (LocalToilM p m) TxUndo
 processTx pm txValRules txpConfig bvd curEpoch tx@(id, aux) = do
     whenM (lift $ hasTx id) $ throwError ToilKnown
     whenM ((>= memPoolLimitTx txpConfig) <$> lift memPoolSize) $
@@ -129,14 +129,14 @@ processTx pm txValRules txpConfig bvd curEpoch tx@(id, aux) = do
 -- | Get rid of invalid transactions.
 -- All valid transactions will be added to mem pool and applied to utxo.
 normalizeToil
-    :: forall m.Monad m
+    :: forall p m.Monad m
     => ProtocolMagic
     -> TxValidationRules
     -> TxpConfiguration
     -> BlockVersionData
     -> EpochIndex
     -> [(TxId, TxAux)]
-    -> LocalToilM m ()
+    -> LocalToilM p m ()
 normalizeToil pm txValRules txpConfig bvd curEpoch txs = mapM_ normalize ordered
   where
     -- If there is a cycle in the tx list, topsortTxs returns Nothing.
@@ -146,7 +146,7 @@ normalizeToil pm txValRules txpConfig bvd curEpoch txs = mapM_ normalize ordered
     wHash (i, txAux) = WithHash (taTx txAux) i
     normalize ::
            (TxId, TxAux)
-        -> LocalToilM m ()
+        -> LocalToilM p m ()
     normalize = void . runExceptT . processTx pm txValRules txpConfig bvd curEpoch
 
 ----------------------------------------------------------------------------

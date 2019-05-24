@@ -101,7 +101,7 @@ eProcessTx
     -> EpochIndex
     -> (TxId, TxAux)
     -> (TxUndo -> TxExtra)
-    -> ExceptT ToilVerFailure (ELocalToilM m) ()
+    -> ExceptT ToilVerFailure (ELocalToilM p m) ()
 eProcessTx pm txValRules txpConfig bvd curEpoch tx@(id, aux) createExtra = do
     undo <- mapExceptT extendLocalToilM $ Txp.processTx pm txValRules txpConfig bvd curEpoch tx
     lift $ explorerExtraMToELocalToilM $ do
@@ -121,7 +121,7 @@ eNormalizeToil
     -> BlockVersionData
     -> EpochIndex
     -> [(TxId, (TxAux, TxExtra))]
-    -> ELocalToilM m ()
+    -> ELocalToilM p m ()
 eNormalizeToil pm txValRules txpConfig bvd curEpoch txs = mapM_ normalize ordered
   where
     ordered = fromMaybe txs $ topsortTxs wHash txs

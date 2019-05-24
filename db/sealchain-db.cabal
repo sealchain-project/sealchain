@@ -52,6 +52,7 @@ library
   other-modules:       Pos.DB.Txp.Logic.Common
                        Pos.DB.Txp.Logic.Global
                        Pos.DB.Txp.Logic.Local
+                       Pos.DB.Txp.Logic.Types
                        Pos.DB.Txp.MemState.Class
                        Pos.DB.Txp.MemState.Holder
                        Pos.DB.Txp.MemState.Metrics
@@ -132,6 +133,8 @@ library
                      , sealchain-chain
                      , sealchain-core
                      , sealchain-crypto
+                     , sealchain-mpt
+                     , sealchain-pact
                      , sealchain-util
                      , concurrent-extra
                      , conduit

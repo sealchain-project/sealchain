@@ -50,6 +50,7 @@ import qualified Pos.DB.Block as DB
 import           Pos.DB.DB (gsAdoptedBVDataDefault)
 import           Pos.DB.Delegation (mkDelegationVar)
 import           Pos.DB.Lrc (HasLrcContext, LrcContext (..))
+import           Pos.DB.Rocks (NodeDBs)
 import           Pos.DB.Ssc (mkSscState)
 import           Pos.DB.Txp (GenericTxpLocalData, MempoolExt, TxpGlobalSettings,
                      TxpHolderTag, mkTxpLocalData)
@@ -280,6 +281,10 @@ instance HasLens SscMemTag (BlockGenContext ext) SscState where
 
 instance HasLens TxpGlobalSettings (BlockGenContext ext) TxpGlobalSettings where
     lensOf = bgcTxpGlobalSettings_L
+
+-- | TODO xl fix this later
+instance HasLens NodeDBs (BlockGenContext ext) NodeDBs where
+    lensOf = error ""
 
 -- Let's assume that block-gen is core node, though it shouldn't
 -- really matter (needed for reporting, which is not used in block-gen

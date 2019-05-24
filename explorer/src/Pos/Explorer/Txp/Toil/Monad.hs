@@ -92,9 +92,9 @@ putUtxoSum utxoSum = eemNewUtxoSum .= Just utxoSum
 -- Monad used for local Toil in Explorer.
 ----------------------------------------------------------------------------
 
-type ELocalToilM m = ExtendedLocalToilM ExplorerExtraLookup ExplorerExtraModifier m
+type ELocalToilM p m = ExtendedLocalToilM ExplorerExtraLookup ExplorerExtraModifier p m
 
-explorerExtraMToELocalToilM :: Monad m => ExplorerExtraM m ~> ELocalToilM m
+explorerExtraMToELocalToilM :: Monad m => ExplorerExtraM m ~> ELocalToilM p m
 explorerExtraMToELocalToilM = zoom _2 . magnify _2
 
 ----------------------------------------------------------------------------

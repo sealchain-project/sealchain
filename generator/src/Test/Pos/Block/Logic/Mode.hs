@@ -85,6 +85,7 @@ import           Pos.DB.DB (gsAdoptedBVDataDefault, initNodeDBs)
 import           Pos.DB.Delegation (mkDelegationVar)
 import           Pos.DB.Lrc (LrcContext (..), mkLrcSyncData)
 import           Pos.DB.Pure (DBPureVar, newDBPureVar)
+import           Pos.DB.Rocks (NodeDBs)
 import           Pos.DB.Ssc (mkSscState)
 import           Pos.DB.Txp (GenericTxpLocalData, MempoolExt,
                      MonadTxpLocal (..), TxpGlobalSettings, TxpHolderTag,
@@ -248,6 +249,10 @@ instance HasAllSecrets BlockTestContext where
 
 instance HasLens UpdateConfiguration BlockTestContext UpdateConfiguration where
     lensOf = btcUpdateConfigurationL
+
+-- | TODO xl fix this later
+instance HasLens NodeDBs BlockTestContext NodeDBs where
+    lensOf = error "" 
 
 ----------------------------------------------------------------------------
 -- Initialization
@@ -531,6 +536,10 @@ instance MonadGState BlockTestMode where
 instance MonadBListener BlockTestMode where
     onApplyBlocks = onApplyBlocksStub
     onRollbackBlocks nm _ blunds = onRollbackBlocksStub nm blunds
+
+-- | TODO xl fix this later
+instance HasLens NodeDBs (BlockTestMode a) NodeDBs where
+    lensOf = error "" 
 
 type instance MempoolExt BlockTestMode = EmptyMempoolExt
 

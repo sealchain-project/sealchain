@@ -35,10 +35,10 @@ import           Test.QuickCheck.Arbitrary.Generic (genericArbitrary,
 
 import           Pos.Binary.Class (biSize)
 import           Pos.Chain.Block (ConsensusEraLeaders (..), HeaderHash,
-                     headerLastSlotInfo, mkMainBlock, mkMainBlockExplicit)
+                     headerLastSlotInfo, mkMainBlock, mkMainBlockExplicit, 
+                     genesisStateRoot)
 import qualified Pos.Chain.Block as Block
 import qualified Pos.Chain.Delegation as Core
-import qualified Pos.Chain.Txp as Txp
 import           Pos.Chain.Genesis (GenesisHash (..))
 import           Pos.Chain.Update (ConsensusEra (..),
                      ObftConsensusStrictness (..))
@@ -90,6 +90,10 @@ instance Arbitrary Block.GenesisExtraBodyData where
     arbitrary = genericArbitrary
     shrink = genericShrink
 
+instance Arbitrary Block.StateRoot where
+    arbitrary = genericArbitrary
+    shrink = genericShrink
+
 instance Arbitrary Block.GenesisBlockHeader where
     arbitrary = genericArbitrary
     shrink = genericShrink
@@ -130,6 +134,7 @@ genMainBlockHeader
     -> Gen Block.MainBlockHeader
 genMainBlockHeader pm prevHash difficulty body =
     Block.mkMainHeaderExplicit pm <$> pure prevHash
+                              <*> pure genesisStateRoot
                               <*> pure difficulty
                               <*> genSlotId dummyEpochSlots
                               <*> arbitrary -- SecretKey
@@ -240,7 +245,7 @@ genMainBlock pm prevHash difficulty = do
     slot <- genSlotId dummyEpochSlots
     sk <- arbitrary
     body <- genMainBlockBodyForSlot pm slot
-    pure $ mkMainBlockExplicit pm bv sv prevHash difficulty slot sk Nothing body Txp.emptyStateRoot
+    pure $ mkMainBlockExplicit pm bv sv prevHash genesisStateRoot difficulty slot sk Nothing body
 
 instance Arbitrary Block.MainBlock where
     arbitrary = do
@@ -252,7 +257,7 @@ instance Arbitrary Block.MainBlock where
         sk <- arbitrary
         BodyDependsOnSlot {..} <- arbitrary :: Gen (BodyDependsOnSlot Block.MainBody)
         body <- genBodyDepsOnSlot slot
-        pure $ mkMainBlock pm bv sv prevHeader slot sk Nothing body Txp.emptyStateRoot
+        pure $ mkMainBlock pm bv sv prevHeader genesisStateRoot slot sk Nothing body
     shrink = genericShrink
 
 instance Buildable (Block.BlockHeader, PublicKey) where
@@ -330,7 +335,7 @@ recursiveHeaderGen pm
                                 , toPublic issuerSK)
                     in (delegateSK, Just proxy)
         pure $ Block.BlockHeaderMain $
-            Block.mkMainHeader pm (maybe (Left gHash) Right prevHeader) slotId leader proxySK body extraHData
+            Block.mkMainHeader pm (maybe (Left gHash) Right prevHeader) genesisStateRoot slotId leader proxySK body extraHData
 recursiveHeaderGen _ _ _ _ [] _ b = return b
 recursiveHeaderGen _ _ _ _ _ [] b = return b
 

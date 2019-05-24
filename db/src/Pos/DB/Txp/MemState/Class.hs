@@ -11,6 +11,7 @@ module Pos.DB.Txp.MemState.Class
        , getUtxoModifier
        , getLocalUndos
        , getMemPool
+       , getPactState
        , getLocalTxs
        , getLocalTxsMap
        , getTxpExtra
@@ -33,10 +34,11 @@ import           Pos.Chain.Block (HeaderHash)
 import           Pos.Chain.Genesis as Genesis (Config)
 import           Pos.Chain.Txp (MemPool (..), ToilVerFailure, TxAux, TxId,
                      TxValidationRules, TxpConfiguration, UndoMap,
-                     UtxoModifier)
+                     UtxoModifier, PactState)
 import           Pos.Core.Reporting (MonadReporting)
 import           Pos.Core.Slotting (MonadSlots (..))
 import           Pos.DB.Class (MonadDBRead, MonadGState (..))
+import           Pos.DB.Rocks (MonadRealDB)
 
 import           Pos.DB.Txp.MemState.Types (GenericTxpLocalData (..))
 import           Pos.Util.Util (HasLens (..))
@@ -93,6 +95,10 @@ getMemPool
     :: GenericTxpLocalData e -> STM.STM MemPool
 getMemPool = STM.readTVar . txpMemPool
 
+getPactState
+    :: GenericTxpLocalData e -> STM.STM PactState
+getPactState = STM.readTVar . txpPactState
+
 getTxpTip
     :: GenericTxpLocalData e -> STM.STM HeaderHash
 getTxpTip = STM.readTVar . txpTip
@@ -104,12 +110,13 @@ getTxpExtra = STM.readTVar . txpExtra
 -- | Helper function to set all components of the TxpLocalData.
 setTxpLocalData
     :: GenericTxpLocalData e
-    -> (UtxoModifier, MemPool, UndoMap, HeaderHash, e)
+    -> (UtxoModifier, MemPool, UndoMap, PactState, HeaderHash, e)
     -> STM.STM ()
-setTxpLocalData txpData (um, mp, un, hh, e) = do
+setTxpLocalData txpData (um, mp, un, ps, hh, e) = do
     STM.writeTVar (txpUtxoModifier txpData) um
     STM.writeTVar (txpMemPool txpData) mp
     STM.writeTVar (txpUndos txpData) un
+    STM.writeTVar (txpPactState txpData) ps
     STM.writeTVar (txpTip txpData) hh
     STM.writeTVar (txpExtra txpData) e
 
@@ -121,7 +128,7 @@ clearTxpMemPool
     -> STM ()
 clearTxpMemPool txpData = do
   tip <- getTxpTip txpData
-  setTxpLocalData txpData (mempty, def, mempty, tip, def)
+  setTxpLocalData txpData (mempty, def, mempty, def, tip, def)
 
 ----------------------------------------------------------------------------
 -- Abstract txNormalize and processTx
@@ -142,4 +149,5 @@ type TxpLocalWorkMode ctx m =
     , WithLogger m
     , MonadMask m
     , MonadReporting m
+    , MonadRealDB ctx m
     )

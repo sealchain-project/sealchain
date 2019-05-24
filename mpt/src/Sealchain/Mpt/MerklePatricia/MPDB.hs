@@ -15,8 +15,8 @@ import           Sealchain.Mpt.MerklePatricia.StateRoot
 
 -- | The interface represents KV persister
 class KVPersister k where
-    getKV :: k -> B.ByteString -> m (Maybe B.ByteString)
-    putKV :: k -> B.ByteString -> B.ByteString -> m () 
+    getKV :: MonadIO m => k -> B.ByteString -> m (Maybe B.ByteString)
+    putKV :: MonadIO m => k -> B.ByteString -> B.ByteString -> m () 
 
 -- | This is the database reference type, contianing both the handle to the underlying database, as well
 -- as the stateRoot to the current tree holding the data.
@@ -29,8 +29,8 @@ data MPDB p = MPDB {
     stateRoot :: StateRoot
 }
 
-getKV' :: (KVPersister p) => MPDB p -> B.ByteString -> m (Maybe B.ByteString)
+getKV' :: (KVPersister p, MonadIO m) => MPDB p -> B.ByteString -> m (Maybe B.ByteString)
 getKV' mpdb k = getKV (kvdb mpdb) k
 
-putKV' :: (KVPersister p) => MPDB p -> B.ByteString -> B.ByteString -> m ()
+putKV' :: (KVPersister p, MonadIO m) => MPDB p -> B.ByteString -> B.ByteString -> m ()
 putKV' mpdb k v = putKV (kvdb mpdb) k v

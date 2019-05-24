@@ -25,7 +25,7 @@ import           Serokell.Data.Memory.Units (Byte, memory)
 import           Pos.Binary.Class (biSize)
 import           Pos.Chain.Block (BlockHeader (..), GenesisBlock,
                      HasSlogGState (..), HeaderHash, MainBlock, MainBody,
-                     headerHash, mkGenesisBlock, mkMainBlock)
+                     headerHash, mkGenesisBlock, mkMainBlock, genesisStateRoot)
 import qualified Pos.Chain.Block as BC
 import           Pos.Chain.Delegation (DelegationVar, DlgPayload (..),
                      ProxySKBlockInfo)
@@ -35,7 +35,7 @@ import           Pos.Chain.Genesis as Genesis (Config (..),
 import           Pos.Chain.Ssc (MonadSscMem, SscPayload, defaultSscPayload,
                      stripSscPayload)
 import           Pos.Chain.Txp (TxAux (..), TxpConfiguration, emptyTxPayload,
-                     mkTxPayload, emptyStateRoot)
+                     mkTxPayload)
 import           Pos.Chain.Update (ConsensusEra (..), UpdateConfiguration,
                      UpdatePayload (..), curSoftwareVersion,
                      lastKnownBlockVersion)
@@ -338,7 +338,7 @@ createMainBlockPure genesisConfig limit prevHeader pske sId sk rawPayload = do
     uc <- view (lensOf @UpdateConfiguration)
     bodyLimit <- execStateT (computeBodyLimit uc) limit
     body <- createMainBody k bodyLimit sId rawPayload
-    pure (mkMainBlock pm (bv uc) (sv uc) (Right prevHeader) sId sk pske body emptyStateRoot)
+    pure (mkMainBlock pm (bv uc) (sv uc) (Right prevHeader) genesisStateRoot sId sk pske body) -- | TODO xl use emptyStateRoot now 
   where
     k = configBlkSecurityParam genesisConfig
     pm = configProtocolMagic genesisConfig
@@ -350,7 +350,7 @@ createMainBlockPure genesisConfig limit prevHeader pske sId sk rawPayload = do
         -- account for block header and serialization overhead, etc;
         let musthaveBody = BC.MainBody emptyTxPayload defSsc def def
         let musthaveBlock =
-                mkMainBlock pm (bv uc) (sv uc) (Right prevHeader) sId sk pske musthaveBody emptyStateRoot
+                mkMainBlock pm (bv uc) (sv uc) (Right prevHeader) genesisStateRoot sId sk pske musthaveBody
         let mhbSize = biSize musthaveBlock
         when (mhbSize > limit) $ throwError $
             "Musthave block size is more than limit: " <> show mhbSize

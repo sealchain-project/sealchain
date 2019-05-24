@@ -33,14 +33,14 @@ import           Pos.Chain.Block (BlockBodyAttributes, BlockConfiguration (..),
                      MainBlockHeader, MainBody (..), MainConsensusData (..),
                      MainExtraBodyData (..), MainExtraHeaderData (..),
                      MainProof (..), MainToSign (..), SlogUndo (..), Undo (..),
-                     mkGenesisHeader, mkMainHeaderExplicit)
+                     mkGenesisHeader, mkMainHeaderExplicit, genesisStateRoot)
 import           Pos.Core (SlotCount)
 import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Crypto (ProtocolMagic)
 
 import qualified Test.Pos.Chain.Delegation.Gen as Delegation
 import           Test.Pos.Chain.Ssc.Gen (genSscPayload, genSscProof)
-import           Test.Pos.Chain.Txp.Gen (genTxPayload, genTxProof, genTxpUndo, genStateRoot)
+import           Test.Pos.Chain.Txp.Gen (genTxPayload, genTxProof, genTxpUndo)
 import qualified Test.Pos.Chain.Update.Gen as Update
 import           Test.Pos.Core.Gen (genChainDifficulty, genEpochIndex,
                      genFlatSlotId, genSlotId, genSlotLeaders, genTextHash)
@@ -120,6 +120,7 @@ genMainBlockHeader :: ProtocolMagic -> SlotCount -> Gen MainBlockHeader
 genMainBlockHeader pm epochSlots =
     mkMainHeaderExplicit pm
         <$> genHeaderHash
+        <*> pure genesisStateRoot
         <*> genChainDifficulty
         <*> genSlotId epochSlots
         <*> genSecretKey
@@ -144,7 +145,6 @@ genMainExtraHeaderData =
     MainExtraHeaderData
         <$> Update.genBlockVersion
         <*> Update.genSoftwareVersion
-        <*> genStateRoot
         <*> genBlockHeaderAttributes
         <*> genAbstractHash genMainExtraBodyData
 

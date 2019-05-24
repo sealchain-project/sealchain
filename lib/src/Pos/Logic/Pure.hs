@@ -16,11 +16,12 @@ import           Pos.Chain.Block (Block, BlockHeader (..),
                      MainBlock, MainBlockHeader, MainBody (..),
                      MainConsensusData (..), MainExtraBodyData (..),
                      MainExtraHeaderData (..), MainProof (..),
-                     mkGenericBlockHeaderUnsafe, mkGenericBlockUnsafe)
+                     mkGenericBlockHeaderUnsafe, mkGenericBlockUnsafe,
+                     genesisStateRoot)
 import           Pos.Chain.Delegation (DlgPayload (..))
 import           Pos.Chain.Ssc (SscPayload (..), SscProof (..),
                      VssCertificatesMap (..))
-import           Pos.Chain.Txp (TxProof (..), emptyTxPayload, emptyStateRoot)
+import           Pos.Chain.Txp (TxProof (..), emptyTxPayload)
 import           Pos.Chain.Update (ApplicationName (..), BlockVersion (..),
                      BlockVersionData (..), SoftforkRule (..),
                      SoftwareVersion (..), UpdatePayload (..), UpdateProof)
@@ -175,6 +176,7 @@ mainBlockHeader :: MainBlockHeader
 mainBlockHeader = mkGenericBlockHeaderUnsafe
     protocolMagic
     mainBlockHeaderHash
+    genesisStateRoot
     bodyProof
     consensusData
     extraHeaderData
@@ -244,7 +246,6 @@ extraHeaderData :: MainExtraHeaderData
 extraHeaderData = MainExtraHeaderData
     { _mehBlockVersion    = blockVersion
     , _mehSoftwareVersion = softwareVersion
-    , _mehStateRoot       = emptyStateRoot
     , _mehAttributes      = blockHeaderAttributes
     , _mehEBDataProof     = extraBodyDataProof
     }

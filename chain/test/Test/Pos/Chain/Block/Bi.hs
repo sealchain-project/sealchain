@@ -15,12 +15,11 @@ import           Pos.Chain.Block (BlockHeader (..), BlockHeaderAttributes,
                      BlockSignature (..), GenesisBlockHeader, GenesisBody (..),
                      GenesisConsensusData (..), GenesisProof (..), HeaderHash,
                      MainBlockHeader, MainBody (..), MainConsensusData (..),
-                     MainExtraBodyData (..), MainExtraHeaderData (..),
+                     MainExtraBodyData (..), MainExtraHeaderData (..), StateRoot,
                      MainProof (..), MainToSign (..), SlogUndo (..), Undo (..),
-                     mkGenesisHeader, mkMainHeaderExplicit)
+                     mkGenesisHeader, mkMainHeaderExplicit, genesisStateRoot)
 import           Pos.Chain.Delegation (DlgPayload (..))
 import           Pos.Chain.Genesis (GenesisHash (..))
-import           Pos.Chain.Txp (emptyStateRoot)
 import           Pos.Core (EpochIndex (..))
 import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Crypto (Hash, ProtocolMagic (..), ProtocolMagicId (..),
@@ -275,7 +274,7 @@ exampleBlockHeaderGenesis = (BlockHeaderGenesis exampleGenesisBlockHeader)
 
 exampleBlockHeaderMain :: MainBlockHeader
 exampleBlockHeaderMain =
-  mkMainHeaderExplicit pm exampleHeaderHash
+  mkMainHeaderExplicit pm exampleHeaderHash exampleStateRoot
                        exampleChainDifficulty exampleSlotId
                        exampleSecretKey Nothing
                        exampleMainBody exampleMainExtraHeaderData
@@ -324,7 +323,6 @@ exampleMainExtraHeaderData :: MainExtraHeaderData
 exampleMainExtraHeaderData =
     MainExtraHeaderData exampleBlockVersion
                         exampleSoftwareVersion
-                        emptyStateRoot
                         (mkAttributes ())
                         (abstractHash (MainExtraBodyData (mkAttributes ())))
 
@@ -344,6 +342,7 @@ exampleGenesisBlockHeader = mkGenesisHeader pm
 exampleMainBlockHeader :: MainBlockHeader
 exampleMainBlockHeader = mkMainHeaderExplicit pm
                                               exampleHeaderHash
+                                              exampleStateRoot
                                               exampleChainDifficulty
                                               exampleSlotId
                                               exampleSecretKey
@@ -363,6 +362,9 @@ exampleMainProof = MainProof exampleTxProof exampleSscProof
 
 exampleHeaderHash :: HeaderHash
 exampleHeaderHash = coerce (hash ("HeaderHash" :: Text))
+
+exampleStateRoot :: StateRoot
+exampleStateRoot = coerce genesisStateRoot
 
 exampleGenesisBody :: GenesisBody
 exampleGenesisBody = GenesisBody exampleSlotLeaders

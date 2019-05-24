@@ -15,9 +15,13 @@ module Pos.Chain.Txp.Toil.Monad
          -- * Monadic local Toil
        , LocalToilEnv (..)
        , LocalToilState (..)
+       , lteUtxo
+       , lteGasModel
+       , ltePactMPDB
        , ltsMemPool
        , ltsUtxoModifier
        , ltsUndos
+       , ltsPactState
        , LocalToilM
        , hasTx
        , memPoolSize
@@ -34,6 +38,7 @@ module Pos.Chain.Txp.Toil.Monad
        , GlobalToilM
        , gteUtxo
        , gteTotalStake
+       , gteStakeGetter
        , runGlobalToilM
        , getStake
        , getTotalStake
@@ -68,8 +73,8 @@ import           Pact.Types.Gas (GasModel)
 import           Pact.Types.Runtime (RefStore)
 
 import           Pos.Chain.Txp.Toil.Types (MemPool, StakesView, UndoMap,
-                     UtxoLookup, UtxoModifier, mpLocalTxs, mpSize, svStakes,
-                     svTotal)
+                     UtxoLookup, UtxoModifier, PactState, 
+                     mpLocalTxs, mpSize, svStakes, svTotal)
 import           Pos.Chain.Txp.Tx (TxId, TxIn)
 import           Pos.Chain.Txp.TxAux (TxAux)
 import           Pos.Chain.Txp.TxOutAux (TxOutAux)
@@ -78,6 +83,8 @@ import           Pos.Core.Common (Coin, StakeholderId)
 import           Pos.Util (type (~>))
 import qualified Pos.Util.Modifier as MM
 import           Pos.Util.Wlog (NamedPureLogger, WithLogger, launchNamedPureLog)
+
+import           Sealchain.Mpt.MerklePatriciaMixMem (MPDB)
 
 ----------------------------------------------------------------------------
 -- Monad used for verify and apply tx.
@@ -130,26 +137,29 @@ data LocalToilState = LocalToilState
     { _ltsMemPool      :: !MemPool
     , _ltsUtxoModifier :: !UtxoModifier
     , _ltsUndos        :: !UndoMap
+    , _ltsPactState    :: !PactState
     }
 
 makeLenses ''LocalToilState
 
-data LocalToilEnv = LocalToilEnv
+data LocalToilEnv p = LocalToilEnv
     { _lteUtxo       :: !UtxoLookup
+    , _lteGasModel   :: !GasModel
+    , _ltePactMPDB   :: !(MPDB p)
     }
 
 makeLenses ''LocalToilEnv
 
 -- | Monad in which local Toil happens.
-type LocalToilM m = ReaderT LocalToilEnv (StateT LocalToilState m)
+type LocalToilM p m = ReaderT (LocalToilEnv p) (StateT LocalToilState m)
 
 -- | Check whether Tx with given identifier is stored in the pool.
-hasTx :: Monad m => TxId -> LocalToilM m Bool
+hasTx :: Monad m => TxId -> LocalToilM p m Bool
 hasTx tid = isJust <$> use (ltsMemPool . mpLocalTxs . at tid)
 
 -- | Put a transaction with corresponding 'TxUndo' into MemPool.
 -- Transaction must not be in MemPool (but it's checked anyway).
-putTxWithUndo :: Monad m => TxId -> TxAux -> TxUndo -> LocalToilM m ()
+putTxWithUndo :: Monad m => TxId -> TxAux -> TxUndo -> LocalToilM p m ()
 putTxWithUndo tid tx undo =
     unlessM (hasTx tid) $ do
         ltsMemPool . mpLocalTxs . at tid .= Just tx
@@ -157,21 +167,21 @@ putTxWithUndo tid tx undo =
         ltsUndos . at tid .= Just undo
 
 -- | Return the number of transactions contained in the pool.
-memPoolSize :: Monad m => LocalToilM m Int
+memPoolSize :: Monad m => LocalToilM p m Int
 memPoolSize = use $ ltsMemPool . mpSize
 
 -- | Extended version of 'LocalToilM'. It allows to put extra data
 -- into reader context, extra state and also adds logging
 -- capabilities. It's needed for explorer which has more complicated
 -- transaction processing.
-type ExtendedLocalToilM extraEnv extraState m =
-    ReaderT (LocalToilEnv, extraEnv) (
+type ExtendedLocalToilM extraEnv extraState p m =
+    ReaderT (LocalToilEnv p, extraEnv) (
         StateT (LocalToilState, extraState) (
             NamedPureLogger m
     ))
 
 -- | Natural transformation from 'LocalToilM to 'ExtendedLocalToilM'.
-extendLocalToilM :: Monad m => LocalToilM m a -> ExtendedLocalToilM extraEnv extraState m a
+extendLocalToilM :: Monad m => LocalToilM p m a -> ExtendedLocalToilM extraEnv extraState p m a
 extendLocalToilM = mapReaderT (mapStateT lift . zoom _1) . magnify _1
 
 ----------------------------------------------------------------------------
@@ -248,12 +258,11 @@ type ExtendedGlobalToilM extraEnv extraState m =
 extendGlobalToilM :: Monad m => GlobalToilM m ~> ExtendedGlobalToilM extraEnv extraState m
 extendGlobalToilM = zoom _1 . magnify _1
 
-
 ----------------------------------------------------------------------------
 -- Conversions
 ----------------------------------------------------------------------------
 
-verifyAndApplyMToLocalToilM :: forall a m.Monad m => VerifyAndApplyM m a -> LocalToilM m a
+verifyAndApplyMToLocalToilM :: forall a p m.Monad m => VerifyAndApplyM m a -> LocalToilM p m a
 verifyAndApplyMToLocalToilM action = do
     utxoModifier <- use ltsUtxoModifier
     utxoLookup <- view lteUtxo

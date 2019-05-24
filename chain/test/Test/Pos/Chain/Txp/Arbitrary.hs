@@ -45,7 +45,7 @@ import           Test.QuickCheck.Arbitrary.Generic (genericArbitrary,
 import           Pos.Binary.Class (Raw)
 import           Pos.Chain.Txp (Tx (..), TxAttributes, TxAux (..), TxIn (..),
                      TxInWitness (..), TxOut (..), TxOutAux (..),
-                     TxPayload (..), TxProof (..), TxSigData (..), StateRoot,
+                     TxPayload (..), TxProof (..), TxSigData (..),
                      TxValidationRules (..), mkTxPayload)
 import           Pos.Core.Attributes (Attributes, mkAttributes,
                      mkAttributesWithUnparsedFields)
@@ -270,10 +270,6 @@ genTxAux pm = TxAux <$> genTx <*> (V.fromList <$> listOf (genTxInWitness pm))
 
 instance Arbitrary TxAux where
     arbitrary = genTxAux dummyProtocolMagic
-    shrink = genericShrink
-
-instance Arbitrary StateRoot where
-    arbitrary = genericArbitrary
     shrink = genericShrink
 
 ----------------------------------------------------------------------------

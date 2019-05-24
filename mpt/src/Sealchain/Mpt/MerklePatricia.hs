@@ -75,7 +75,7 @@ keyExists::(MonadIO m,KVPersister p)=>MPDB p -- ^ The object containing the curr
 keyExists db key = isJust <$> getKeyVal db key
 
 -- | Initialize the DB by adding a blank stateroot.
-initializeBlank::(KVPersister p)=>MPDB p -- ^ The object containing the current stateRoot.
+initializeBlank::(KVPersister p, MonadIO m)=>MPDB p -- ^ The object containing the current stateRoot.
                ->m ()
 initializeBlank db =
     let bytes = rlpSerialize $ rlpEncode (0::Integer)

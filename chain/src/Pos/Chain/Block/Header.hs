@@ -18,7 +18,13 @@ module Pos.Chain.Block.Header
        , headerHashF
        , headerHashG
 
+       , StateRoot (..)
+       , stateRootF
+       , stateRootG
+       , genesisStateRoot
+
        , HasHeaderHash (..)
+       , HasStateRoot (..)
 
        , BlockSignature (..)
 
@@ -26,6 +32,7 @@ module Pos.Chain.Block.Header
        , mkGenericBlockHeaderUnsafe
        , gbhProtocolMagicId
        , gbhPrevBlock
+       , gbhStateRoot
        , gbhBodyProof
        , gbhConsensus
        , gbhExtra
@@ -78,6 +85,7 @@ import           Data.SafeCopy (SafeCopy (..), contain, safeGet, safePut)
 import qualified Data.Serialize as Cereal
 import           Formatting (Format, bprint, build, int, (%))
 import qualified Formatting.Buildable as Buildable
+import           Serokell.Util.Base16 (base16F)
 
 import           Pos.Binary.Class (Bi (..), decodeListLenCanonicalOf,
                      encodeListLen, enforceSize)
@@ -228,6 +236,62 @@ headerHashG = to headerHash
 blockHeaderHash :: BlockHeader -> HeaderHash
 blockHeaderHash = unsafeHash
 
+--------------------------------------------------------------------------------
+-- StateRoot
+--------------------------------------------------------------------------------
+
+data StateRoot = StateRoot 
+    { getByteString :: ByteString
+    } deriving (Show, Ord, Eq, Generic, Hashable, NFData)
+
+instance Buildable StateRoot where
+    build (StateRoot bs) = bprint base16F bs
+
+instance Bi StateRoot where
+  encode (StateRoot bs) = encode bs
+  decode = StateRoot <$> decode
+
+instance SafeCopy StateRoot
+  where
+    getCopy =
+        contain $
+        do bs <- safeGet
+           return $! StateRoot bs
+    putCopy (StateRoot bs) =
+        contain $
+        do safePut bs
+
+stateRootF :: Format r (StateRoot -> r)
+stateRootF = build
+
+genesisStateRoot :: StateRoot
+genesisStateRoot = StateRoot mempty
+
+-- HasStateRoot
+class HasStateRoot a where
+    getStateRoot :: a -> StateRoot
+
+instance HasStateRoot StateRoot where
+    getStateRoot = identity
+
+instance HasStateRoot (Some HasStateRoot) where
+    getStateRoot = applySome getStateRoot
+
+instance HasStateRoot BlockHeader where
+    getStateRoot = blockHeaderStateRoot
+
+instance HasStateRoot GenesisBlockHeader where
+    getStateRoot = blockHeaderStateRoot . BlockHeaderGenesis
+
+instance HasStateRoot MainBlockHeader where
+    getStateRoot = blockHeaderStateRoot . BlockHeaderMain
+
+stateRootG :: HasStateRoot a => Getter a StateRoot
+stateRootG = to getStateRoot
+
+blockHeaderStateRoot :: BlockHeader -> StateRoot
+blockHeaderStateRoot (BlockHeaderGenesis gbh) = _gbhStateRoot gbh
+blockHeaderStateRoot (BlockHeaderMain mbh)    = _gbhStateRoot mbh
 
 --------------------------------------------------------------------------------
 -- GenericBlockHeader
@@ -243,12 +307,14 @@ data GenericBlockHeader bodyProof consensus extra = GenericBlockHeader
     { _gbhProtocolMagicId :: !ProtocolMagicId
       -- | Pointer to the header of the previous block.
     , _gbhPrevBlock       :: !HeaderHash
-    , -- | Proof of body.
-      _gbhBodyProof       :: !bodyProof
-    , -- | Consensus data to verify consensus algorithm.
-      _gbhConsensus       :: !consensus
-    , -- | Any extra data.
-      _gbhExtra           :: !extra
+      -- | The root state of Sealchain 
+    , _gbhStateRoot       :: !StateRoot
+      -- | Proof of body.
+    , _gbhBodyProof       :: !bodyProof
+      -- | Consensus data to verify consensus algorithm.
+    , _gbhConsensus       :: !consensus
+     -- | Any extra data.
+    , _gbhExtra           :: !extra
     } deriving (Eq, Show, Generic, NFData)
 
 instance
@@ -265,6 +331,7 @@ instance
         enforceSize "GenericBlockHeader b" 5
         _gbhProtocolMagicId <- ProtocolMagicId <$> decode
         _gbhPrevBlock <- decode
+        _gbhStateRoot <- decode
         _gbhBodyProof <- decode
         _gbhConsensus <- decode
         _gbhExtra     <- decode
@@ -278,6 +345,7 @@ instance
         contain $
         do _gbhProtocolMagicId <- safeGet
            _gbhPrevBlock <- safeGet
+           _gbhStateRoot <- safeGet
            _gbhBodyProof <- safeGet
            _gbhConsensus <- safeGet
            _gbhExtra <- safeGet
@@ -286,6 +354,7 @@ instance
         contain $
         do safePut _gbhProtocolMagicId
            safePut _gbhPrevBlock
+           safePut _gbhStateRoot
            safePut _gbhBodyProof
            safePut _gbhConsensus
            safePut _gbhExtra
@@ -294,6 +363,7 @@ instance
 mkGenericBlockHeaderUnsafe
     :: ProtocolMagic
     -> HeaderHash
+    -> StateRoot
     -> bodyProof
     -> consensus
     -> extra
@@ -345,6 +415,7 @@ mkGenesisHeader pm prevHeader epoch body =
     GenericBlockHeader
         pmi
         (either getGenesisHash headerHash prevHeader)
+        (either (const genesisStateRoot) getStateRoot prevHeader)
         (mkGenesisProof body)
         consensus
         (GenesisExtraHeaderData $ mkAttributes ())
@@ -390,14 +461,15 @@ instance Buildable MainBlockHeader where
 mkMainHeader
     :: ProtocolMagic
     -> Either GenesisHash BlockHeader
+    -> StateRoot
     -> SlotId
     -> SecretKey
     -> ProxySKBlockInfo
     -> MainBody
     -> MainExtraHeaderData
     -> MainBlockHeader
-mkMainHeader pm prevHeader =
-    mkMainHeaderExplicit pm prevHash difficulty
+mkMainHeader pm prevHeader stateRoot =
+    mkMainHeaderExplicit pm prevHash stateRoot difficulty
   where
     prevHash = either getGenesisHash headerHash prevHeader
     difficulty = either (const 0) (succ . view difficultyL) prevHeader
@@ -407,6 +479,7 @@ mkMainHeader pm prevHeader =
 mkMainHeaderExplicit
     :: ProtocolMagic
     -> HeaderHash -- ^ Parent
+    -> StateRoot
     -> ChainDifficulty
     -> SlotId
     -> SecretKey
@@ -414,8 +487,8 @@ mkMainHeaderExplicit
     -> MainBody
     -> MainExtraHeaderData
     -> MainBlockHeader
-mkMainHeaderExplicit pm prevHash difficulty slotId sk pske body extra =
-    GenericBlockHeader pmi prevHash proof consensus extra
+mkMainHeaderExplicit pm prevHash stateRoot difficulty slotId sk pske body extra =
+    GenericBlockHeader pmi prevHash stateRoot proof consensus extra
   where
     pmi = getProtocolMagicId pm
     proof = mkMainProof body

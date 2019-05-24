@@ -18,20 +18,22 @@ module Pos.DB.Txp.Logic.Local
        ) where
 
 import           Universum
+import qualified Universum.Unsafe as Unsafe
 
 import           Control.Monad.Except (mapExceptT, runExceptT, throwError)
 import           Data.Default (Default (def))
 import qualified Data.HashMap.Strict as HM
 import           Formatting (build, sformat, (%))
 
-import           Pos.Chain.Block (HeaderHash)
+import           Pact.Gas (constGasModel)
+import           Pos.Chain.Block (HeaderHash, StateRoot (..), HasStateRoot (..))
 import           Pos.Chain.Genesis as Genesis (Config (..), configEpochSlots)
 import           Pos.Chain.Txp (ExtendedLocalToilM, LocalToilEnv (..), 
                      LocalToilState (..), MemPool, ToilVerFailure (..), 
                      TxAux (..), TxId, TxUndo, TxValidationRules (..), 
                      TxpConfiguration (..), UndoMap, Utxo, UtxoModifier, 
-                     extendLocalToilM, mkLiveTxValidationRules, mpLocalTxs, 
-                     normalizeToil, processTx, topsortTxs, utxoToLookup)
+                     PactState, extendLocalToilM, mkLiveTxValidationRules, 
+                     mpLocalTxs, normalizeToil, processTx, topsortTxs, utxoToLookup)
 import           Pos.Chain.Update (BlockVersionData)
 import           Pos.Core (EpochIndex, SlotCount, siEpoch)
 import           Pos.Core.JsonLog (CanJsonLog (..))
@@ -40,19 +42,22 @@ import           Pos.Core.Reporting (reportError)
 import           Pos.Core.Slotting (MonadSlots (..), epochOrSlotToEpochIndex,
                      getEpochOrSlot)
 import           Pos.Crypto (WithHash (..))
-import           Pos.DB.BlockIndex (getTipHeader)
+import           Pos.DB.BlockIndex (getTipHeader, getHeader)
 import           Pos.DB.Class (MonadGState (..))
 import qualified Pos.DB.GState.Common as GS
 import           Pos.DB.GState.Lock (Priority (..), StateLock, StateLockMetrics,
                      withStateLock)
 import           Pos.DB.Txp.Logic.Common (buildUtxo)
+import           Pos.DB.Txp.Logic.Types (GStateDB (..), newGStateDB)
 import           Pos.DB.Txp.MemState (GenericTxpLocalData (..), MempoolExt,
                      MonadTxpMem, TxpLocalWorkMode, getLocalTxsMap, getTxpTip,
-                     getLocalUndos, getMemPool, getTxpExtra, getUtxoModifier,
-                     setTxpLocalData, withTxpLocalData)
+                     getLocalUndos, getMemPool, getTxpExtra, getUtxoModifier, 
+                     getPactState, setTxpLocalData, withTxpLocalData)
 import           Pos.Util.Util (HasLens')
 import           Pos.Util.Wlog (NamedPureLogger, WithLogger, launchNamedPureLog,
                      logDebug, logError, logWarning)
+
+import qualified Sealchain.Mpt.MerklePatriciaMixMem as Mpt
 
 type TxpProcessTransactionMode ctx m =
     ( TxpLocalWorkMode ctx m
@@ -99,18 +104,18 @@ txProcessTransactionNoLock genesisConfig txpConfig = txProcessTransactionAbstrac
         -> TxValidationRules
         -> EpochIndex
         -> (TxId, TxAux)
-        -> ExceptT ToilVerFailure (ExtendedLocalToilM () () m) TxUndo
+        -> ExceptT ToilVerFailure (ExtendedLocalToilM () () GStateDB m) TxUndo
     processTxHoisted bvd txValRules = do
         mapExceptT extendLocalToilM
             ... (processTx (configProtocolMagic genesisConfig) txValRules txpConfig bvd)
 
 txProcessTransactionAbstract ::
-       forall extraEnv extraState ctx m a.
-       (TxpLocalWorkMode ctx m, MempoolExt m ~ extraState)
+       forall extraEnv extraState ctx p m a.
+       (TxpLocalWorkMode ctx m, MempoolExt m ~ extraState, p ~ GStateDB)
     => SlotCount
     -> Genesis.Config
     -> (Utxo -> TxAux -> m extraEnv)
-    -> (BlockVersionData -> TxValidationRules -> EpochIndex -> (TxId, TxAux) -> ExceptT ToilVerFailure (ExtendedLocalToilM extraEnv extraState m) a)
+    -> (BlockVersionData -> TxValidationRules -> EpochIndex -> (TxId, TxAux) -> ExceptT ToilVerFailure (ExtendedLocalToilM extraEnv extraState p m) a)
     -> (TxId, TxAux)
     -> m (Either ToilVerFailure ())
 txProcessTransactionAbstract epochSlots genesisConfig buildEnv txAction itw@(txId, txAux) = reportTipMismatch $ runExceptT $ do
@@ -140,6 +145,7 @@ txProcessTransactionAbstract epochSlots genesisConfig buildEnv txAction itw@(txI
 
     mp <- withTxpLocalData getMemPool
     undo <- withTxpLocalData getLocalUndos
+    pactSt <- withTxpLocalData getPactState
     tip <- withTxpLocalData getTxpTip
     extra <- withTxpLocalData getTxpExtra
     pRes <- lift $ launchNamedPureLog id $ 
@@ -151,7 +157,7 @@ txProcessTransactionAbstract epochSlots genesisConfig buildEnv txAction itw@(txI
                 extraEnv
                 tipDB
                 itw
-                (utxoModifier, mp, undo, tip, extra)
+                (utxoModifier, mp, undo, pactSt, tip, extra)
     case pRes of
         Left er -> do
             logDebug $ sformat ("Transaction processing failed: " %build) txId
@@ -170,15 +176,21 @@ txProcessTransactionAbstract epochSlots genesisConfig buildEnv txAction itw@(txI
         -> extraEnv
         -> HeaderHash
         -> (TxId, TxAux)
-        -> (UtxoModifier, MemPool, UndoMap, HeaderHash, extraState)
-        -> NamedPureLogger m (Either ToilVerFailure (UtxoModifier, MemPool, UndoMap, HeaderHash, extraState))
-    processTransactionPure bvd txValRules curEpoch utxo extraEnv tipDB tx (um, mp, undo, tip, extraState)
+        -> (UtxoModifier, MemPool, UndoMap, PactState, HeaderHash, extraState)
+        -> NamedPureLogger m (Either ToilVerFailure (UtxoModifier, MemPool, UndoMap, PactState, HeaderHash, extraState))
+    processTransactionPure bvd txValRules curEpoch utxo extraEnv tipDB tx (um, mp, undo, pactSt, tip, extraState)
         | tipDB /= tip = pure . Left $ ToilTipsMismatch tipDB tip
         | otherwise = do
-            let initialEnv = LocalToilEnv { _lteUtxo = (utxoToLookup utxo) }
-            let initialState = LocalToilState { _ltsMemPool = mp
+            pactMPDB <- lift $ newPactMPDB tip
+            let gasModel = constGasModel 1 -- | TODO xl make it configable
+                initialEnv = LocalToilEnv { _lteUtxo = (utxoToLookup utxo) 
+                                          , _lteGasModel = gasModel
+                                          , _ltePactMPDB = pactMPDB
+                                          }
+                initialState = LocalToilState { _ltsMemPool = mp
                                               , _ltsUtxoModifier = um
                                               , _ltsUndos = undo
+                                              , _ltsPactState = pactSt
                                               }
             res :: (Either ToilVerFailure a, (LocalToilState, extraState)) <-
                     usingStateT (initialState, extraState) $
@@ -188,7 +200,7 @@ txProcessTransactionAbstract epochSlots genesisConfig buildEnv txAction itw@(txI
             case res of
                 (Left er, _) -> pure $ Left er
                 (Right _, (LocalToilState {..}, newExtraState)) -> pure $ Right
-                    (_ltsUtxoModifier, _ltsMemPool, _ltsUndos, tip, newExtraState)
+                    (_ltsUtxoModifier, _ltsMemPool, _ltsUndos, _ltsPactState, tip, newExtraState)
     -- REPORT:ERROR Tips mismatch in txp.
     reportTipMismatch action = do
         res <- action
@@ -218,7 +230,7 @@ txNormalize genesisConfig txValRules txpConfig = do
         -> BlockVersionData
         -> EpochIndex
         -> HashMap TxId TxAux
-        -> ExtendedLocalToilM () () m ()
+        -> ExtendedLocalToilM () () GStateDB m ()
     normalizeToilHoisted txValRules' bvd epoch txs =
         extendLocalToilM
             $ normalizeToil (configProtocolMagic genesisConfig) txValRules' txpConfig bvd epoch
@@ -228,14 +240,14 @@ txNormalizeAbstract ::
        (TxpLocalWorkMode ctx m, MempoolExt m ~ extraState)
     => SlotCount
     -> (Utxo -> [TxAux] -> m extraEnv)
-    -> (BlockVersionData -> EpochIndex -> HashMap TxId TxAux -> ExtendedLocalToilM extraEnv extraState m ())
+    -> (BlockVersionData -> EpochIndex -> HashMap TxId TxAux -> ExtendedLocalToilM extraEnv extraState GStateDB m ())
     -> m ()
 txNormalizeAbstract epochSlots buildEnv normalizeAction =
     getCurrentSlot epochSlots >>= \case
         Nothing -> do
             tip <- GS.getTip
             -- Clear and update tip
-            withTxpLocalData $ flip setTxpLocalData (mempty, def, mempty, tip, def)
+            withTxpLocalData $ flip setTxpLocalData (mempty, def, mempty, def, tip, def)
         Just (siEpoch -> epoch) -> do
             globalTip <- GS.getTip
             localTxs <- withTxpLocalData getLocalTxsMap
@@ -243,12 +255,19 @@ txNormalizeAbstract epochSlots buildEnv normalizeAction =
             utxo <- buildUtxo mempty txAuxes
             extraEnv <- buildEnv utxo txAuxes
             bvd <- gsAdoptedBVData
-            let initialEnv = LocalToilEnv { _lteUtxo = (utxoToLookup utxo) }
+
+            pactMPDB <- newPactMPDB globalTip
+            let gasModel = constGasModel 1 -- | TODO xl make it configable
+            let initialEnv = LocalToilEnv { _lteUtxo = (utxoToLookup utxo) 
+                                          , _lteGasModel = gasModel
+                                          , _ltePactMPDB = pactMPDB
+                                          }
             let initialState =
                     LocalToilState
                         { _ltsMemPool = def
                         , _ltsUtxoModifier = mempty
                         , _ltsUndos = mempty
+                        , _ltsPactState = def
                         }
             (LocalToilState {..}, newExtraState) <-
                 launchNamedPureLog id $
@@ -261,8 +280,15 @@ txNormalizeAbstract epochSlots buildEnv normalizeAction =
                 ( _ltsUtxoModifier
                 , _ltsMemPool
                 , _ltsUndos
+                , _ltsPactState
                 , globalTip
                 , newExtraState)
+
+newPactMPDB :: TxpLocalWorkMode ctx m => HeaderHash -> m (Mpt.MPDB GStateDB)
+newPactMPDB tip = do
+    gsdb <- newGStateDB
+    (StateRoot bs) <- getStateRoot . Unsafe.fromJust <$> getHeader tip
+    return $ Mpt.MPDB gsdb (Mpt.StateRoot bs)
 
 -- | Get 'TxPayload' from mempool to include into a new block which
 -- will be based on the given tip. In something goes wrong, empty

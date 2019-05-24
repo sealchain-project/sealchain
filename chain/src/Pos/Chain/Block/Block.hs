@@ -75,7 +75,7 @@ import           Pos.Chain.Block.Genesis (GenesisBody (..),
                      checkGenesisProof, gbLeaders, gcdEpoch, gebAttributes)
 import           Pos.Chain.Block.HasPrevBlock (HasPrevBlock (..))
 import           Pos.Chain.Block.Header (BlockHeader (..), BlockSignature (..),
-                     GenericBlockHeader, HasHeaderHash (..), HeaderHash,
+                     GenericBlockHeader, HasHeaderHash (..), HeaderHash, StateRoot,
                      MainConsensusData (..), blockHeaderHash, gbhBodyProof,
                      gbhConsensus, gbhPrevBlock, genHeaderAttributes,
                      genHeaderDifficulty, genHeaderEpoch, genHeaderProof,
@@ -98,7 +98,6 @@ import           Pos.Chain.Genesis.Config as Genesis (Config (..))
 import           Pos.Chain.Genesis.Hash (GenesisHash (..))
 import           Pos.Chain.Ssc.Functions (verifySscPayload)
 import           Pos.Chain.Ssc.Payload (SscPayload)
-import           Pos.Chain.Txp.StateRoot (StateRoot)
 import           Pos.Chain.Txp.Tx (TxValidationRules)
 import           Pos.Chain.Txp.TxPayload (TxPayload)
 import           Pos.Chain.Update (ConsensusEra (..))
@@ -290,13 +289,13 @@ mkMainBlock
     -> BlockVersion
     -> SoftwareVersion
     -> Either GenesisHash BlockHeader
+    -> StateRoot
     -> SlotId
     -> SecretKey
     -> ProxySKBlockInfo
     -> MainBody
-    -> StateRoot
     -> MainBlock
-mkMainBlock pm bv sv prevHeader = mkMainBlockExplicit pm bv sv prevHash difficulty
+mkMainBlock pm bv sv prevHeader stateRoot = mkMainBlockExplicit pm bv sv prevHash stateRoot difficulty
   where
     prevHash = either getGenesisHash headerHash prevHeader
     difficulty = either (const 0) (succ . view difficultyL) prevHeader
@@ -310,16 +309,16 @@ mkMainBlockExplicit
     -> BlockVersion
     -> SoftwareVersion
     -> HeaderHash
+    -> StateRoot
     -> ChainDifficulty
     -> SlotId
     -> SecretKey
     -> ProxySKBlockInfo
     -> MainBody
-    -> StateRoot
     -> MainBlock
-mkMainBlockExplicit pm bv sv prevHash difficulty slotId sk pske body stateRoot =
+mkMainBlockExplicit pm bv sv prevHash stateRoot difficulty slotId sk pske body =
     GenericBlock
-        (mkMainHeaderExplicit pm prevHash difficulty slotId sk pske body extraH)
+        (mkMainHeaderExplicit pm prevHash stateRoot difficulty slotId sk pske body extraH)
         body
         extraB
   where
@@ -330,7 +329,6 @@ mkMainBlockExplicit pm bv sv prevHash difficulty slotId sk pske body stateRoot =
         MainExtraHeaderData
             bv
             sv
-            stateRoot
             (mkAttributes ())
             (hash extraB)
 

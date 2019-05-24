@@ -283,14 +283,6 @@ instance SC.SafeCopy (InDb Txp.TxInWitness) where
             SC.safePut (a :: Word8)
             SC.safePut (b :: B.ByteString)
 
-instance SC.SafeCopy (InDb Txp.StateRoot) where
-    getCopy = SC.contain $ do
-       bs :: ByteString <- SC.safeGet
-       pure (InDb (Txp.StateRoot bs))
-    putCopy (InDb (Txp.StateRoot bs)) = SC.contain $ do
-       SC.safePut (bs :: ByteString)
-
-
 instance SC.SafeCopy (InDb Core.AddrType) where
     getCopy = SC.contain $ fmap InDb $ do
         SC.safeGet >>= \case
@@ -489,6 +481,7 @@ instance SC.SafeCopy (InDb Core.MainBlockHeader) where
     getCopy = SC.contain $ do
         InDb protocolMagicId <- SC.safeGet
         InDb prevBlock <- SC.safeGet
+        InDb stateRoot <- SC.safeGet
         InDb bodyProof <- SC.safeGet
         InDb consensus <- SC.safeGet
         InDb extra <- SC.safeGet
@@ -496,12 +489,14 @@ instance SC.SafeCopy (InDb Core.MainBlockHeader) where
             Core.mkGenericBlockHeaderUnsafe
                 (Core.ProtocolMagic protocolMagicId Core.RequiresNoMagic)
                 prevBlock
+                stateRoot
                 bodyProof
                 consensus
                 extra
     putCopy (InDb header) = SC.contain $ do
         safePutDb $ header ^. Core.gbhProtocolMagicId
         safePutDb $ header ^. Core.gbhPrevBlock
+        safePutDb $ header ^. Core.gbhStateRoot
         safePutDb $ header ^. Core.gbhBodyProof
         safePutDb $ header ^. Core.gbhConsensus
         safePutDb $ header ^. Core.gbhExtra
@@ -618,20 +613,17 @@ instance SC.SafeCopy (InDb Core.MainExtraHeaderData) where
     getCopy = SC.contain $ do
         blockVers <- SC.safeGet
         softVers <- SC.safeGet
-        stateRoot <- SC.safeGet
         attrs <- SC.safeGet
         ebDataProof <- SC.safeGet
         pure $ Core.MainExtraHeaderData
             <$> blockVers
             <*> softVers
-            <*> stateRoot
             <*> attrs
             <*> ebDataProof
 
-    putCopy (InDb (Core.MainExtraHeaderData b s r a e)) = SC.contain $ do
+    putCopy (InDb (Core.MainExtraHeaderData b s a e)) = SC.contain $ do
         safePutDb b
         safePutDb s
-        safePutDb r
         safePutDb a
         safePutDb e
 
@@ -786,10 +778,27 @@ instance SC.SafeCopy (InDb Core.BlockCount) where
     putCopy (InDb (Core.BlockCount i)) = SC.contain $ do
         SC.safePut i
 
+instance SC.SafeCopy (InDb ByteString) where
+    getCopy = SC.contain $ do
+        bs <- SC.safeGet
+        pure bs
+
+    putCopy (InDb bs) = SC.contain $ do
+        safePutDb bs
+
+instance SC.SafeCopy (InDb (Core.StateRoot)) where
+    getCopy = SC.contain $ do
+        bs <- SC.safeGet
+        pure $ Core.StateRoot <$> bs
+
+    putCopy (InDb (Core.StateRoot bs)) = SC.contain $ do
+        safePutDb bs
+
 instance SC.SafeCopy (InDb Core.GenesisBlockHeader) where
     getCopy = SC.contain $ do
         InDb protocolMagic <- SC.safeGet
         InDb prevBlock <- SC.safeGet
+        InDb stateRoot <- SC.safeGet
         InDb bodyProof <- SC.safeGet
         InDb consensus <- SC.safeGet
         InDb extra <- SC.safeGet
@@ -797,6 +806,7 @@ instance SC.SafeCopy (InDb Core.GenesisBlockHeader) where
             Core.mkGenericBlockHeaderUnsafe
                 (Core.ProtocolMagic protocolMagic Core.RequiresNoMagic)
                 prevBlock
+                stateRoot
                 bodyProof
                 consensus
                 extra
@@ -804,6 +814,7 @@ instance SC.SafeCopy (InDb Core.GenesisBlockHeader) where
     putCopy (InDb header) = SC.contain $ do
         safePutDb $ header ^. Core.gbhProtocolMagicId
         safePutDb $ header ^. Core.gbhPrevBlock
+        safePutDb $ header ^. Core.gbhStateRoot
         safePutDb $ header ^. Core.gbhBodyProof
         safePutDb $ header ^. Core.gbhConsensus
         safePutDb $ header ^. Core.gbhExtra
