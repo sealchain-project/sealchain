@@ -22,7 +22,7 @@ module Pos.Chain.Txp.Toil.Types
        , TxMap
        , UndoMap
 
-       , PactState
+       , PactState (..)
        , psRefStore 
        , psPacts
        , psModifier
@@ -34,7 +34,6 @@ module Pos.Chain.Txp.Toil.Types
 import           Universum
 
 import           Control.Lens (makeLenses)
-import           Data.ByteString as B (ByteString)
 import           Data.Default (Default, def)
 import qualified Data.Map as M (Map, lookup, toList, filter, empty)
 import           Data.Text.Lazy.Builder (Builder)
@@ -133,7 +132,7 @@ type UndoMap = HashMap TxId TxUndo
 -- PactModifier & PactState
 ----------------------------------------------------------------------------
 
-type PactModifier = M.Map B.ByteString B.ByteString
+type PactModifier = M.Map ByteString ByteString
 
 data PactState = PactState
     { _psRefStore :: !RefStore

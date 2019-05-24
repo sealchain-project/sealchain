@@ -58,7 +58,7 @@ applySettings bootStakeholders =
         }
 
 rollbackSettings ::
-       (TxpGlobalRollbackMode m)
+       (TxpGlobalRollbackMode ctx m)
     => GenesisWStakeholders
     -> ProcessBlundsSettings ExplorerExtraLookup ExplorerExtraModifier m
 rollbackSettings bootStakeholders =
@@ -70,8 +70,8 @@ rollbackSettings bootStakeholders =
         }
 
 applySingle ::
-       forall ctx m . TxpGlobalApplyMode ctx m
-    => GenesisWStakeholders -> TxpBlund -> m (EGlobalToilM m ())
+       forall ctx p m . TxpGlobalApplyMode ctx m
+    => GenesisWStakeholders -> TxpBlund -> m (EGlobalToilM p m ())
 applySingle bootStakeholders txpBlund = do
     -- @TxpBlund@ is a block/blund with a reduced set of information required for
     -- transaction processing. We use it to determine at which slot did a transaction

@@ -34,6 +34,7 @@ library
                        Pos.DB.Txp.Logic
                        Pos.DB.Txp.MemState
 
+                       Pos.DB.Txp.Pact
                        Pos.DB.Txp.Settings
                        Pos.DB.Txp.Stakes
                        Pos.DB.Txp.Utxo

@@ -29,13 +29,13 @@ import           Pos.Core (StakesList, coinToInteger, mkCoin, sumCoins,
 import           Pos.Util.Wlog (logDebug)
 
 -- | Apply transactions to stakes.
-applyTxsToStakes :: Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM m ()
+applyTxsToStakes :: Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM p m ()
 applyTxsToStakes bootStakeholders txun = do
     let (txOutPlus, txInMinus) = concatStakes bootStakeholders txun
     recomputeStakes txOutPlus txInMinus
 
 -- | Rollback application of transactions to stakes.
-rollbackTxsStakes :: Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM m ()
+rollbackTxsStakes :: Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM p m ()
 rollbackTxsStakes bootStakeholders txun = do
     let (txOutMinus, txInPlus) = concatStakes bootStakeholders txun
     recomputeStakes txInPlus txOutMinus
@@ -49,7 +49,7 @@ recomputeStakes
     :: Monad m
     => StakesList
     -> StakesList
-    -> GlobalToilM m ()
+    -> GlobalToilM p m ()
 recomputeStakes plusDistr minusDistr = do
     let (plusStakeHolders, plusCoins) = unzip plusDistr
         (minusStakeHolders, minusCoins) = unzip minusDistr

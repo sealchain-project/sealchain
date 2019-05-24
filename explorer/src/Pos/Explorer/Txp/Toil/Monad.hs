@@ -101,8 +101,8 @@ explorerExtraMToELocalToilM = zoom _2 . magnify _2
 -- Monad used for global Toil in Explorer.
 ----------------------------------------------------------------------------
 
-type EGlobalToilM m
-     = ExtendedGlobalToilM ExplorerExtraLookup ExplorerExtraModifier m
+type EGlobalToilM p m
+     = ExtendedGlobalToilM ExplorerExtraLookup ExplorerExtraModifier p m
 
-explorerExtraMToEGlobalToilM :: Monad m => ExplorerExtraM m ~> EGlobalToilM m 
+explorerExtraMToEGlobalToilM :: Monad m => ExplorerExtraM m ~> EGlobalToilM p m 
 explorerExtraMToEGlobalToilM = mapReaderT (mapStateT id . zoom _2) . magnify _2

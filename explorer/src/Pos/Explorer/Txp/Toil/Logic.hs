@@ -52,7 +52,7 @@ eApplyToil
     -> Maybe Timestamp
     -> [(TxAux, TxUndo)]
     -> HeaderHash
-    -> EGlobalToilM m ()
+    -> EGlobalToilM p m ()
 eApplyToil bootStakeholders mTxTimestamp txun hh = do
     extendGlobalToilM $ Txp.applyToil bootStakeholders txun
     explorerExtraMToEGlobalToilM $ mapM_ applier $ zip [0..] txun
@@ -69,7 +69,7 @@ eApplyToil bootStakeholders mTxTimestamp txun hh = do
         updateUtxoSumFromBalanceUpdate balanceUpdate
 
 -- | Rollback transactions from one block.
-eRollbackToil :: forall m.Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> EGlobalToilM m ()
+eRollbackToil :: forall p m.Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> EGlobalToilM p m ()
 eRollbackToil bootStakeholders txun = do
     extendGlobalToilM $ Txp.rollbackToil bootStakeholders txun
     explorerExtraMToEGlobalToilM $ mapM_ extraRollback $ reverse txun

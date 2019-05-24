@@ -73,7 +73,7 @@ verifyToil ::
     -> EpochIndex
     -> Bool
     -> [TxAux]
-    -> ExceptT ToilVerFailure (GlobalToilM m) TxpUndo
+    -> ExceptT ToilVerFailure (GlobalToilM p m) TxpUndo
 verifyToil pm txValRules bvd lockedAssets curEpoch verifyAllIsKnown =
     mapM verifyTx
   where 
@@ -83,7 +83,7 @@ verifyToil pm txValRules bvd lockedAssets curEpoch verifyAllIsKnown =
 
 -- | Apply transactions from one block. They must be valid (for
 -- example, it implies topological sort).
-applyToil :: Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM m ()
+applyToil :: Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM p m ()
 applyToil _ [] = pass
 applyToil bootStakeholders txun = do
     applyTxsToStakes bootStakeholders txun
@@ -96,7 +96,7 @@ applyToil bootStakeholders txun = do
     applyItem = verifyAndApplyMToGlobalToilM . runExceptT . applyTx
 
 -- | Rollback transactions from one block.
-rollbackToil :: Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM m ()
+rollbackToil :: Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM p m ()
 rollbackToil bootStakeholders txun = do
     rollbackTxsStakes bootStakeholders txun
     verifyAndApplyMToGlobalToilM $

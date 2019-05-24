@@ -3,16 +3,27 @@
 module Pos.DB.Txp.Logic.Common
        ( buildUtxo
        , buildUtxoForRollback
+       , defaultGasModel
+       , unsafeNewPactMPDB
        ) where
 
 import           Universum
+import qualified Universum.Unsafe as Unsafe
 
 import qualified Data.Map as M (fromList)
 
+import           Pact.Gas (constGasModel)
+import           Pact.Types.Gas (GasModel)
+import qualified Sealchain.Mpt.MerklePatriciaMixMem as Mpt
+
+import           Pos.Chain.Block (HeaderHash, StateRoot (..), HasStateRoot (..))
 import           Pos.Chain.Txp (Tx (..), TxAux (..), TxIn (..), TxOutAux, Utxo,
                      UtxoModifier)
 import           Pos.Crypto (hash)
+import           Pos.DB.BlockIndex (getHeader)
 import           Pos.DB.Class (MonadDBRead)
+import           Pos.DB.Rocks (MonadRealDB)
+import           Pos.DB.Txp.Logic.Types (GStateDB (..), newGStateDB)
 import           Pos.DB.Txp.Utxo (getTxOut)
 import qualified Pos.Util.Modifier as MM
 
@@ -72,3 +83,12 @@ buildUtxoGeneric toInputs utxoModifier txs = concatMapM buildForOne txs
                 fmap (txIn, ) <$> MM.lookupM getTxOut txIn utxoModifier
         resolvedPairs <- mapM utxoLookupM (toInputs tx)
         return $ M.fromList $ catMaybes $ toList resolvedPairs
+
+defaultGasModel :: Monad m => m GasModel
+defaultGasModel = return $ constGasModel 1
+
+unsafeNewPactMPDB :: (MonadRealDB ctx m, MonadDBRead m) => HeaderHash -> m (Mpt.MPDB GStateDB)
+unsafeNewPactMPDB tip = do
+    gsdb <- newGStateDB
+    (StateRoot bs) <- getStateRoot . Unsafe.fromJust <$> getHeader tip
+    return $ Mpt.MPDB gsdb (Mpt.StateRoot bs)

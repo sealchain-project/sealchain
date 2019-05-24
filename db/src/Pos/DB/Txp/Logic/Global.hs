@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeFamilies    #-}
 {-# LANGUAGE TypeOperators   #-}
 
 -- | Logic for global processing of transactions.  Global transaction
@@ -21,6 +22,7 @@ import           Control.Monad.Except (throwError)
 import           Data.Default (Default, def)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.List.NonEmpty as NE
+import qualified Data.Map.Strict as M
 import           Formatting (build, sformat, (%))
 
 import           Pos.Chain.Block (ComponentBlock (..))
@@ -31,10 +33,10 @@ import           Pos.Chain.Txp (ExtendedGlobalToilM, GlobalToilEnv (..),
                      GlobalToilM, GlobalToilState (..), StakesView (..),
                      ToilVerFailure, TxAux, TxUndo, TxValidationRules (..),
                      TxValidationRulesConfig (..), TxpConfiguration (..),
-                     TxpUndo, Utxo, UtxoModifier, applyToil,
+                     TxpUndo, Utxo, UtxoModifier, PactState (..), applyToil,
                      defGlobalToilState, flattenTxPayload, gtsUtxoModifier,
-                     mkLiveTxValidationRules, rollbackToil, runGlobalToilM,
-                     utxoToLookup, verifyToil)
+                     gtsPactState, mkLiveTxValidationRules, rollbackToil, 
+                     runGlobalToilM, utxoToLookup, verifyToil)
 import           Pos.Core (epochIndexL, mkCoin)
 import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..))
 import           Pos.Core.Exception (assertionFailed)
@@ -42,11 +44,15 @@ import           Pos.Core.Slotting (epochOrSlotToEpochIndex, getEpochOrSlot)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB (SomeBatchOp (..), getTipHeader)
 import           Pos.DB.Class (gsAdoptedBVData)
+import           Pos.DB.GState.Common (getTip)
 import           Pos.DB.GState.Stakes (getRealStake, getRealTotalStake)
-import           Pos.DB.Txp.Logic.Common (buildUtxo, buildUtxoForRollback)
+import           Pos.DB.Txp.Logic.Common (buildUtxo, buildUtxoForRollback, 
+                     defaultGasModel, unsafeNewPactMPDB)
+import           Pos.DB.Txp.Logic.Types (GStateDB)
 import           Pos.DB.Txp.Settings (TxpBlock, TxpBlund, TxpCommonMode,
                      TxpGlobalApplyMode, TxpGlobalRollbackMode,
                      TxpGlobalSettings (..), TxpGlobalVerifyMode)
+import           Pos.DB.Txp.Pact (PactOp (..))
 import           Pos.DB.Txp.Stakes (StakesOp (..))
 import           Pos.DB.Txp.Utxo (UtxoOp (..))
 import           Pos.Util.AssertMode (inAssertMode)
@@ -78,7 +84,7 @@ txpGlobalSettings genesisConfig txpConfig = TxpGlobalSettings
 ----------------------------------------------------------------------------
 
 verifyBlocks ::
-       forall m. (TxpGlobalVerifyMode m)
+       forall ctx m. (TxpGlobalVerifyMode ctx m)
     => ProtocolMagic
     -> Genesis.Config
     -> TxpConfiguration
@@ -86,42 +92,46 @@ verifyBlocks ::
     -> OldestFirst NE TxpBlock
     -> m $ Either ToilVerFailure $ OldestFirst NE TxpUndo
 verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $ do
+    gasModel <- defaultGasModel
+    pactMPDB <- getTip >>= unsafeNewPactMPDB
+    let baseEnv = GlobalToilEnv { _gteUtxo = utxoToLookup M.empty
+                                , _gteTotalStake = (mkCoin 0) -- | because we do not need stakes while verifying
+                                , _gteStakeGetter = getRealStake
+                                , _gteGasModel = gasModel
+                                , _gtePactMPDB = pactMPDB
+                                }
     bvd <- gsAdoptedBVData
-    let verifyPure :: TxValidationRules -> [TxAux] -> GlobalToilM m (Either ToilVerFailure TxpUndo)
+    let verifyPure :: TxValidationRules -> [TxAux] -> GlobalToilM GStateDB m (Either ToilVerFailure TxpUndo)
         verifyPure txValRules = runExceptT
             . verifyToil pm txValRules bvd (tcAssetLockedSrcAddrs txpConfig) epoch verifyAllIsKnown
         foldStep
             :: TxValidationRulesConfig
-            -> (UtxoModifier, [TxpUndo])
+            -> (UtxoModifier, [TxpUndo], PactState)
             -> TxpBlock
-            -> ExceptT ToilVerFailure m (UtxoModifier, [TxpUndo])
-        foldStep tvrc (modifier, undos) (convertPayload -> txAuxes) = do
+            -> ExceptT ToilVerFailure m (UtxoModifier, [TxpUndo], PactState)
+        foldStep tvrc (modifier, undos, pactState) (convertPayload -> txAuxes) = do
             currentEpoch <- epochOrSlotToEpochIndex . getEpochOrSlot <$> lift getTipHeader
             baseUtxo <- utxoToLookup <$> buildUtxo modifier txAuxes
             let txValRules = mkLiveTxValidationRules currentEpoch tvrc
-            let gte = GlobalToilEnv { _gteUtxo = baseUtxo
-                                    , _gteTotalStake = (mkCoin 0) 
-                                    -- ^ because we do not need stakes while verifying
-                                    , _gteStakeGetter = getRealStake
-                                    }
+            let gte = baseEnv { _gteUtxo = baseUtxo }
             let gts = GlobalToilState { _gtsUtxoModifier = modifier
-                                      , _gtsStakesView = def 
-                                      -- ^ because we do not need stakes while verifying
+                                      , _gtsStakesView = def -- | because we do not need stakes while verifying
+                                      , _gtsPactState = pactState
                                       }
             res <- lift $ runGlobalToilM gte gts (verifyPure txValRules txAuxes)
             case res of
                 (Left err, _)         -> throwError err
                 (Right txpUndo, gts') ->
                     return 
-                      ( gts' ^. gtsUtxoModifier, (txpUndo : undos))
+                      ( gts' ^. gtsUtxoModifier, (txpUndo : undos), gts' ^. gtsPactState)
         -- 'NE.fromList' is safe here, because there will be at least
         -- one 'foldStep' (since 'newChain' is not empty) and it will
         -- either fail (and then 'convertRes' will not be called) or
         -- will prepend something to the result.
-        convertRes :: (UtxoModifier, [TxpUndo]) -> OldestFirst NE TxpUndo
-        convertRes = OldestFirst . NE.fromList . reverse . snd
+        convertRes :: (UtxoModifier, [TxpUndo], PactState) -> OldestFirst NE TxpUndo
+        convertRes (_, undos, _) = OldestFirst . NE.fromList . reverse $ undos
     let txValRulesConfig = configTxValRules $ genesisConfig
-    convertRes <$> foldM (foldStep txValRulesConfig) mempty newChain
+    convertRes <$> foldM (foldStep txValRulesConfig) (mempty, mempty, def) newChain
   where
     epoch = NE.last (getOldestFirst newChain) ^. epochIndexL
     convertPayload :: TxpBlock -> [TxAux]
@@ -133,7 +143,7 @@ verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $
 ----------------------------------------------------------------------------
 
 data ProcessBlundsSettings extraEnv extraState m = ProcessBlundsSettings
-    { pbsProcessSingle   :: TxpBlund -> m (ExtendedGlobalToilM extraEnv extraState m ())
+    { pbsProcessSingle   :: TxpBlund -> m (ExtendedGlobalToilM extraEnv extraState GStateDB m ())
     , pbsCreateEnv       :: Utxo -> [TxAux] -> m extraEnv
     , pbsExtraOperations :: extraState -> SomeBatchOp
     , pbsIsRollback      :: !Bool
@@ -145,7 +155,7 @@ data ProcessBlundsSettings extraEnv extraState m = ProcessBlundsSettings
     }
 
 processBlunds ::
-       forall extraEnv extraState m. (TxpCommonMode m, Default extraState)
+       forall extraEnv extraState ctx m. (TxpCommonMode ctx m, Default extraState)
     => ProcessBlundsSettings extraEnv extraState m
     -> NE TxpBlund
     -> m SomeBatchOp
@@ -153,6 +163,9 @@ processBlunds ProcessBlundsSettings {..} blunds = do
     let toBatchOp (gts, extra) =
             globalToilStateToBatch gts <> pbsExtraOperations extra
     totalStake <- getRealTotalStake -- doesn't change
+
+    gasModel <- defaultGasModel
+    pactMPDB <- getTip >>= unsafeNewPactMPDB
     -- Note: base utxo also doesn't change, but we build it on each
     -- step (for different sets of transactions), because
     -- 'UtxoModifier' may accumulate some data and it may be more
@@ -180,6 +193,8 @@ processBlunds ProcessBlundsSettings {..} blunds = do
                         { _gteUtxo = utxoToLookup baseUtxo
                         , _gteTotalStake = totalStake
                         , _gteStakeGetter = getRealStake
+                        , _gteGasModel = gasModel
+                        , _gtePactMPDB = pactMPDB
                         }
             let env = (gte, extraEnv)
             launchNamedPureLog id $ 
@@ -210,9 +225,9 @@ applyBlocksWith pm genesisConfig txpConfig settings blunds = do
     processBlunds settings (getOldestFirst blunds)
 
 processBlundsSettings ::
-       forall m. Monad m
+       forall p m.(Monad m, p ~ GStateDB)
     => Bool
-    -> ([(TxAux, TxUndo)] -> GlobalToilM m ())
+    -> ([(TxAux, TxUndo)] -> GlobalToilM p m ())
     -> ProcessBlundsSettings () () m
 processBlundsSettings isRollback pureAction =
     ProcessBlundsSettings
@@ -222,11 +237,11 @@ processBlundsSettings isRollback pureAction =
         , pbsIsRollback = isRollback
         }
   where
-    processSingle :: TxpBlund -> ExtendedGlobalToilM () () m ()
+    processSingle :: TxpBlund -> ExtendedGlobalToilM () () GStateDB m ()
     processSingle = zoom _1 . magnify _1 . pureAction . blundToAuxNUndo
 
 rollbackBlocks ::
-       forall m. (TxpGlobalRollbackMode m)
+       forall ctx m. (TxpGlobalRollbackMode ctx m)
     => GenesisWStakeholders
     -> NewestFirst NE TxpBlund
     -> m SomeBatchOp
@@ -241,7 +256,10 @@ rollbackBlocks bootStakeholders (NewestFirst blunds) = processBlunds
 -- | Convert 'GlobalToilState' to batch of database operations.
 globalToilStateToBatch :: GlobalToilState -> SomeBatchOp
 globalToilStateToBatch GlobalToilState {..} =
-    SomeBatchOp [SomeBatchOp utxoOps, SomeBatchOp stakesOps]
+    SomeBatchOp [ SomeBatchOp utxoOps
+                , SomeBatchOp stakesOps
+                , SomeBatchOp pactOps
+                ]
   where
     StakesView (HM.toList -> stakes) total = _gtsStakesView
     utxoOps =
@@ -252,6 +270,9 @@ globalToilStateToBatch GlobalToilState {..} =
         case total of
             Nothing -> identity
             Just x  -> (PutTotalStake x :)
+    pactOps =
+        map (uncurry PactOp) $ M.toList (_psModifier _gtsPactState)
+    
 
 -- Zip block's TxAuxes and corresponding TxUndos.
 blundToAuxNUndo :: TxpBlund -> [(TxAux, TxUndo)]

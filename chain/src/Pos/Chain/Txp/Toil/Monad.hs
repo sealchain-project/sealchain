@@ -33,12 +33,15 @@ module Pos.Chain.Txp.Toil.Monad
        , GlobalToilState (..)
        , gtsUtxoModifier
        , gtsStakesView
+       , gtsPactState
        , defGlobalToilState
        , GlobalToilEnv (..)
        , GlobalToilM
        , gteUtxo
        , gteTotalStake
        , gteStakeGetter
+       , gteGasModel
+       , gtePactMPDB
        , runGlobalToilM
        , getStake
        , getTotalStake
@@ -192,6 +195,7 @@ extendLocalToilM = mapReaderT (mapStateT lift . zoom _1) . magnify _1
 data GlobalToilState = GlobalToilState
     { _gtsUtxoModifier :: !UtxoModifier
     , _gtsStakesView   :: !StakesView
+    , _gtsPactState    :: !PactState
     }
 
 -- | Default 'GlobalToilState'.
@@ -200,62 +204,65 @@ defGlobalToilState =
     GlobalToilState 
     { _gtsUtxoModifier = mempty
     , _gtsStakesView = def
+    , _gtsPactState = def
     }
 
 makeLenses ''GlobalToilState
 
 -- | Immutable environment used in global Toil.
-data GlobalToilEnv m = GlobalToilEnv
+data GlobalToilEnv p m = GlobalToilEnv
     { _gteUtxo        :: !UtxoLookup
     , _gteTotalStake  :: !Coin
     , _gteStakeGetter :: (StakeholderId -> m (Maybe Coin)) 
+    , _gteGasModel    :: !GasModel
+    , _gtePactMPDB    :: !(MPDB p)
     }
 
 makeLenses ''GlobalToilEnv
 
 -- | Monad in which global Toil happens.
-type GlobalToilM m
-     = ReaderT (GlobalToilEnv m) (StateT GlobalToilState (NamedPureLogger m))
+type GlobalToilM p m
+     = ReaderT (GlobalToilEnv p m) (StateT GlobalToilState (NamedPureLogger m))
 
 runGlobalToilM 
-    :: forall m a. (WithLogger m)
-    => GlobalToilEnv m
+    :: forall p m a. (WithLogger m)
+    => GlobalToilEnv p m
     -> GlobalToilState
-    -> GlobalToilM m a
+    -> GlobalToilM p m a
     -> m (a, GlobalToilState)
 runGlobalToilM env gts =
     launchNamedPureLog id . usingStateT gts . usingReaderT env
 
 -- | Get stake of a given stakeholder.
-getStake :: Monad m => StakeholderId -> GlobalToilM m (Maybe Coin)
+getStake :: Monad m => StakeholderId -> GlobalToilM p m (Maybe Coin)
 getStake shId = do
     stakeGetter <- view gteStakeGetter
     (<|>) <$> use (gtsStakesView . svStakes . at shId) <*> (lift . lift . lift $ (stakeGetter shId))
 
 -- | Get total stake of all stakeholders.
-getTotalStake :: Monad m => GlobalToilM m Coin
+getTotalStake :: Monad m => GlobalToilM p m Coin
 getTotalStake =
     maybe (view gteTotalStake) pure =<< use (gtsStakesView . svTotal)
 
 -- | Set stake of a given stakeholder.
-setStake :: Monad m => StakeholderId -> Coin -> GlobalToilM m ()
+setStake :: Monad m => StakeholderId -> Coin -> GlobalToilM p m ()
 setStake shId c = gtsStakesView . svStakes . at shId .= Just c
 
 -- | Set total stake of all stakeholders.
-setTotalStake :: Monad m => Coin -> GlobalToilM m ()
+setTotalStake :: Monad m => Coin -> GlobalToilM p m ()
 setTotalStake c = gtsStakesView . svTotal .= Just c
 
 -- | Extended version of 'GlobalToilM'. It allows to put extra data
 -- into reader context and extra state. It's needed for explorer which
 -- has more complicated transaction processing.
-type ExtendedGlobalToilM extraEnv extraState m =
-    ReaderT (GlobalToilEnv m, extraEnv) (
+type ExtendedGlobalToilM extraEnv extraState p m =
+    ReaderT (GlobalToilEnv p m, extraEnv) (
         StateT (GlobalToilState, extraState) (
             NamedPureLogger m
     ))
 
 -- | Natural transformation from 'GlobalToilM to 'ExtendedGlobalToilM'.
-extendGlobalToilM :: Monad m => GlobalToilM m ~> ExtendedGlobalToilM extraEnv extraState m
+extendGlobalToilM :: Monad m => GlobalToilM p m ~> ExtendedGlobalToilM extraEnv extraState p m
 extendGlobalToilM = zoom _1 . magnify _1
 
 ----------------------------------------------------------------------------
@@ -276,7 +283,7 @@ verifyAndApplyMToLocalToilM action = do
     ltsUtxoModifier .= _vaasUtxoModifier vaas
     return res
 
-verifyAndApplyMToGlobalToilM :: forall a m.Monad m => VerifyAndApplyM m a -> GlobalToilM m a
+verifyAndApplyMToGlobalToilM :: forall p a m.Monad m => VerifyAndApplyM m a -> GlobalToilM p m a
 verifyAndApplyMToGlobalToilM action = do
     utxoModifier <- use gtsUtxoModifier
     utxoLookup <- view gteUtxo

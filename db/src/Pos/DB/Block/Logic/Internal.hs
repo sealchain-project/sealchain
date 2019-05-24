@@ -64,6 +64,7 @@ import           Pos.DB.Delegation (dlgApplyBlocks, dlgNormalizeOnRollback,
                      dlgRollbackBlocks)
 import qualified Pos.DB.GState.Common as GS (writeBatchGState)
 import           Pos.DB.Lrc (HasLrcContext)
+import           Pos.DB.Rocks (MonadRealDB)
 import           Pos.DB.Ssc (sscApplyBlocks, sscNormalize, sscRollbackBlocks)
 import           Pos.DB.Txp.MemState (MonadTxpLocal (..))
 import           Pos.DB.Txp.Settings (TxpBlock, TxpBlund,
@@ -92,6 +93,7 @@ type MonadBlockBase ctx m
        -- To report bad things.
        , MonadReporting m
        , HasSscConfiguration
+       , MonadRealDB ctx m
        )
 
 -- | Set of constraints necessary for high-level block verification.
