@@ -24,7 +24,6 @@ module Pos.Chain.Txp.Toil.Types
 
        , PactState (..)
        , psRefStore 
-       , psPacts
        , psModifier
 
        , originUtxo
@@ -36,11 +35,13 @@ import           Universum
 import           Control.Lens (makeLenses)
 import           Data.Default (Default, def)
 import qualified Data.Map as M (Map, lookup, toList, filter, empty)
+import qualified Data.HashMap.Strict as HM
 import           Data.Text.Lazy.Builder (Builder)
 import           Formatting (Format, later)
 import           Serokell.Util.Text (mapBuilderJson)
 
-import           Pact.Types.Runtime (RefStore, PactExec, PactId)
+import           Pact.Native (nativeDefs)
+import           Pact.Types.Runtime (RefStore (..))
 
 import           Pos.Chain.Txp.Tx (TxId, TxIn, isOriginTxOut, isGDTxOut)
 import           Pos.Chain.Txp.TxAux (TxAux)
@@ -136,19 +137,19 @@ type PactModifier = M.Map ByteString ByteString
 
 data PactState = PactState
     { _psRefStore :: !RefStore
-    , _psPacts    :: !(M.Map PactId PactExec)
     , _psModifier :: !PactModifier
     }
 
 makeLenses ''PactState
 
+initRefStore :: RefStore
+initRefStore = RefStore nativeDefs HM.empty
+
 instance Default PactState where
-    def =
-        PactState
-        { _psRefStore = def
-        , _psPacts    = M.empty
-        , _psModifier = M.empty
-        }
+    def = PactState
+          { _psRefStore = initRefStore
+          , _psModifier = M.empty
+          }
 
 ----------------------------------------------------------------------------
 -- Helper functions 

@@ -78,6 +78,10 @@ library
                        Pos.Chain.Txp.Toil.Failure
                        Pos.Chain.Txp.Toil.Logic
                        Pos.Chain.Txp.Toil.Monad
+                       Pos.Chain.Txp.Toil.Pact
+                       Pos.Chain.Txp.Toil.Pact.Command
+                       Pos.Chain.Txp.Toil.Pact.Functions
+                       Pos.Chain.Txp.Toil.Pact.Interpreter
                        Pos.Chain.Txp.Toil.Stakes
                        Pos.Chain.Txp.Toil.Types
                        Pos.Chain.Txp.Toil.Utxo

@@ -67,6 +67,7 @@ data ToilVerFailure
     | ToilRepeatedInput
     | ToilEmptyAfterFilter
     | ToilStateMismatch
+    | ToilPactError !Text
     deriving (Show, Eq)
 
 instance TypeError (DisallowException ToilVerFailure) =>
@@ -143,6 +144,9 @@ instance Buildable ToilVerFailure where
 
     build ToilStateMismatch =
        "bad transaction, if there is input state, there must have output state, and just 1 in each of them"
+
+    build (ToilPactError msg) =
+        bprint ("PactError: "%stext) msg
 
 ----------------------------------------------------------------------------
 -- WitnessVerFailure

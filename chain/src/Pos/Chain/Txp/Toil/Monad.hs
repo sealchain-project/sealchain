@@ -58,7 +58,8 @@ module Pos.Chain.Txp.Toil.Monad
        , PactExecEnv (..)
        , PactExecState (..)
        , PactExecM
-       , peeGasModel
+       , peeLoggers
+       , peeGasEnv
        , pesRefStore
        , pesMPTreeDB
        ) where
@@ -71,9 +72,10 @@ import           Control.Monad.State.Strict (mapStateT)
 import           Data.Default (def)
 import           Fmt ((+|), (|+))
 
-import           Pact.Persist.MPTree (MPTreeDB)
-import           Pact.Types.Gas (GasModel)
-import           Pact.Types.Runtime (RefStore)
+import qualified Pact.Persist.MPTree as Pact (MPTreeDB)
+import qualified Pact.Types.Gas as Pact (GasModel, GasEnv)
+import qualified Pact.Types.Logger as Pact (Loggers)
+import qualified Pact.Types.Runtime as Pact (RefStore)
 
 import           Pos.Chain.Txp.Toil.Types (MemPool, StakesView, UndoMap,
                      UtxoLookup, UtxoModifier, PactState, 
@@ -147,7 +149,7 @@ makeLenses ''LocalToilState
 
 data LocalToilEnv p = LocalToilEnv
     { _lteUtxo       :: !UtxoLookup
-    , _lteGasModel   :: !GasModel
+    , _lteGasModel   :: !Pact.GasModel
     , _ltePactMPDB   :: !(MPDB p)
     }
 
@@ -214,7 +216,7 @@ data GlobalToilEnv p m = GlobalToilEnv
     { _gteUtxo        :: !UtxoLookup
     , _gteTotalStake  :: !Coin
     , _gteStakeGetter :: (StakeholderId -> m (Maybe Coin)) 
-    , _gteGasModel    :: !GasModel
+    , _gteGasModel    :: !Pact.GasModel
     , _gtePactMPDB    :: !(MPDB p)
     }
 
@@ -303,14 +305,15 @@ verifyAndApplyMToGlobalToilM action = do
 
 -- | Immutable environment used in Pact execution.
 data PactExecEnv = PactExecEnv
-    { _peeGasModel :: !GasModel
+    { _peeLoggers :: Pact.Loggers
+    , _peeGasEnv  :: Pact.GasEnv
     }
 makeLenses ''PactExecEnv
 
 -- | Mutable state used in Pact execution.
 data PactExecState p = PactExecState
-    { _pesRefStore :: !RefStore
-    , _pesMPTreeDB :: !(MPTreeDB p)
+    { _pesRefStore :: Pact.RefStore
+    , _pesMPTreeDB :: !(Pact.MPTreeDB p)
     }
 
 makeLenses ''PactExecState
