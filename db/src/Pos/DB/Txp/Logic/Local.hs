@@ -31,7 +31,8 @@ import           Pos.Chain.Txp (ExtendedLocalToilM, LocalToilEnv (..),
                      TxAux (..), TxId, TxUndo, TxValidationRules (..), 
                      TxpConfiguration (..), UndoMap, Utxo, UtxoModifier, 
                      PactState, extendLocalToilM, mkLiveTxValidationRules, 
-                     mpLocalTxs, normalizeToil, processTx, topsortTxs, utxoToLookup)
+                     mpLocalTxs, normalizeToil, processTx, topsortTxs, 
+                     utxoToLookup, defPactState)
 import           Pos.Chain.Update (BlockVersionData)
 import           Pos.Core (EpochIndex, SlotCount, siEpoch)
 import           Pos.Core.JsonLog (CanJsonLog (..))
@@ -45,7 +46,7 @@ import           Pos.DB.Class (MonadGState (..))
 import qualified Pos.DB.GState.Common as GS
 import           Pos.DB.GState.Lock (Priority (..), StateLock, StateLockMetrics,
                      withStateLock)
-import           Pos.DB.Txp.Logic.Common (buildUtxo, defaultGasModel, unsafeNewPactMPDB)
+import           Pos.DB.Txp.Logic.Common (buildUtxo, defaultGasModel, unsafeGetStateRoot)
 import           Pos.DB.Txp.MemState (GenericTxpLocalData (..), MempoolExt,
                      MonadTxpMem, TxpLocalWorkMode, getLocalTxsMap, getTxpTip,
                      getLocalUndos, getMemPool, getTxpExtra, getUtxoModifier, 
@@ -106,7 +107,7 @@ txProcessTransactionNoLock genesisConfig txpConfig = txProcessTransactionAbstrac
 
 txProcessTransactionAbstract ::
        forall extraEnv extraState ctx p m a.
-       (TxpLocalWorkMode ctx m, MempoolExt m ~ extraState, p ~ GS.MPTDb)
+       (TxpLocalWorkMode ctx m, MempoolExt m ~ extraState)
     => SlotCount
     -> Genesis.Config
     -> (Utxo -> TxAux -> m extraEnv)
@@ -177,10 +178,8 @@ txProcessTransactionAbstract epochSlots genesisConfig buildEnv txAction itw@(txI
         | tipDB /= tip = pure . Left $ ToilTipsMismatch tipDB tip
         | otherwise = do
             gasModel <- defaultGasModel
-            pactMPDB <- lift $ unsafeNewPactMPDB tip
             let initialEnv = LocalToilEnv { _lteUtxo = (utxoToLookup utxo) 
                                           , _lteGasModel = gasModel
-                                          , _ltePactMPDB = pactMPDB
                                           }
                 initialState = LocalToilState { _ltsMemPool = mp
                                               , _ltsUtxoModifier = um
@@ -241,8 +240,9 @@ txNormalizeAbstract epochSlots buildEnv normalizeAction =
     getCurrentSlot epochSlots >>= \case
         Nothing -> do
             tip <- GS.getTip
+            stateRoot <- unsafeGetStateRoot tip
             -- Clear and update tip
-            withTxpLocalData $ flip setTxpLocalData (mempty, def, mempty, def, tip, def)
+            withTxpLocalData $ flip setTxpLocalData (mempty, def, mempty, defPactState stateRoot, tip, def)
         Just (siEpoch -> epoch) -> do
             globalTip <- GS.getTip
             localTxs <- withTxpLocalData getLocalTxsMap
@@ -252,17 +252,16 @@ txNormalizeAbstract epochSlots buildEnv normalizeAction =
             bvd <- gsAdoptedBVData
 
             gasModel <- defaultGasModel
-            pactMPDB <- unsafeNewPactMPDB globalTip
+            stateRoot <- unsafeGetStateRoot globalTip
             let initialEnv = LocalToilEnv { _lteUtxo = (utxoToLookup utxo) 
                                           , _lteGasModel = gasModel
-                                          , _ltePactMPDB = pactMPDB
                                           }
             let initialState =
                     LocalToilState
                         { _ltsMemPool = def
                         , _ltsUtxoModifier = mempty
                         , _ltsUndos = mempty
-                        , _ltsPactState = def  -- | clear PactState every slot
+                        , _ltsPactState = defPactState stateRoot  -- | clear PactState every slot
                         }
             (LocalToilState {..}, newExtraState) <-
                 launchNamedPureLog id $

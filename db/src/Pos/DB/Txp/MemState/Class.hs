@@ -34,7 +34,7 @@ import           Pos.Chain.Block (HeaderHash)
 import           Pos.Chain.Genesis as Genesis (Config)
 import           Pos.Chain.Txp (MemPool (..), ToilVerFailure, TxAux, TxId,
                      TxValidationRules, TxpConfiguration, UndoMap,
-                     UtxoModifier, PactState)
+                     UtxoModifier, PactState, defPactState)
 import           Pos.Core.Reporting (MonadReporting)
 import           Pos.Core.Slotting (MonadSlots (..))
 import           Pos.DB.Class (MonadDBRead, MonadGState (..))
@@ -43,6 +43,8 @@ import           Pos.DB.Rocks (MonadRealDB)
 import           Pos.DB.Txp.MemState.Types (GenericTxpLocalData (..))
 import           Pos.Util.Util (HasLens (..))
 import           Pos.Util.Wlog (NamedPureLogger, WithLogger, launchNamedPureLog)
+
+import           Sealchain.Mpt.MerklePatricia.StateRoot (StateRoot)
 
 data TxpHolderTag
 
@@ -124,11 +126,12 @@ setTxpLocalData txpData (um, mp, un, ps, hh, e) = do
 --   header tip.
 clearTxpMemPool
     :: Default e
-    => GenericTxpLocalData e
+    => StateRoot
+    -> GenericTxpLocalData e
     -> STM ()
-clearTxpMemPool txpData = do
+clearTxpMemPool sr txpData = do
   tip <- getTxpTip txpData
-  setTxpLocalData txpData (mempty, def, mempty, def, tip, def)
+  setTxpLocalData txpData (mempty, def, mempty, defPactState sr, tip, def)
 
 ----------------------------------------------------------------------------
 -- Abstract txNormalize and processTx

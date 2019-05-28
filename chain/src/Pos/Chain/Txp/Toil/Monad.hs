@@ -17,7 +17,6 @@ module Pos.Chain.Txp.Toil.Monad
        , LocalToilState (..)
        , lteUtxo
        , lteGasModel
-       , ltePactMPDB
        , ltsMemPool
        , ltsUtxoModifier
        , ltsUndos
@@ -41,7 +40,6 @@ module Pos.Chain.Txp.Toil.Monad
        , gteTotalStake
        , gteStakeGetter
        , gteGasModel
-       , gtePactMPDB
        , runGlobalToilM
        , getStake
        , getTotalStake
@@ -78,7 +76,7 @@ import qualified Pact.Types.Logger as Pact (Loggers)
 import qualified Pact.Types.Runtime as Pact (RefStore)
 
 import           Pos.Chain.Txp.Toil.Types (MemPool, StakesView, UndoMap,
-                     UtxoLookup, UtxoModifier, PactState, 
+                     UtxoLookup, UtxoModifier, PactState, defPactState,
                      mpLocalTxs, mpSize, svStakes, svTotal)
 import           Pos.Chain.Txp.Tx (TxId, TxIn)
 import           Pos.Chain.Txp.TxAux (TxAux)
@@ -89,7 +87,7 @@ import           Pos.Util (type (~>))
 import qualified Pos.Util.Modifier as MM
 import           Pos.Util.Wlog (NamedPureLogger, WithLogger, launchNamedPureLog)
 
-import           Sealchain.Mpt.MerklePatriciaMixMem (MPDB)
+import           Sealchain.Mpt.MerklePatriciaMixMem (StateRoot)
 
 ----------------------------------------------------------------------------
 -- Monad used for verify and apply tx.
@@ -150,7 +148,6 @@ makeLenses ''LocalToilState
 data LocalToilEnv p = LocalToilEnv
     { _lteUtxo       :: !UtxoLookup
     , _lteGasModel   :: !Pact.GasModel
-    , _ltePactMPDB   :: !(MPDB p)
     }
 
 makeLenses ''LocalToilEnv
@@ -201,12 +198,12 @@ data GlobalToilState = GlobalToilState
     }
 
 -- | Default 'GlobalToilState'.
-defGlobalToilState :: GlobalToilState
-defGlobalToilState =
+defGlobalToilState :: StateRoot -> GlobalToilState
+defGlobalToilState sr =
     GlobalToilState 
     { _gtsUtxoModifier = mempty
     , _gtsStakesView = def
-    , _gtsPactState = def
+    , _gtsPactState = defPactState sr
     }
 
 makeLenses ''GlobalToilState
@@ -217,7 +214,6 @@ data GlobalToilEnv p m = GlobalToilEnv
     , _gteTotalStake  :: !Coin
     , _gteStakeGetter :: (StakeholderId -> m (Maybe Coin)) 
     , _gteGasModel    :: !Pact.GasModel
-    , _gtePactMPDB    :: !(MPDB p)
     }
 
 makeLenses ''GlobalToilEnv

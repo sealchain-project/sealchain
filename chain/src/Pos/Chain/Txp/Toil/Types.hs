@@ -1,4 +1,5 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies    #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | Types used for pure transaction processing (aka Toil).
 
@@ -24,7 +25,9 @@ module Pos.Chain.Txp.Toil.Types
 
        , PactState (..)
        , psRefStore 
+       , psStateRoot
        , psModifier
+       , defPactState
 
        , originUtxo
        , gdUtxo
@@ -49,6 +52,8 @@ import           Pos.Chain.Txp.TxOutAux (TxOutAux (..))
 import           Pos.Chain.Txp.Undo (TxUndo)
 import           Pos.Core (Coin, StakeholderId)
 import qualified Pos.Util.Modifier as MM
+
+import           Sealchain.Mpt.MerklePatricia.StateRoot (StateRoot)
 
 ----------------------------------------------------------------------------
 -- UTXO
@@ -136,20 +141,19 @@ type UndoMap = HashMap TxId TxUndo
 type PactModifier = M.Map ByteString ByteString
 
 data PactState = PactState
-    { _psRefStore :: !RefStore
-    , _psModifier :: !PactModifier
+    { _psRefStore  :: !RefStore
+    , _psStateRoot :: !StateRoot
+    , _psModifier  :: !PactModifier
     }
 
 makeLenses ''PactState
 
-initRefStore :: RefStore
-initRefStore = RefStore nativeDefs HM.empty
-
-instance Default PactState where
-    def = PactState
-          { _psRefStore = initRefStore
-          , _psModifier = M.empty
-          }
+defPactState :: StateRoot -> PactState
+defPactState sr = 
+    let _psRefStore = RefStore nativeDefs HM.empty
+        _psStateRoot = sr
+        _psModifier = M.empty
+    in PactState {..}
 
 ----------------------------------------------------------------------------
 -- Helper functions 

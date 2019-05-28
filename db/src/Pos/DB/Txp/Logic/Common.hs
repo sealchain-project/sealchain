@@ -4,7 +4,7 @@ module Pos.DB.Txp.Logic.Common
        ( buildUtxo
        , buildUtxoForRollback
        , defaultGasModel
-       , unsafeNewPactMPDB
+       , unsafeGetStateRoot
        ) where
 
 import           Universum
@@ -22,7 +22,6 @@ import           Pos.Chain.Txp (Tx (..), TxAux (..), TxIn (..), TxOutAux, Utxo,
 import           Pos.Crypto (hash)
 import           Pos.DB.BlockIndex (getHeader)
 import           Pos.DB.Class (MonadDBRead)
-import           Pos.DB.GState.Common (MPTDb (..), newMPTDb)
 import           Pos.DB.Rocks (MonadRealDB)
 import           Pos.DB.Txp.Utxo (getTxOut)
 import qualified Pos.Util.Modifier as MM
@@ -87,8 +86,7 @@ buildUtxoGeneric toInputs utxoModifier txs = concatMapM buildForOne txs
 defaultGasModel :: Monad m => m GasModel
 defaultGasModel = return $ constGasModel 1
 
-unsafeNewPactMPDB :: (MonadRealDB ctx m, MonadDBRead m) => HeaderHash -> m (Mpt.MPDB MPTDb)
-unsafeNewPactMPDB tip = do
-    db <- newMPTDb
+unsafeGetStateRoot :: (MonadRealDB ctx m, MonadDBRead m) => HeaderHash -> m Mpt.StateRoot
+unsafeGetStateRoot tip = do
     (StateRoot bs) <- getStateRoot . Unsafe.fromJust <$> getHeader tip
-    return $ Mpt.MPDB db (Mpt.StateRoot bs)
+    return (Mpt.StateRoot bs)

@@ -66,7 +66,8 @@ import           Pos.DB.Lrc (HasLrcContext, lrcActionOnEpochReason)
 import qualified Pos.DB.Lrc as LrcDB
 import           Pos.DB.Ssc (sscGetLocalPayload, sscResetLocal)
 import           Pos.DB.Txp (MempoolExt, MonadTxpLocal (..), MonadTxpMem,
-                     clearTxpMemPool, txGetPayload, withTxpLocalData)
+                     clearTxpMemPool, txGetPayload, withTxpLocalData, getTxpTip, 
+                     unsafeGetStateRoot)
 import           Pos.DB.Update (UpdateContext, clearUSMemPool, getConsensusEra,
                      getMaxBlockSize, usCanCreateBlock, usPreparePayload)
 import           Pos.Util (_neHead)
@@ -398,7 +399,9 @@ applyCreatedBlock genesisConfig txpConfig pske createdBlock = applyCreatedBlockD
                 pure blockToApply
     clearMempools :: m ()
     clearMempools = do
-        withTxpLocalData clearTxpMemPool
+        txpTip <- withTxpLocalData getTxpTip
+        stateRoot <- unsafeGetStateRoot txpTip
+        withTxpLocalData (clearTxpMemPool stateRoot)
         sscResetLocal epochSlots
         clearUSMemPool
         clearDlgMemPool

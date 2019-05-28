@@ -36,7 +36,7 @@ import           Pos.Chain.Txp (ExtendedGlobalToilM, GlobalToilEnv (..),
                      TxpUndo, Utxo, UtxoModifier, PactState (..), applyToil,
                      defGlobalToilState, flattenTxPayload, gtsUtxoModifier,
                      gtsPactState, mkLiveTxValidationRules, rollbackToil, 
-                     runGlobalToilM, utxoToLookup, verifyToil)
+                     runGlobalToilM, utxoToLookup, verifyToil, defPactState)
 import           Pos.Core (epochIndexL, mkCoin)
 import           Pos.Core.Chrono (NE, NewestFirst (..), OldestFirst (..))
 import           Pos.Core.Exception (assertionFailed)
@@ -47,7 +47,7 @@ import           Pos.DB.Class (gsAdoptedBVData)
 import           Pos.DB.GState.Common (MPTDb, getTip)
 import           Pos.DB.GState.Stakes (getRealStake, getRealTotalStake)
 import           Pos.DB.Txp.Logic.Common (buildUtxo, buildUtxoForRollback, 
-                     defaultGasModel, unsafeNewPactMPDB)
+                     defaultGasModel, unsafeGetStateRoot)
 import           Pos.DB.Txp.Settings (TxpBlock, TxpBlund, TxpCommonMode,
                      TxpGlobalApplyMode, TxpGlobalRollbackMode,
                      TxpGlobalSettings (..), TxpGlobalVerifyMode)
@@ -92,12 +92,11 @@ verifyBlocks ::
     -> m $ Either ToilVerFailure $ OldestFirst NE TxpUndo
 verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $ do
     gasModel <- defaultGasModel
-    pactMPDB <- getTip >>= unsafeNewPactMPDB
+    stateRoot <- getTip >>= unsafeGetStateRoot
     let baseEnv = GlobalToilEnv { _gteUtxo = utxoToLookup M.empty
                                 , _gteTotalStake = (mkCoin 0) -- | because we do not need stakes while verifying
                                 , _gteStakeGetter = getRealStake
                                 , _gteGasModel = gasModel
-                                , _gtePactMPDB = pactMPDB
                                 }
     bvd <- gsAdoptedBVData
     let verifyPure :: TxValidationRules -> [TxAux] -> GlobalToilM MPTDb m (Either ToilVerFailure TxpUndo)
@@ -121,8 +120,7 @@ verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $
             case res of
                 (Left err, _)         -> throwError err
                 (Right txpUndo, gts') ->
-                    return 
-                      ( gts' ^. gtsUtxoModifier, (txpUndo : undos), gts' ^. gtsPactState)
+                    return (gts' ^. gtsUtxoModifier, (txpUndo : undos), gts' ^. gtsPactState)
         -- 'NE.fromList' is safe here, because there will be at least
         -- one 'foldStep' (since 'newChain' is not empty) and it will
         -- either fail (and then 'convertRes' will not be called) or
@@ -130,7 +128,7 @@ verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $
         convertRes :: (UtxoModifier, [TxpUndo], PactState) -> OldestFirst NE TxpUndo
         convertRes (_, undos, _) = OldestFirst . NE.fromList . reverse $ undos
     let txValRulesConfig = configTxValRules $ genesisConfig
-    convertRes <$> foldM (foldStep txValRulesConfig) (mempty, mempty, def) newChain
+    convertRes <$> foldM (foldStep txValRulesConfig) (mempty, mempty, defPactState stateRoot) newChain
   where
     epoch = NE.last (getOldestFirst newChain) ^. epochIndexL
     convertPayload :: TxpBlock -> [TxAux]
@@ -164,7 +162,7 @@ processBlunds ProcessBlundsSettings {..} blunds = do
     totalStake <- getRealTotalStake -- doesn't change
 
     gasModel <- defaultGasModel
-    pactMPDB <- getTip >>= unsafeNewPactMPDB
+    stateRoot <- getTip >>= unsafeGetStateRoot
     -- Note: base utxo also doesn't change, but we build it on each
     -- step (for different sets of transactions), because
     -- 'UtxoModifier' may accumulate some data and it may be more
@@ -193,13 +191,12 @@ processBlunds ProcessBlundsSettings {..} blunds = do
                         , _gteTotalStake = totalStake
                         , _gteStakeGetter = getRealStake
                         , _gteGasModel = gasModel
-                        , _gtePactMPDB = pactMPDB
                         }
             let env = (gte, extraEnv)
             launchNamedPureLog id $ 
                 flip execStateT gts . usingReaderT env $
                 processSingle
-    toBatchOp <$> foldM step (defGlobalToilState, def) blunds
+    toBatchOp <$> foldM step (defGlobalToilState stateRoot, def) blunds
 
 ----------------------------------------------------------------------------
 -- Apply and rollback
