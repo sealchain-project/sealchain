@@ -26,7 +26,7 @@ import           Universum
 
 import           Control.Lens hiding ((.=))
 import           Data.ByteString (ByteString)
-import           Data.Aeson as A
+import           Data.Aeson
 
 import           Pact.Types.Runtime
 import           Pact.Types.RPC
@@ -53,7 +53,7 @@ verifyCommand orig@Command{..} = case ppcmdPayload' of
       Right env' -> ProcSucc $ orig { _cmdPayload = env' }
       e          -> ProcFail $ "Invalid command: " ++ toErrStr e
   where
-    ppcmdPayload' = traverse parsePact =<< A.eitherDecodeStrict' _cmdPayload
+    ppcmdPayload' = traverse parsePact =<< eitherDecodeStrict' _cmdPayload
     parsePact :: Text -> Either String ParsedCode
     parsePact code = ParsedCode code <$> parseExprs code
     toErrStr :: Either String a -> String
@@ -73,8 +73,15 @@ data Payload c = Payload
   } deriving (Show, Eq, Generic, Functor, Foldable, Traversable)
 
 instance (NFData a) => NFData (Payload a)
-instance (ToJSON a) => ToJSON (Payload a) where toJSON = lensyToJSON 1
-instance (FromJSON a) => FromJSON (Payload a) where parseJSON = lensyParseJSON 1
+
+instance (ToJSON a) => ToJSON (Payload a) where 
+  toJSON (Payload rpc) =
+    object [ "payload" .= toJSON rpc ]
+
+instance (FromJSON a) => FromJSON (Payload a) where 
+  parseJSON =
+      withObject "Payload" $ \o ->
+        Payload <$> (o .: "payload")
 
 data CommandResult = CommandResult
   { _crGas    :: Gas
