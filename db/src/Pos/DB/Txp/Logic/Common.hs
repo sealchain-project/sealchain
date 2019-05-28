@@ -22,8 +22,8 @@ import           Pos.Chain.Txp (Tx (..), TxAux (..), TxIn (..), TxOutAux, Utxo,
 import           Pos.Crypto (hash)
 import           Pos.DB.BlockIndex (getHeader)
 import           Pos.DB.Class (MonadDBRead)
+import           Pos.DB.GState.Common (MPTDb (..), newMPTDb)
 import           Pos.DB.Rocks (MonadRealDB)
-import           Pos.DB.Txp.Logic.Types (GStateDB (..), newGStateDB)
 import           Pos.DB.Txp.Utxo (getTxOut)
 import qualified Pos.Util.Modifier as MM
 
@@ -87,8 +87,8 @@ buildUtxoGeneric toInputs utxoModifier txs = concatMapM buildForOne txs
 defaultGasModel :: Monad m => m GasModel
 defaultGasModel = return $ constGasModel 1
 
-unsafeNewPactMPDB :: (MonadRealDB ctx m, MonadDBRead m) => HeaderHash -> m (Mpt.MPDB GStateDB)
+unsafeNewPactMPDB :: (MonadRealDB ctx m, MonadDBRead m) => HeaderHash -> m (Mpt.MPDB MPTDb)
 unsafeNewPactMPDB tip = do
-    gsdb <- newGStateDB
+    db <- newMPTDb
     (StateRoot bs) <- getStateRoot . Unsafe.fromJust <$> getHeader tip
-    return $ Mpt.MPDB gsdb (Mpt.StateRoot bs)
+    return $ Mpt.MPDB db (Mpt.StateRoot bs)

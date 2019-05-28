@@ -23,6 +23,9 @@ module Pos.DB.GState.Common
 
          -- * Operations
        , CommonOp (..)
+
+       , MPTDb (..)
+       , newMPTDb
        ) where
 
 import           Universum
@@ -40,7 +43,12 @@ import           Pos.DB.Class (DBTag (GStateDB), MonadDB (dbDelete),
                      MonadDBRead (..))
 import           Pos.DB.Error (DBError (DBMalformed))
 import           Pos.DB.Functions (dbGetBi, dbPutBi)
+import           Pos.DB.Rocks.Functions (rocksGetBytes, rocksPutBytes)
+import           Pos.DB.Rocks.Types (DB, MonadRealDB, getGStateDB)
 import           Pos.Util.Util (maybeThrow)
+
+import           Sealchain.Mpt.MerklePatricia.MPDB (KVPersister (..))
+
 
 ----------------------------------------------------------------------------
 -- Common Helpers
@@ -152,3 +160,16 @@ putTip = gsPutBi tipKey
 
 putMaxSeenDifficulty :: MonadDB m => ChainDifficulty -> m ()
 putMaxSeenDifficulty = gsPutBi maxSeenDifficultyKey
+
+----------------------------------------------------------------------------
+-- MPTreeDB and Pact
+----------------------------------------------------------------------------
+
+newtype MPTDb = MPTDb DB
+
+instance KVPersister MPTDb where
+    getKV (MPTDb db) k = rocksGetBytes k db   
+    putKV (MPTDb db) k v = rocksPutBytes k v db
+
+newMPTDb :: MonadRealDB ctx m => m MPTDb
+newMPTDb = MPTDb <$> getGStateDB

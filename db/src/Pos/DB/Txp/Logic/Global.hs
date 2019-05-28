@@ -44,11 +44,10 @@ import           Pos.Core.Slotting (epochOrSlotToEpochIndex, getEpochOrSlot)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB (SomeBatchOp (..), getTipHeader)
 import           Pos.DB.Class (gsAdoptedBVData)
-import           Pos.DB.GState.Common (getTip)
+import           Pos.DB.GState.Common (MPTDb, getTip)
 import           Pos.DB.GState.Stakes (getRealStake, getRealTotalStake)
 import           Pos.DB.Txp.Logic.Common (buildUtxo, buildUtxoForRollback, 
                      defaultGasModel, unsafeNewPactMPDB)
-import           Pos.DB.Txp.Logic.Types (GStateDB)
 import           Pos.DB.Txp.Settings (TxpBlock, TxpBlund, TxpCommonMode,
                      TxpGlobalApplyMode, TxpGlobalRollbackMode,
                      TxpGlobalSettings (..), TxpGlobalVerifyMode)
@@ -101,7 +100,7 @@ verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $
                                 , _gtePactMPDB = pactMPDB
                                 }
     bvd <- gsAdoptedBVData
-    let verifyPure :: TxValidationRules -> [TxAux] -> GlobalToilM GStateDB m (Either ToilVerFailure TxpUndo)
+    let verifyPure :: TxValidationRules -> [TxAux] -> GlobalToilM MPTDb m (Either ToilVerFailure TxpUndo)
         verifyPure txValRules = runExceptT
             . verifyToil pm txValRules bvd (tcAssetLockedSrcAddrs txpConfig) epoch verifyAllIsKnown
         foldStep
@@ -143,7 +142,7 @@ verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $
 ----------------------------------------------------------------------------
 
 data ProcessBlundsSettings extraEnv extraState m = ProcessBlundsSettings
-    { pbsProcessSingle   :: TxpBlund -> m (ExtendedGlobalToilM extraEnv extraState GStateDB m ())
+    { pbsProcessSingle   :: TxpBlund -> m (ExtendedGlobalToilM extraEnv extraState MPTDb m ())
     , pbsCreateEnv       :: Utxo -> [TxAux] -> m extraEnv
     , pbsExtraOperations :: extraState -> SomeBatchOp
     , pbsIsRollback      :: !Bool
@@ -225,7 +224,7 @@ applyBlocksWith pm genesisConfig txpConfig settings blunds = do
     processBlunds settings (getOldestFirst blunds)
 
 processBlundsSettings ::
-       forall p m.(Monad m, p ~ GStateDB)
+       forall p m.(Monad m, p ~ MPTDb)
     => Bool
     -> ([(TxAux, TxUndo)] -> GlobalToilM p m ())
     -> ProcessBlundsSettings () () m
@@ -237,7 +236,7 @@ processBlundsSettings isRollback pureAction =
         , pbsIsRollback = isRollback
         }
   where
-    processSingle :: TxpBlund -> ExtendedGlobalToilM () () GStateDB m ()
+    processSingle :: TxpBlund -> ExtendedGlobalToilM () () MPTDb m ()
     processSingle = zoom _1 . magnify _1 . pureAction . blundToAuxNUndo
 
 rollbackBlocks ::

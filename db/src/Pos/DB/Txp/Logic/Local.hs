@@ -46,7 +46,6 @@ import qualified Pos.DB.GState.Common as GS
 import           Pos.DB.GState.Lock (Priority (..), StateLock, StateLockMetrics,
                      withStateLock)
 import           Pos.DB.Txp.Logic.Common (buildUtxo, defaultGasModel, unsafeNewPactMPDB)
-import           Pos.DB.Txp.Logic.Types (GStateDB (..))
 import           Pos.DB.Txp.MemState (GenericTxpLocalData (..), MempoolExt,
                      MonadTxpMem, TxpLocalWorkMode, getLocalTxsMap, getTxpTip,
                      getLocalUndos, getMemPool, getTxpExtra, getUtxoModifier, 
@@ -100,14 +99,14 @@ txProcessTransactionNoLock genesisConfig txpConfig = txProcessTransactionAbstrac
         -> TxValidationRules
         -> EpochIndex
         -> (TxId, TxAux)
-        -> ExceptT ToilVerFailure (ExtendedLocalToilM () () GStateDB m) TxUndo
+        -> ExceptT ToilVerFailure (ExtendedLocalToilM () () GS.MPTDb m) TxUndo
     processTxHoisted bvd txValRules = do
         mapExceptT extendLocalToilM
             ... (processTx (configProtocolMagic genesisConfig) txValRules txpConfig bvd)
 
 txProcessTransactionAbstract ::
        forall extraEnv extraState ctx p m a.
-       (TxpLocalWorkMode ctx m, MempoolExt m ~ extraState, p ~ GStateDB)
+       (TxpLocalWorkMode ctx m, MempoolExt m ~ extraState, p ~ GS.MPTDb)
     => SlotCount
     -> Genesis.Config
     -> (Utxo -> TxAux -> m extraEnv)
@@ -226,7 +225,7 @@ txNormalize genesisConfig txValRules txpConfig = do
         -> BlockVersionData
         -> EpochIndex
         -> HashMap TxId TxAux
-        -> ExtendedLocalToilM () () GStateDB m ()
+        -> ExtendedLocalToilM () () GS.MPTDb m ()
     normalizeToilHoisted txValRules' bvd epoch txs =
         extendLocalToilM
             $ normalizeToil (configProtocolMagic genesisConfig) txValRules' txpConfig bvd epoch
@@ -236,7 +235,7 @@ txNormalizeAbstract ::
        (TxpLocalWorkMode ctx m, MempoolExt m ~ extraState)
     => SlotCount
     -> (Utxo -> [TxAux] -> m extraEnv)
-    -> (BlockVersionData -> EpochIndex -> HashMap TxId TxAux -> ExtendedLocalToilM extraEnv extraState GStateDB m ())
+    -> (BlockVersionData -> EpochIndex -> HashMap TxId TxAux -> ExtendedLocalToilM extraEnv extraState GS.MPTDb m ())
     -> m ()
 txNormalizeAbstract epochSlots buildEnv normalizeAction =
     getCurrentSlot epochSlots >>= \case

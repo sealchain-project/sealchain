@@ -81,7 +81,7 @@ instance (ToJSON a) => ToJSON (Payload a) where toJSON = lensyToJSON 1
 instance (FromJSON a) => FromJSON (Payload a) where parseJSON = lensyParseJSON 1
 
 data CommandError = CommandError {
-      _ceMsg :: String
+      _ceMsg    :: String
     , _ceDetail :: Maybe String
 }
 

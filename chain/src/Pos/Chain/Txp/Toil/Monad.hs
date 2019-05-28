@@ -305,14 +305,15 @@ verifyAndApplyMToGlobalToilM action = do
 
 -- | Immutable environment used in Pact execution.
 data PactExecEnv = PactExecEnv
-    { _peeLoggers :: Pact.Loggers
-    , _peeGasEnv  :: Pact.GasEnv
+    { _peeLoggers :: !Pact.Loggers
+    , _peeGasEnv  :: !Pact.GasEnv
     }
+
 makeLenses ''PactExecEnv
 
 -- | Mutable state used in Pact execution.
 data PactExecState p = PactExecState
-    { _pesRefStore :: Pact.RefStore
+    { _pesRefStore :: !Pact.RefStore
     , _pesMPTreeDB :: !(Pact.MPTreeDB p)
     }
 
