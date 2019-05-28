@@ -67,7 +67,7 @@ data ToilVerFailure
     | ToilRepeatedInput
     | ToilEmptyAfterFilter
     | ToilStateMismatch
-    | ToilPactError !Text
+    | ToilPactError !Text -- TODO xl optimize
     deriving (Show, Eq)
 
 instance TypeError (DisallowException ToilVerFailure) =>

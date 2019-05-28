@@ -5,16 +5,13 @@
 module Pos.Chain.Txp.Toil.Pact.Functions where
 
 import           Universum
-import qualified Universum.Unsafe as Unsafe
 
 import           Control.Lens ((.=))
 import           Control.Monad.Except
-import           Data.Aeson as A hiding ((.=))
 import qualified Data.Text as T
 
 import           Pact.Persist.MPTree (MPTreeDB (..), persister)
 import           Pact.PersistPactDb (DbEnv (..), pactdb, initDbEnv, createSchema)
-import           Pact.Types.Gas (Gas (..))
 import           Pact.Types.Logger ()
 import           Pact.Types.Persistence (TxId (..))
 import           Pact.Types.RPC (ExecMsg (..), PactRPC (..))
@@ -41,9 +38,6 @@ applyCmd'
   -> ExceptT ToilVerFailure (PactExecM p m) CommandResult
 applyCmd' _ (ProcFail s) = throwError $ ToilPactError (T.pack s)
 applyCmd' _ (ProcSucc cmd) = runPayload cmd
-
-jsonResult :: ToJSON a => Gas -> a -> CommandResult
-jsonResult gas a = CommandResult (toJSON a) gas
 
 runPayload 
   :: (MonadIO m, KVPersister p)
@@ -77,7 +71,7 @@ applyExec (ExecMsg parsedCode edata) Command{..} = do
       pesMPTreeDB .= _db dbEnv -- | save new MPTreeDB
       pesRefStore .= _erRefStore
 
-      return $ jsonResult _erGas $ CommandSuccess (Unsafe.last _erOutput)
+      return $ CommandResult _erGas
 
 newPactDbEnv 
   :: (MonadIO m, KVPersister p) 

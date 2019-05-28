@@ -162,7 +162,7 @@ putMaxSeenDifficulty :: MonadDB m => ChainDifficulty -> m ()
 putMaxSeenDifficulty = gsPutBi maxSeenDifficultyKey
 
 ----------------------------------------------------------------------------
--- MPTreeDB and Pact
+-- MPTDb
 ----------------------------------------------------------------------------
 
 newtype MPTDb = MPTDb DB
