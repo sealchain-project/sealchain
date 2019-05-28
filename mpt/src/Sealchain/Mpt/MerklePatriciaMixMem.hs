@@ -6,7 +6,7 @@ module Sealchain.Mpt.MerklePatriciaMixMem (
   MPVal, 
   MPPtr,
   MPDB (..), 
-  KVPersister,
+  KVPersister (..),
   StateRoot(..),
   MMModifier,
   putKeyValMixMem, 

@@ -44,7 +44,7 @@ import           Pos.DB.Txp.MemState.Types (GenericTxpLocalData (..))
 import           Pos.Util.Util (HasLens (..))
 import           Pos.Util.Wlog (NamedPureLogger, WithLogger, launchNamedPureLog)
 
-import           Sealchain.Mpt.MerklePatricia.StateRoot (StateRoot)
+import           Sealchain.Mpt.MerklePatriciaMixMem (StateRoot)
 
 data TxpHolderTag
 

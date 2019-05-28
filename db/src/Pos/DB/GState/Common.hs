@@ -47,7 +47,7 @@ import           Pos.DB.Rocks.Functions (rocksGetBytes, rocksPutBytes)
 import           Pos.DB.Rocks.Types (DB, MonadRealDB, getGStateDB)
 import           Pos.Util.Util (maybeThrow)
 
-import           Sealchain.Mpt.MerklePatricia.MPDB (KVPersister (..))
+import           Sealchain.Mpt.MerklePatriciaMixMem (KVPersister (..))
 
 
 ----------------------------------------------------------------------------

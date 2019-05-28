@@ -53,7 +53,7 @@ import           Pos.Chain.Txp.Undo (TxUndo)
 import           Pos.Core (Coin, StakeholderId)
 import qualified Pos.Util.Modifier as MM
 
-import           Sealchain.Mpt.MerklePatricia.StateRoot (StateRoot)
+import           Sealchain.Mpt.MerklePatriciaMixMem (StateRoot)
 
 ----------------------------------------------------------------------------
 -- UTXO

@@ -26,8 +26,7 @@ import           Pos.Chain.Txp.Toil.Monad
 import           Pos.Chain.Txp.Toil.Pact.Command
 import           Pos.Chain.Txp.Toil.Pact.Interpreter
 
-import           Sealchain.Mpt.MerklePatricia.MPDB (MPDB (..), KVPersister (..))
-import           Sealchain.Mpt.MerklePatricia.StateRoot (emptyTriePtr)
+import           Sealchain.Mpt.MerklePatriciaMixMem (MPDB (..), KVPersister, emptyTriePtr)
 
 applyCmd 
   :: (MonadIO m, KVPersister p)
