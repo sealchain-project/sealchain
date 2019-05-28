@@ -12,7 +12,7 @@ import           Control.Monad.Except
 import           Data.Aeson as A hiding ((.=))
 import qualified Data.Text as T
 
-import           Pact.Persist.MPTree (MPTreeDB, persister)
+import           Pact.Persist.MPTree (MPTreeDB (..), persister)
 import           Pact.PersistPactDb (DbEnv (..), pactdb, initDbEnv, createSchema)
 import           Pact.Types.Gas (Gas (..))
 import           Pact.Types.Logger ()
@@ -26,10 +26,8 @@ import           Pos.Chain.Txp.Toil.Monad
 import           Pos.Chain.Txp.Toil.Pact.Command
 import           Pos.Chain.Txp.Toil.Pact.Interpreter
 
-import           Sealchain.Mpt.MerklePatricia.MPDB (KVPersister (..))
-
-initSchema :: PactDbEnv (DbEnv p) -> IO ()
-initSchema PactDbEnv {..} = createSchema pdPactDbVar
+import           Sealchain.Mpt.MerklePatricia.MPDB (MPDB (..), KVPersister (..))
+import           Sealchain.Mpt.MerklePatricia.StateRoot (emptyTriePtr)
 
 applyCmd 
   :: (MonadIO m, KVPersister p)
@@ -43,7 +41,7 @@ applyCmd'
   -> ProcessedCommand ParsedCode 
   -> ExceptT ToilVerFailure (PactExecM p m) CommandResult
 applyCmd' _ (ProcFail s) = throwError $ ToilPactError (T.pack s)
-applyCmd'  _ (ProcSucc cmd) = runPayload cmd
+applyCmd' _ (ProcSucc cmd) = runPayload cmd
 
 jsonResult :: ToJSON a => Gas -> a -> CommandResult
 jsonResult gas a = CommandResult (toJSON a) gas
@@ -89,4 +87,11 @@ newPactDbEnv = do
   mptDb <- use pesMPTreeDB
   loggers <- view peeLoggers
   let dbe = initDbEnv loggers persister mptDb
-  PactDbEnv pactdb <$> newMVar dbe
+  pactDbEnv <- liftIO $ PactDbEnv pactdb <$> newMVar dbe
+  let curRoot = stateRoot . _mpdb $ mptDb 
+  when (curRoot == emptyTriePtr) $ liftIO $ initSchema pactDbEnv -- | init schema when state root is empty
+  return pactDbEnv
+
+initSchema :: PactDbEnv (DbEnv p) -> IO ()
+initSchema PactDbEnv {..} = do
+  createSchema pdPactDbVar
