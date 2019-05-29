@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
--- | Functions operating on UTXO (in '(VerifyAndApplyM m)' monad).
+-- | Functions operating on UTXO (in '(UtxoM)' monad).
 
 module Pos.Chain.Txp.Toil.Utxo.Functions
        ( VTxContext (..)
@@ -23,7 +23,7 @@ import           Serokell.Util (allDistinct, enumerate)
 import           Pos.Chain.Script (Script (..))
 import           Pos.Chain.Txp.Toil.Failure (ToilVerFailure (..),
                      TxOutVerFailure (..), WitnessVerFailure (..))
-import           Pos.Chain.Txp.Toil.Monad (VerifyAndApplyM, utxoDel, utxoGet, utxoPut)
+import           Pos.Chain.Txp.Toil.Monad (UtxoM, utxoDel, utxoGet, utxoPut)
 import           Pos.Chain.Txp.Toil.Types (TxFee (..))
 import           Pos.Chain.Txp.Tx (Tx (..), TxAttributes, TxIn (..), TxOut (..),
                      isOriginTxOut, isGDTxOut, isStateTxOut)
@@ -89,12 +89,11 @@ data VerifyTxUtxoRes = VerifyTxUtxoRes
 -- inclusion into blocks are verified with 'vtcVerifyAllIsKnown'
 -- set to 'True', so unknown script versions are rejected).
 verifyTxUtxo
-    :: Monad m
-    => ProtocolMagic
+    :: ProtocolMagic
     -> VTxContext
     -> Set Address
     -> TxAux
-    -> ExceptT ToilVerFailure (VerifyAndApplyM m) VerifyTxUtxoRes
+    -> ExceptT ToilVerFailure UtxoM VerifyTxUtxoRes
 verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {..} witnesses) = do
     liftEither $ do
         verifyConsistency _txInputs witnesses
@@ -121,9 +120,8 @@ verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {
     -- After decentralisation, anyone can modify the code to add or remove similar functionality,
     -- but the decentralised nature of the network should make any such action irrelevant.
     filterAssetLocked
-        :: Monad m
-        => NonEmpty (TxIn, TxOutAux)
-        -> ExceptT ToilVerFailure (VerifyAndApplyM m) (NonEmpty (TxIn, TxOutAux))
+        :: NonEmpty (TxIn, TxOutAux)
+        -> ExceptT ToilVerFailure UtxoM (NonEmpty (TxIn, TxOutAux))
     filterAssetLocked xs =
         case NE.filter notAssetLockedSrcAddr xs of
             []     -> throwError ToilEmptyAfterFilter
@@ -136,7 +134,7 @@ verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {
 
 
 -- | For a given TxIn, look up the TxOutAux that it is spending.
-resolveInput :: Monad m => TxIn -> ExceptT ToilVerFailure (VerifyAndApplyM m) (TxIn, TxOutAux)
+resolveInput :: TxIn -> ExceptT ToilVerFailure UtxoM (TxIn, TxOutAux)
 resolveInput txIn =
     (txIn, ) <$> (note (ToilNotUnspent txIn) =<< lift (utxoGet txIn))
 
@@ -274,7 +272,7 @@ verifyAttributesAreKnown attrs =
 
 -- | Remove unspent outputs used in given transaction, add new unspent
 -- outputs.
-applyTxToUtxo :: Monad m => WithHash Tx -> VerifyAndApplyM m ()
+applyTxToUtxo :: WithHash Tx -> UtxoM ()
 applyTxToUtxo (WithHash UnsafeTx {..} txid) = do
     mapM_ utxoDel $ toList _txInputs
     mapM_ applyOutput . zip [0 ..] . toList . map TxOutAux $ _txOutputs
@@ -284,7 +282,7 @@ applyTxToUtxo (WithHash UnsafeTx {..} txid) = do
 -- | Rollback application of given transaction to Utxo using Undo
 -- data.  This function assumes that transaction has been really
 -- applied and doesn't check anything.
-rollbackTxUtxo :: Monad m => (TxAux, TxUndo) -> VerifyAndApplyM m ()
+rollbackTxUtxo :: (TxAux, TxUndo) -> UtxoM ()
 rollbackTxUtxo (txAux, undo) = do
     let tx@UnsafeTx {..} = taTx txAux
     let txid = hash tx

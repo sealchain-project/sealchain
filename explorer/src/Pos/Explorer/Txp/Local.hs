@@ -20,6 +20,7 @@ import           Pos.Core (EpochIndex, Timestamp)
 import           Pos.Core.JsonLog (CanJsonLog (..))
 import           Pos.DB.Txp.Logic (txNormalizeAbstract,
                      txProcessTransactionAbstract)
+import           Pos.DB.Txp.Pact (GStateDb)
 import           Pos.DB.Txp.MemState (MempoolExt, TxpLocalWorkMode, getTxpExtra,
                      withTxpLocalData)
 import           Pos.Infra.Slotting (MonadSlots (getCurrentSlot), getSlotStart)
@@ -56,7 +57,7 @@ eTxProcessTransaction genesisConfig txpConfig itw =
         $ \__tip -> eTxProcessTransactionNoLock genesisConfig txpConfig itw
 
 eTxProcessTransactionNoLock ::
-       forall ctx m. (ETxpLocalWorkMode ctx m)
+       forall ctx p m. (ETxpLocalWorkMode ctx m, p ~ GStateDb)
     => Genesis.Config
     -> TxpConfiguration
     -> (TxId, TxAux)
@@ -97,7 +98,7 @@ eTxProcessTransactionNoLock genesisConfig txpConfig itw = getCurrentSlot epochSl
 --   2. Remove invalid transactions from MemPool
 --   3. Set new tip to txp local data
 eTxNormalize
-    :: forall ctx m . (ETxpLocalWorkMode ctx m)
+    :: forall ctx p m.(ETxpLocalWorkMode ctx m, p ~ GStateDb)
     => Genesis.Config
     -> TxValidationRules
     -> TxpConfiguration

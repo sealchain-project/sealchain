@@ -188,6 +188,9 @@ runExplorerTestMode tp extraContext action = do
 instance HasLens DB.DBPureVar ExplorerTestInitContext DB.DBPureVar where
     lensOf = eticDBPureVar_L
 
+instance HasLens DB.NodeDBs ExplorerTestInitContext DB.NodeDBs where
+    lensOf = error ""
+
 ----------------------------------------------------------------------------
 -- Boilerplate ExplorerTestInitMode instances
 ----------------------------------------------------------------------------

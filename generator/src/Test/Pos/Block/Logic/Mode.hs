@@ -373,6 +373,9 @@ blockPropertyTestable uc = blockPropertyToProperty uc arbitrary
 instance HasLens DBPureVar TestInitModeContext DBPureVar where
     lensOf = timcDBPureVar_L
 
+instance HasLens NodeDBs TestInitModeContext NodeDBs where
+    lensOf = error "" 
+
 instance HasLens LrcContext TestInitModeContext LrcContext where
     lensOf = timcLrcContext_L
 

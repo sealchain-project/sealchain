@@ -5,6 +5,8 @@
 
 module Pos.DB.Txp.Pact
        ( PactOp (..)
+       , GStateDb (..)
+       , newGStateDb
        ) where
 
 
@@ -16,6 +18,10 @@ import qualified Formatting.Buildable
 import           Serokell.Util.Base16 (base16F)
 
 import           Pos.DB (RocksBatchOp (..))
+import           Pos.DB.Rocks.Functions (rocksGetBytes, rocksPutBytes)
+import           Pos.DB.Rocks.Types (DB, MonadRealDB, getGStateDB)
+
+import           Sealchain.Mpt.MerklePatriciaMixMem (KVPersister (..))
 
 ----------------------------------------------------------------------------
 -- Batch operations
@@ -29,3 +35,16 @@ instance Buildable PactOp where
 
 instance RocksBatchOp PactOp where
     toBatchOp (PactOp key val) = [Rocks.Put key val]
+
+----------------------------------------------------------------------------
+-- GStateDb
+----------------------------------------------------------------------------
+
+newtype GStateDb = GStateDb DB
+
+instance KVPersister GStateDb where
+    getKV (GStateDb db) k = rocksGetBytes k db   
+    putKV (GStateDb db) k v = rocksPutBytes k v db
+
+newGStateDb :: MonadRealDB ctx m => m GStateDb
+newGStateDb = GStateDb <$> getGStateDB

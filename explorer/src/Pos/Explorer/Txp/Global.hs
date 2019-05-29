@@ -29,6 +29,8 @@ import           Pos.Explorer.Txp.Common (buildExplorerExtraLookup)
 import           Pos.Explorer.Txp.Toil (EGlobalToilM, ExplorerExtraLookup (..),
                      ExplorerExtraModifier (..), eApplyToil, eRollbackToil)
 
+import           Sealchain.Mpt.MerklePatriciaMixMem (KVPersister)
+
 -- | Settings used for global transactions data processing used by explorer.
 explorerTxpGlobalSettings :: Genesis.Config
                           -> TxpConfiguration
@@ -70,7 +72,7 @@ rollbackSettings bootStakeholders =
         }
 
 applySingle ::
-       forall ctx p m . TxpGlobalApplyMode ctx m
+       forall ctx p m .(TxpGlobalApplyMode ctx m, KVPersister p)
     => GenesisWStakeholders -> TxpBlund -> m (EGlobalToilM p m ())
 applySingle bootStakeholders txpBlund = do
     -- @TxpBlund@ is a block/blund with a reduced set of information required for

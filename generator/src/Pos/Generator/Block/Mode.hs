@@ -50,7 +50,7 @@ import qualified Pos.DB.Block as DB
 import           Pos.DB.DB (gsAdoptedBVDataDefault)
 import           Pos.DB.Delegation (mkDelegationVar)
 import           Pos.DB.Lrc (HasLrcContext, LrcContext (..))
-import           Pos.DB.Rocks (NodeDBs)
+import           Pos.DB.Rocks (NodeDBs, MonadRealDB)
 import           Pos.DB.Ssc (mkSscState)
 import           Pos.DB.Txp (GenericTxpLocalData, MempoolExt, TxpGlobalSettings,
                      TxpHolderTag, mkTxpLocalData)
@@ -95,6 +95,7 @@ type MonadBlockGen ctx m
        , HasLrcContext ctx
        , HasLens' ctx UpdateConfiguration
        , MonadBListener m
+       , MonadRealDB ctx m
        )
 
 -- | MonadBlockGen extended with the specific GStateContext.
@@ -198,6 +199,10 @@ type InitBlockGenMode ext m = ReaderT InitBlockGenContext m
 
 instance HasLens DBSum InitBlockGenContext DBSum where
     lensOf = ibgcDB_L
+
+-- | TODO xl fix this later
+instance HasLens NodeDBs InitBlockGenContext NodeDBs where
+    lensOf = error ""
 
 instance HasLens LrcContext InitBlockGenContext LrcContext where
     lensOf = ibgcLrcContext_L

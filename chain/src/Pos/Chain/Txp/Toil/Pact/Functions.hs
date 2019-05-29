@@ -12,11 +12,9 @@ import qualified Data.Text as T
 
 import           Pact.Persist.MPTree (MPTreeDB (..), persister)
 import           Pact.PersistPactDb (DbEnv (..), pactdb, initDbEnv, createSchema)
-import           Pact.Types.Logger ()
+import           Pact.Types.Gas (GasEnv (..))
 import           Pact.Types.Persistence (TxId (..))
 import           Pact.Types.RPC (ExecMsg (..), PactRPC (..))
-import           Pact.Types.Server ()
-import           Pact.Types.SQLite ()
 
 import           Pos.Chain.Txp.Toil.Failure
 import           Pos.Chain.Txp.Toil.Monad
@@ -56,7 +54,8 @@ applyExec (ExecMsg parsedCode edata) Command{..} = do
   when (null (_pcExps parsedCode)) $ throwError $ ToilPactError "No expressions found"
 
   refStore <- use pesRefStore
-  gasEnv <- view peeGasEnv
+  gasModel <- view peeGasModel
+  let gasEnv = GasEnv _cmdGasLimit _cmdGasPrice gasModel 
   pactDbEnv <- lift $ newPactDbEnv
 
   let evalEnv = setupEvalEnv pactDbEnv (TxId (1::Word64))

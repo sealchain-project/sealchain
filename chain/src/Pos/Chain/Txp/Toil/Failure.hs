@@ -33,7 +33,7 @@ import           Pos.Util (DisallowException)
 ----------------------------------------------------------------------------
 
 -- | Result of transaction processing
-data ToilVerFailure
+data ToilVerFailure -- TODO xl rename to ToilFailure, because it's not only about verification
     = ToilKnown -- ^ Transaction is already in the storage (cache)
     -- | ToilTipsMismatch oldTip newTip
     | ToilTipsMismatch !HeaderHash !HeaderHash

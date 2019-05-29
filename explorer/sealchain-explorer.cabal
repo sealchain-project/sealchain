@@ -87,6 +87,7 @@ library
                       , sealchain-db
                       , sealchain-generator
                       , sealchain-infra
+                      , sealchain-mpt
                       , sealchain-util
 
                       -- mtl ++

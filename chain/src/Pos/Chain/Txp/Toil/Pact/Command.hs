@@ -15,7 +15,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Pos.Chain.Txp.Toil.Pact.Command
-  ( Command (..), cmdPayload, cmdSigners, cmdHash, verifyCommand
+  ( Command (..), cmdPayload, cmdSigners, cmdHash, cmdGasPrice, cmdGasLimit, verifyCommand
   , ProcessedCommand(..), _ProcSucc, _ProcFail
   , Payload (..), pPayload
   , ParsedCode (..), pcCode, pcExps
@@ -28,25 +28,24 @@ import           Control.Lens hiding ((.=))
 import           Data.ByteString (ByteString)
 import           Data.Aeson
 
+import           Pact.Types.Gas
 import           Pact.Types.Runtime
 import           Pact.Types.RPC
 import           Pact.Parse
 
 data Command a = Command
-  { _cmdPayload :: !a
-  , _cmdSigners :: !(Set PublicKey)
-  , _cmdHash    :: !Hash
+  { _cmdPayload  :: !a
+  , _cmdSigners  :: !(Set PublicKey)
+  , _cmdHash     :: !Hash
+  , _cmdGasPrice :: !GasPrice
+  , _cmdGasLimit :: !GasLimit
   } deriving (Eq,Show,Ord,Generic,Functor,Foldable,Traversable)
-
-instance NFData a => NFData (Command a)
 
 -- | Strict Either thing for attempting to deserialize a Command.
 data ProcessedCommand a =
   ProcSucc !(Command (Payload a)) |
   ProcFail !String
   deriving (Show, Eq, Generic, Functor, Foldable, Traversable)
-
-instance (NFData a) => NFData (ProcessedCommand a)
 
 verifyCommand :: Command ByteString -> ProcessedCommand ParsedCode
 verifyCommand orig@Command{..} = case ppcmdPayload' of

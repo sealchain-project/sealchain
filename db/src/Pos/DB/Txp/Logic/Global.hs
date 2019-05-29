@@ -44,14 +44,14 @@ import           Pos.Core.Slotting (epochOrSlotToEpochIndex, getEpochOrSlot)
 import           Pos.Crypto (ProtocolMagic)
 import           Pos.DB (SomeBatchOp (..), getTipHeader)
 import           Pos.DB.Class (gsAdoptedBVData)
-import           Pos.DB.GState.Common (MPTDb, getTip)
+import           Pos.DB.GState.Common (getTip)
 import           Pos.DB.GState.Stakes (getRealStake, getRealTotalStake)
 import           Pos.DB.Txp.Logic.Common (buildUtxo, buildUtxoForRollback, 
                      defaultGasModel, unsafeGetStateRoot)
 import           Pos.DB.Txp.Settings (TxpBlock, TxpBlund, TxpCommonMode,
                      TxpGlobalApplyMode, TxpGlobalRollbackMode,
                      TxpGlobalSettings (..), TxpGlobalVerifyMode)
-import           Pos.DB.Txp.Pact (PactOp (..))
+import           Pos.DB.Txp.Pact (PactOp (..), GStateDb, newGStateDb)
 import           Pos.DB.Txp.Stakes (StakesOp (..))
 import           Pos.DB.Txp.Utxo (UtxoOp (..))
 import           Pos.Util.AssertMode (inAssertMode)
@@ -92,14 +92,16 @@ verifyBlocks ::
     -> m $ Either ToilVerFailure $ OldestFirst NE TxpUndo
 verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $ do
     gasModel <- defaultGasModel
+    persister <- newGStateDb
     stateRoot <- getTip >>= unsafeGetStateRoot
-    let baseEnv = GlobalToilEnv { _gteUtxo = utxoToLookup M.empty
+    let baseEnv = GlobalToilEnv { _gteUtxoLookup = utxoToLookup M.empty
                                 , _gteTotalStake = (mkCoin 0) -- | because we do not need stakes while verifying
                                 , _gteStakeGetter = getRealStake
                                 , _gteGasModel = gasModel
+                                , _gtePersister = persister
                                 }
     bvd <- gsAdoptedBVData
-    let verifyPure :: TxValidationRules -> [TxAux] -> GlobalToilM MPTDb m (Either ToilVerFailure TxpUndo)
+    let verifyPure :: TxValidationRules -> [TxAux] -> GlobalToilM GStateDb m (Either ToilVerFailure TxpUndo)
         verifyPure txValRules = runExceptT
             . verifyToil pm txValRules bvd (tcAssetLockedSrcAddrs txpConfig) epoch verifyAllIsKnown
         foldStep
@@ -111,7 +113,7 @@ verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $
             currentEpoch <- epochOrSlotToEpochIndex . getEpochOrSlot <$> lift getTipHeader
             baseUtxo <- utxoToLookup <$> buildUtxo modifier txAuxes
             let txValRules = mkLiveTxValidationRules currentEpoch tvrc
-            let gte = baseEnv { _gteUtxo = baseUtxo }
+            let gte = baseEnv { _gteUtxoLookup = baseUtxo }
             let gts = GlobalToilState { _gtsUtxoModifier = modifier
                                       , _gtsStakesView = def -- | because we do not need stakes while verifying
                                       , _gtsPactState = pactState
@@ -140,7 +142,7 @@ verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $
 ----------------------------------------------------------------------------
 
 data ProcessBlundsSettings extraEnv extraState m = ProcessBlundsSettings
-    { pbsProcessSingle   :: TxpBlund -> m (ExtendedGlobalToilM extraEnv extraState MPTDb m ())
+    { pbsProcessSingle   :: TxpBlund -> m (ExtendedGlobalToilM extraEnv extraState GStateDb m ())
     , pbsCreateEnv       :: Utxo -> [TxAux] -> m extraEnv
     , pbsExtraOperations :: extraState -> SomeBatchOp
     , pbsIsRollback      :: !Bool
@@ -162,6 +164,7 @@ processBlunds ProcessBlundsSettings {..} blunds = do
     totalStake <- getRealTotalStake -- doesn't change
 
     gasModel <- defaultGasModel
+    persister <- newGStateDb
     stateRoot <- getTip >>= unsafeGetStateRoot
     -- Note: base utxo also doesn't change, but we build it on each
     -- step (for different sets of transactions), because
@@ -187,10 +190,11 @@ processBlunds ProcessBlundsSettings {..} blunds = do
             baseUtxo <- buildBaseUtxo (gts ^. _1 . gtsUtxoModifier) txAuxes
             extraEnv <- pbsCreateEnv baseUtxo txAuxes
             let gte = GlobalToilEnv
-                        { _gteUtxo = utxoToLookup baseUtxo
+                        { _gteUtxoLookup = utxoToLookup baseUtxo
                         , _gteTotalStake = totalStake
                         , _gteStakeGetter = getRealStake
                         , _gteGasModel = gasModel
+                        , _gtePersister = persister
                         }
             let env = (gte, extraEnv)
             launchNamedPureLog id $ 
@@ -221,7 +225,7 @@ applyBlocksWith pm genesisConfig txpConfig settings blunds = do
     processBlunds settings (getOldestFirst blunds)
 
 processBlundsSettings ::
-       forall p m.(Monad m, p ~ MPTDb)
+       forall p m.(Monad m, p ~ GStateDb)
     => Bool
     -> ([(TxAux, TxUndo)] -> GlobalToilM p m ())
     -> ProcessBlundsSettings () () m
@@ -233,7 +237,7 @@ processBlundsSettings isRollback pureAction =
         , pbsIsRollback = isRollback
         }
   where
-    processSingle :: TxpBlund -> ExtendedGlobalToilM () () MPTDb m ()
+    processSingle :: TxpBlund -> ExtendedGlobalToilM () () GStateDb m ()
     processSingle = zoom _1 . magnify _1 . pureAction . blundToAuxNUndo
 
 rollbackBlocks ::

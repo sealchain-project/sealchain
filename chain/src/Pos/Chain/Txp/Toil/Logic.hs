@@ -18,16 +18,25 @@ module Pos.Chain.Txp.Toil.Logic
 import           Universum hiding (id)
 
 import           Control.Monad.Except (ExceptT, mapExceptT, throwError)
+import qualified Data.ByteString as BS
+import qualified Data.Set as Set
 import           Serokell.Data.Memory.Units (Byte)
 
-import           Pos.Binary.Class (biSize)
+import qualified Pact.Types.Gas as Pact (Gas (..), GasPrice (..), GasLimit (..))
+import qualified Pact.Types.Util as Pact (Hash (..))
+
+import           Pos.Binary.Class (biSize, serialize')
 import           Pos.Chain.Genesis (GenesisWStakeholders)
 import           Pos.Chain.Txp.Configuration (TxpConfiguration (..),
                      memPoolLimitTx)
 import           Pos.Chain.Txp.Toil.Failure (ToilVerFailure (..))
-import           Pos.Chain.Txp.Toil.Monad (GlobalToilM, LocalToilM, VerifyAndApplyM,
+import           Pos.Chain.Txp.Toil.Monad (GlobalToilM, LocalToilM, 
+                     UtxoM, VerifyAndApplyM, PactExecM,
                      hasTx, memPoolSize, putTxWithUndo,
-                     verifyAndApplyMToLocalToilM, verifyAndApplyMToGlobalToilM)
+                     utxoMToVerifyAndApplyM, utxoMToGlobalToilM,
+                     verifyAndApplyMToLocalToilM, verifyAndApplyMToGlobalToilM,
+                     pactExecMToVerifyAndApplyM, pactExecMToGlobalToilM)
+import qualified Pos.Chain.Txp.Toil.Pact as Pact
 import           Pos.Chain.Txp.Toil.Stakes (applyTxsToStakes, rollbackTxsStakes)
 import           Pos.Chain.Txp.Toil.Types (TxFee (..))
 import           Pos.Chain.Txp.Toil.Utxo (VerifyTxUtxoRes (..))
@@ -41,14 +50,16 @@ import           Pos.Chain.Txp.Undo (TxUndo, TxpUndo)
 import           Pos.Chain.Update.BlockVersionData (BlockVersionData (..),
                      isBootstrapEraBVD)
 import           Pos.Core (AddrAttributes (..), AddrStakeDistribution (..),
-                     Address, EpochIndex, addrAttributesUnwrapped,
-                     isRedeemAddress)
+                     Address, EpochIndex, Coin (..), addrAttributesUnwrapped,
+                     isRedeemAddress, unsafeIntegerToCoin, mkCoin)
 import           Pos.Core.Common (integerToCoin)
 import qualified Pos.Core.Common as Fee (TxFeePolicy (..),
                      calculateTxSizeLinear)
 import           Pos.Core.NetworkMagic (makeNetworkMagic)
 import           Pos.Crypto (ProtocolMagic, WithHash (..), hash)
 import           Pos.Util (liftEither)
+
+import           Sealchain.Mpt.MerklePatriciaMixMem (KVPersister)
 
 ----------------------------------------------------------------------------
 -- Global
@@ -64,8 +75,8 @@ import           Pos.Util (liftEither)
 -- If the 'Bool' argument is 'True', all data (script versions,
 -- witnesses, addresses, attributes) must be known. Otherwise unknown
 -- data is just ignored.
-verifyToil ::
-       Monad m
+verifyToil
+    :: (MonadIO m, KVPersister p)
     => ProtocolMagic
     -> TxValidationRules
     -> BlockVersionData
@@ -83,23 +94,26 @@ verifyToil pm txValRules bvd lockedAssets curEpoch verifyAllIsKnown =
 
 -- | Apply transactions from one block. They must be valid (for
 -- example, it implies topological sort).
-applyToil :: Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM p m ()
+applyToil 
+    :: (MonadIO m, KVPersister p)
+    => GenesisWStakeholders 
+    -> [(TxAux, TxUndo)] 
+    -> GlobalToilM p m ()
 applyToil _ [] = pass
 applyToil bootStakeholders txun = do
     applyTxsToStakes bootStakeholders txun
-    mapM_ applyItem txun
+    mapM_ applyTx txun
   where
-    applyTx (TxAux{..}, _) = do
+    applyTx (txAux@TxAux{..}, _) = do
         let txId = hash taTx
-        lift $ Utxo.applyTxToUtxo $ WithHash taTx txId
-
-    applyItem = verifyAndApplyMToGlobalToilM . runExceptT . applyTx
+        _ <- utxoMToGlobalToilM $ Utxo.applyTxToUtxo $ WithHash taTx txId
+        pactExecMToGlobalToilM . runExceptT $ applyTxToPact (txId, txAux) (mkCoin 0) (mkCoin 0)
 
 -- | Rollback transactions from one block.
 rollbackToil :: Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM p m ()
 rollbackToil bootStakeholders txun = do
     rollbackTxsStakes bootStakeholders txun
-    verifyAndApplyMToGlobalToilM $
+    utxoMToGlobalToilM $
         mapM_ Utxo.rollbackTxUtxo $ reverse txun
     -- only rollback utxo
 
@@ -110,7 +124,7 @@ rollbackToil bootStakeholders txun = do
 -- | Verify one transaction and also add it to mem pool and apply to utxo
 -- if transaction is valid.
 processTx
-    :: Monad m
+    :: (MonadIO m, KVPersister p)
     => ProtocolMagic
     -> TxValidationRules
     -> TxpConfiguration
@@ -129,7 +143,7 @@ processTx pm txValRules txpConfig bvd curEpoch tx@(id, aux) = do
 -- | Get rid of invalid transactions.
 -- All valid transactions will be added to mem pool and applied to utxo.
 normalizeToil
-    :: forall p m.Monad m
+    :: forall p m.(MonadIO m, KVPersister p)
     => ProtocolMagic
     -> TxValidationRules
     -> TxpConfiguration
@@ -155,8 +169,8 @@ normalizeToil pm txValRules txpConfig bvd curEpoch txs = mapM_ normalize ordered
 
 -- Note: it doesn't consider/affect stakes! That's because we don't
 -- care about stakes for local txp.
-verifyAndApplyTx ::
-       Monad m
+verifyAndApplyTx
+    :: (MonadIO m, KVPersister p)
     => ProtocolMagic
     -> TxValidationRules
     -> BlockVersionData
@@ -164,13 +178,16 @@ verifyAndApplyTx ::
     -> EpochIndex
     -> Bool
     -> (TxId, TxAux)
-    -> ExceptT ToilVerFailure (VerifyAndApplyM m) TxUndo
+    -> ExceptT ToilVerFailure (VerifyAndApplyM p m) TxUndo
 verifyAndApplyTx pm txValRules adoptedBVD lockedAssets curEpoch verifyVersions tx@(_, txAux) = do
     whenLeft (checkTxAux txValRules txAux) (throwError . ToilInconsistentTxAux)
     let ctx = Utxo.VTxContext verifyVersions (makeNetworkMagic pm)
-    vtur@VerifyTxUtxoRes {..} <- Utxo.verifyTxUtxo pm ctx lockedAssets txAux
+    vtur@VerifyTxUtxoRes {..} <- mapExceptT utxoMToVerifyAndApplyM $ 
+                                 Utxo.verifyTxUtxo pm ctx lockedAssets txAux
     liftEither $ verifyGState adoptedBVD curEpoch txAux vtur
-    lift $ applyTxToUtxo' tx
+    lift $ utxoMToVerifyAndApplyM (applyTxToUtxo' tx)
+    _ <- mapExceptT pactExecMToVerifyAndApplyM $ 
+         applyTxToPact tx (mkCoin 0) (mkCoin 0)
     pure vturUndo
 
 isRedeemTx :: TxUndo -> Bool
@@ -257,5 +274,22 @@ verifyTxFeePolicy (TxFee txFee) policy txSize = case policy of
 withTxId :: TxAux -> (TxId, TxAux)
 withTxId aux = (hash (taTx aux), aux)
 
-applyTxToUtxo' :: Monad m => (TxId, TxAux) -> VerifyAndApplyM m ()
+applyTxToUtxo' :: (TxId, TxAux) -> UtxoM ()
 applyTxToUtxo' (i, TxAux tx _) = Utxo.applyTxToUtxo (WithHash tx i)
+
+applyTxToPact 
+    :: (MonadIO m, KVPersister p)
+    => (TxId, TxAux) 
+    -> Coin 
+    -> Coin 
+    -> ExceptT ToilVerFailure (PactExecM p m) Coin
+applyTxToPact (txId, TxAux _ _) (Coin gasPrice) (Coin gasLimit) = do
+    Pact.CommandResult{..} <- Pact.applyCmd Pact.Command{..}
+    let (Pact.Gas int64Gas) = _crGas  
+    return . unsafeIntegerToCoin . toInteger $ int64Gas   
+  where
+    _cmdPayload = BS.empty -- TODO xl fix this later
+    _cmdSigners = Set.empty -- TODO xl fix this later
+    _cmdHash = Pact.Hash $ serialize' txId
+    _cmdGasPrice = Pact.GasPrice . fromInteger $ toInteger gasPrice
+    _cmdGasLimit = Pact.GasLimit gasLimit

@@ -40,6 +40,8 @@ import           Pos.Explorer.Txp.Toil.Monad (EGlobalToilM, ELocalToilM,
 import           Pos.Util.Util (Sign (..))
 import           Pos.Util.Wlog (logError)
 
+import           Sealchain.Mpt.MerklePatriciaMixMem (KVPersister)
+
 ----------------------------------------------------------------------------
 -- Global
 ----------------------------------------------------------------------------
@@ -47,7 +49,7 @@ import           Pos.Util.Wlog (logError)
 -- | Apply transactions from one block. They must be valid (for
 -- example, it implies topological sort).
 eApplyToil
-    :: Monad m
+    :: (MonadIO m, KVPersister p)
     => GenesisWStakeholders
     -> Maybe Timestamp
     -> [(TxAux, TxUndo)]
@@ -93,7 +95,7 @@ eRollbackToil bootStakeholders txun = do
 -- | Verify one transaction and also add it to mem pool and apply to utxo
 -- if transaction is valid.
 eProcessTx
-    :: Monad m
+    :: (MonadIO m, KVPersister p)
     => ProtocolMagic
     -> TxValidationRules
     -> TxpConfiguration
@@ -114,7 +116,7 @@ eProcessTx pm txValRules txpConfig bvd curEpoch tx@(id, aux) createExtra = do
 -- | Get rid of invalid transactions.
 -- All valid transactions will be added to mem pool and applied to utxo.
 eNormalizeToil
-    :: Monad m
+    :: (MonadIO m, KVPersister p)
     => ProtocolMagic
     -> TxValidationRules
     -> TxpConfiguration

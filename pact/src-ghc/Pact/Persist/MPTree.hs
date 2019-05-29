@@ -6,7 +6,9 @@
 
 module Pact.Persist.MPTree
   ( MPTreeDB (..)
-  , initMPTreeDB
+  , newMPTreeDB
+  , getStateRoot
+  , getModifier
   , persister
   ) where
 
@@ -16,7 +18,6 @@ import           Control.Monad.Reader ()
 import           Data.Aeson
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BSL
-import qualified Data.Map as Map
 import           Data.Text.Encoding (encodeUtf8, decodeUtf8)
 
 import           Pact.Persist hiding (compileQuery)
@@ -34,10 +35,22 @@ data MPTreeDB p = MPTreeDB
   , _logger       :: Logger
   }
 
-initMPTreeDB :: MPDB p -> Loggers -> MPTreeDB p
-initMPTreeDB mpdb loggers = 
-  let logger = newLogger loggers "Persist-MPTree"
-  in MPTreeDB mpdb Map.empty mpdb Map.empty logger
+newMPTreeDB :: p -> StateRoot -> MMModifier -> Loggers -> MPTreeDB p
+newMPTreeDB p sr modifier loggers = 
+  let mpdb = MPDB p sr
+  in MPTreeDB {
+      _mpdb = mpdb,
+      _modifier = modifier,
+      _workMpdb = mpdb,
+      _workModifier = modifier,
+      _logger = newLogger loggers "Persist-MPTree"
+     }
+
+getStateRoot :: MPTreeDB p -> StateRoot
+getStateRoot = stateRoot . _mpdb
+
+getModifier :: MPTreeDB p -> MMModifier 
+getModifier = _modifier
 
 log :: MPTreeDB p -> String -> String -> IO ()
 log e = logLog (_logger e)
