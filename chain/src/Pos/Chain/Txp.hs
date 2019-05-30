@@ -5,6 +5,7 @@ module Pos.Chain.Txp
        ) where
 
 import           Pos.Chain.Txp.Base as X
+import           Pos.Chain.Txp.Command as X
 import           Pos.Chain.Txp.Configuration as X
 import           Pos.Chain.Txp.Error as X
 import           Pos.Chain.Txp.GenesisUtxo as X

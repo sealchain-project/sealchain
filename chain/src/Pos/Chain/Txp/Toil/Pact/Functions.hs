@@ -12,54 +12,70 @@ import qualified Data.Text as T
 
 import           Pact.Persist.MPTree (MPTreeDB (..), persister)
 import           Pact.PersistPactDb (DbEnv (..), pactdb, initDbEnv, createSchema)
-import           Pact.Types.Gas (GasEnv (..))
+import           Pact.Types.Gas (GasEnv (..), GasLimit, GasPrice (..))
 import           Pact.Types.Persistence (TxId (..))
 import           Pact.Types.RPC (ExecMsg (..), PactRPC (..))
+import           Pact.Types.Term (PublicKey)
+import           Pact.Types.Util (Hash)
 
+import           Pos.Chain.Txp.Command
 import           Pos.Chain.Txp.Toil.Failure
 import           Pos.Chain.Txp.Toil.Monad
-import           Pos.Chain.Txp.Toil.Pact.Command
 import           Pos.Chain.Txp.Toil.Pact.Interpreter
+import           Pos.Core (coinToInteger)
 
 import           Sealchain.Mpt.MerklePatriciaMixMem (MPDB (..), KVPersister, emptyTriePtr)
 
 applyCmd 
   :: (MonadIO m, KVPersister p)
   => Command ByteString 
+  -> GasLimit
+  -> Hash
+  -> Set PublicKey
   -> ExceptT ToilVerFailure (PactExecM p m) CommandResult
-applyCmd cmd = applyCmd' cmd (verifyCommand cmd)
+applyCmd cmd = applyCmd' (verifyCommand cmd)
 
 applyCmd' 
   :: (MonadIO m, KVPersister p)
-  => Command a 
-  -> ProcessedCommand ParsedCode 
+  => ProcessedCommand ParsedCode 
+  -> GasLimit
+  -> Hash
+  -> Set PublicKey
   -> ExceptT ToilVerFailure (PactExecM p m) CommandResult
-applyCmd' _ (ProcFail s) = throwError $ ToilPactError (T.pack s)
-applyCmd' _ (ProcSucc cmd) = runPayload cmd
+applyCmd' (ProcFail s) _ _ _ = throwError $ ToilPactError (T.pack s)
+applyCmd' (ProcSucc cmd) gasLimit txHash signers = runPayload cmd gasLimit txHash signers
 
 runPayload 
   :: (MonadIO m, KVPersister p)
   => Command (Payload ParsedCode) 
+  -> GasLimit
+  -> Hash
+  -> Set PublicKey
   -> ExceptT ToilVerFailure (PactExecM p m) CommandResult
-runPayload c@Command{..} = case (_pPayload _cmdPayload) of
-  Exec pm         -> applyExec pm c
-  Continuation _  -> throwError $ ToilPactError "Pact continuation is not supportted for now"
+runPayload Command{..} gasLimit txHash signers = case (_pPayload _cmdPayload) of
+    Exec pm         -> applyExec pm gasLimit txHash signers gasPrice
+    Continuation _  -> throwError $ ToilPactError "Pact continuation is not supportted for now"
+  where
+    gasPrice = GasPrice . fromInteger . toInteger . coinToInteger $ _pGasPrice _cmdPayload
 
 applyExec 
   :: (MonadIO m, KVPersister p)
   => ExecMsg ParsedCode 
-  -> Command a 
+  -> GasLimit
+  -> Hash
+  -> Set PublicKey
+  -> GasPrice
   -> ExceptT ToilVerFailure (PactExecM p m) CommandResult
-applyExec (ExecMsg parsedCode edata) Command{..} = do
+applyExec (ExecMsg parsedCode edata) gasLimit txHash signers gasPrice = do
   when (null (_pcExps parsedCode)) $ throwError $ ToilPactError "No expressions found"
 
   refStore <- use pesRefStore
   gasModel <- view peeGasModel
-  let gasEnv = GasEnv _cmdGasLimit _cmdGasPrice gasModel 
+  let gasEnv = GasEnv gasLimit gasPrice gasModel 
   pactDbEnv <- lift $ newPactDbEnv
 
   let evalEnv = setupEvalEnv pactDbEnv (TxId (1::Word64))
-                (MsgData _cmdSigners edata _cmdHash) refStore gasEnv  
+                (MsgData signers edata txHash) refStore gasEnv  
   res <- liftIO $ tryAny $ evalExec evalEnv parsedCode
   case res of
     Left (SomeException ex) -> throwError $ ToilPactError $ "Command execution error" <> (show ex)

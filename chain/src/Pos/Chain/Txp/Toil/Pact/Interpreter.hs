@@ -23,7 +23,7 @@ import           Pact.Types.Runtime
 import           Pact.Compile
 import           Pact.Eval hiding (evalContinuation)
 
-import           Pos.Chain.Txp.Toil.Pact.Command (ParsedCode (..))
+import           Pos.Chain.Txp.Command (ParsedCode (..))
 
 data PactDbEnv e = PactDbEnv {
   pdPactDb    :: !(PactDb e),

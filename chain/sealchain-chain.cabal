@@ -70,6 +70,7 @@ library
                        Pos.Chain.Genesis.WStakeholders
 
                        Pos.Chain.Txp.Configuration
+                       Pos.Chain.Txp.Command
                        Pos.Chain.Txp.Base
                        Pos.Chain.Txp.Error
                        Pos.Chain.Txp.Topsort
@@ -79,7 +80,6 @@ library
                        Pos.Chain.Txp.Toil.Logic
                        Pos.Chain.Txp.Toil.Monad
                        Pos.Chain.Txp.Toil.Pact
-                       Pos.Chain.Txp.Toil.Pact.Command
                        Pos.Chain.Txp.Toil.Pact.Functions
                        Pos.Chain.Txp.Toil.Pact.Interpreter
                        Pos.Chain.Txp.Toil.Stakes

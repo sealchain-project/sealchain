@@ -1,25 +1,23 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleContexts #-}
 
-module Pos.Chain.Txp.Toil.Pact.Command
-  ( Command (..), cmdPayload, cmdSigners, cmdHash, cmdGasPrice, cmdGasLimit, verifyCommand
-  , ProcessedCommand(..), _ProcSucc, _ProcFail
-  , Payload (..), pPayload
-  , ParsedCode (..), pcCode, pcExps
-  , CommandResult (..), crGas
+module Pos.Chain.Txp.Command
+  ( Command (..)
+  , cmdPayload
+  , verifyCommand
+  , ProcessedCommand (..)
+  , _ProcSucc
+  , _ProcFail
+  , Payload (..)
+  , pPayload
+  , pGasPrice
+  , ParsedCode (..)
+  , pcCode
+  , pcExps
+  , CommandResult (..)
+  , crGas
   ) where
 
 import           Universum
@@ -33,13 +31,11 @@ import           Pact.Types.Runtime
 import           Pact.Types.RPC
 import           Pact.Parse
 
+import           Pos.Core.Common (Coin)
+
 data Command a = Command
   { _cmdPayload  :: !a
-  , _cmdSigners  :: !(Set PublicKey)
-  , _cmdHash     :: !Hash
-  , _cmdGasPrice :: !GasPrice
-  , _cmdGasLimit :: !GasLimit
-  } deriving (Eq,Show,Ord,Generic,Functor,Foldable,Traversable)
+  } deriving (Eq, Show, Ord, Generic, Functor, Foldable, Traversable)
 
 -- | Strict Either thing for attempting to deserialize a Command.
 data ProcessedCommand a =
@@ -68,19 +64,23 @@ data ParsedCode = ParsedCode
 instance NFData ParsedCode
 
 data Payload c = Payload
-  { _pPayload :: !(PactRPC c)
+  { _pPayload  :: !(PactRPC c)
+  , _pGasPrice :: !Coin
   } deriving (Show, Eq, Generic, Functor, Foldable, Traversable)
 
 instance (NFData a) => NFData (Payload a)
 
 instance (ToJSON a) => ToJSON (Payload a) where 
-  toJSON (Payload rpc) =
-    object [ "payload" .= toJSON rpc ]
+  toJSON (Payload payload gasPrice) =
+    object [ "payload" .= toJSON payload 
+           , "gasPrice" .= toJSON gasPrice
+           ]
 
 instance (FromJSON a) => FromJSON (Payload a) where 
   parseJSON =
       withObject "Payload" $ \o ->
         Payload <$> (o .: "payload")
+                <*> (o .: "gasPrice")
 
 data CommandResult = CommandResult
   { _crGas    :: Gas
