@@ -27,8 +27,7 @@ import           Pos.AllSecrets (asSecretKeys, asSpendingData,
 import           Pos.Chain.Genesis as Genesis (Config (..))
 import           Pos.Chain.Txp (Tx (..), TxAux (..), TxIn (..), TxOut (..),
                      TxOutAux (..), TxpConfiguration, Utxo,
-                     utxoToLookup)
-import           Pos.Chain.Txp.Toil.Utxo.Monad (execUtxoM, applyTxToUtxo)
+                     utxoToLookup, execUtxoM, applyTxToUtxo)
 
 import qualified Pos.Chain.Txp as Utxo
 import           Pos.Client.Txp.Failure (TxError (..))

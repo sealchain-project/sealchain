@@ -43,11 +43,10 @@ import           Pos.Chain.Genesis (GenesisData)
 import           Pos.Chain.Lrc (genesisLeaders)
 import           Pos.Chain.Txp (ToilVerFailure, Tx (..), TxAux (..), TxId,
                      TxOut, TxOutAux (..), TxWitness, TxpConfiguration,
-                     TxpError (..), UtxoLookup, UtxoModifier,
+                     TxpError (..), UtxoLookup, UtxoModifier, UtxoM,
                      flattenTxPayload, genesisUtxo,
-                     topsortTxs, txOutAddress, utxoToLookup)
-import           Pos.Chain.Txp.Toil.Utxo.Monad (UtxoM, evalUtxoM, runUtxoM, 
-                     utxoGet, applyTxToUtxo)
+                     topsortTxs, txOutAddress, utxoToLookup,
+                     evalUtxoM, runUtxoM, utxoGet, applyTxToUtxo)
 import           Pos.Core (Address, ChainDifficulty, Timestamp (..),
                      difficultyL)
 import           Pos.Core.JsonLog (CanJsonLog (..))

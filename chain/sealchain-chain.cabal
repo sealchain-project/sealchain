@@ -23,7 +23,6 @@ library
                        Pos.Chain.Ssc
                        Pos.Chain.Script
                        Pos.Chain.Txp
-                       Pos.Chain.Txp.Toil.Utxo.Monad
                        Pos.Chain.Update
 
   other-modules:
