@@ -40,8 +40,8 @@ import qualified Hedgehog.Range as Range
 import           Pos.Chain.Txp (Tx (..), TxAttributes, TxAux (..), TxId,
                      TxIn (..), TxInWitness (..), TxOut (..), TxOutAux (..),
                      TxPayload, TxProof (..), TxSig, TxSigData (..), TxUndo,
-                     TxValidationRulesConfig (..), TxWitness,
-                     TxpConfiguration (..), TxpUndo, mkTxPayload)
+                     TxValidationRulesConfig (..), TxWitness, TxCommand,
+                     TxpConfiguration (..), TxpUndo, mkTxPayload, emptyTxCommand)
 import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Crypto (Hash, ProtocolMagic, decodeHash, sign)
 
@@ -75,7 +75,7 @@ genScriptWitness :: Gen TxInWitness
 genScriptWitness = ScriptWitness <$> genScript <*> genScript
 
 genTx :: Gen Tx
-genTx = UnsafeTx <$> genTxInList <*> genTxOutList <*> genTxAttributes
+genTx = UnsafeTx <$> genTxInList <*> genTxOutList <*> genTxCommand <*> genTxAttributes
 
 genTxAttributes :: Gen TxAttributes
 genTxAttributes = pure $ mkAttributes ()
@@ -113,6 +113,9 @@ genTxOutAux = TxOutAux <$> genTxOut
 
 genTxOutList :: Gen [TxOut]
 genTxOutList = Gen.list (Range.linear 1 100) genTxOut
+
+genTxCommand :: Gen TxCommand
+genTxCommand = return emptyTxCommand
 
 genTxpUndo :: Gen TxpUndo
 genTxpUndo = Gen.list (Range.linear 1 50) genTxUndo

@@ -192,11 +192,13 @@ instance SC.SafeCopy (InDb Txp.Tx) where
     getCopy = SC.contain $ do
         InDb (i :: NonEmpty Txp.TxIn) <- SC.safeGet
         InDb (o :: [Txp.TxOut]) <- SC.safeGet
+        InDb (c :: Txp.TxCommand) <- SC.safeGet
         InDb (a :: Txp.TxAttributes) <- SC.safeGet
-        pure (InDb (Txp.UnsafeTx i o a))
-    putCopy (InDb (Txp.UnsafeTx i o a)) = SC.contain $ do
+        pure (InDb (Txp.UnsafeTx i o c a))
+    putCopy (InDb (Txp.UnsafeTx i o c a)) = SC.contain $ do
         SC.safePut (InDb i)
         SC.safePut (InDb o)
+        SC.safePut (InDb c)
         SC.safePut (InDb a)
 
 instance SC.SafeCopy (InDb Txp.TxOut) where
@@ -229,6 +231,13 @@ instance SC.SafeCopy (InDb Txp.TxOut) where
             SC.safePut (InDb addr)
             SC.safePut (InDb gd)
             SC.safePut (proof :: B.ByteString)
+
+instance SC.SafeCopy (InDb Txp.TxCommand) where
+    getCopy = SC.contain $ do
+        InDb (x :: ByteString) <- SC.safeGet
+        pure (InDb (Txp.Command x))
+    putCopy (InDb (Txp.Command x)) = SC.contain $ do
+        SC.safePut (InDb x)
 
 instance SC.SafeCopy (InDb Txp.TxOutAux) where
     getCopy = SC.contain $ do

@@ -46,7 +46,7 @@ import           Pos.Binary.Class (Raw)
 import           Pos.Chain.Txp (Tx (..), TxAttributes, TxAux (..), TxIn (..),
                      TxInWitness (..), TxOut (..), TxOutAux (..),
                      TxPayload (..), TxProof (..), TxSigData (..),
-                     TxValidationRules (..), mkTxPayload)
+                     TxValidationRules (..), TxCommand, mkTxPayload, emptyTxCommand)
 import           Pos.Core.Attributes (Attributes, mkAttributes,
                      mkAttributesWithUnparsedFields)
 import           Pos.Core.Common (AddrAttributes, Address (..), Coin,
@@ -76,6 +76,10 @@ instance Arbitrary TxSigData where
     arbitrary = genericArbitrary
     shrink = genericShrink
 
+instance Arbitrary TxCommand where
+    arbitrary = genericArbitrary
+    shrink = genericShrink
+
 -- This instance avoids the failure of tests that
 -- use checkTx but aren't explicitly checking if
 -- checkTx is behaving as it should.
@@ -94,8 +98,8 @@ genAddrAttribBloated =
 -- Generates a Tx bloated via its `Attributes AddrAttributes` or `TxAttributes`
 genAddressBloatedTx :: Gen Tx
 genAddressBloatedTx =
-    oneof [ UnsafeTx <$> arbitrary <*> genTxOutBloated <*> pure (mkAttributes ())
-          , UnsafeTx <$> arbitrary <*> arbitrary <*> genTxAttributesBloated
+    oneof [ UnsafeTx <$> arbitrary <*> genTxOutBloated <*> arbitrary <*> pure (mkAttributes ())
+          , UnsafeTx <$> arbitrary <*> arbitrary <*> arbitrary <*> genTxAttributesBloated
           ]
 
 genAddBloated :: Gen Address
@@ -140,7 +144,7 @@ instance Arbitrary TxIn where
     shrink = genericShrink
 
 genTx :: Gen Tx
-genTx = UnsafeTx <$> arbitrary <*> arbitrary <*> pure (mkAttributes ())
+genTx = UnsafeTx <$> arbitrary <*> arbitrary <*> arbitrary <*> pure (mkAttributes ())
 
 -- | Arbitrary transactions generated from this instance will only be valid
 -- with regards to 'mxTx'
@@ -178,13 +182,14 @@ buildProperTx pm inputList (inCoin, outCoin) =
         , mkWitness fromSk
         )
   where
-    fun (UnsafeTx txIn txOut _, fromSk, toSk, c) =
+    fun (UnsafeTx txIn txOut _ _, fromSk, toSk, c) =
         let inC = inCoin c
             outC = outCoin c
             txToBeSpent =
                 UnsafeTx
                     txIn
                     ((makeTxOutput fromSk inC):txOut)
+                    emptyTxCommand
                     (mkAttributes ())
         in ( txToBeSpent
            , TxInUtxo (hash txToBeSpent) 0
@@ -192,7 +197,7 @@ buildProperTx pm inputList (inCoin, outCoin) =
            , makeTxOutput toSk outC )
     -- why is it called txList? I've no idea what's going on here (@neongreen)
     txList = fmap fun inputList
-    newTx = UnsafeTx ins outs def
+    newTx = UnsafeTx ins outs emptyTxCommand def
     newTxHash = hash newTx
     ins  = fmap (view _2) txList
     outs = NE.toList $ fmap (view _4) txList
@@ -217,7 +222,7 @@ genGoodTxWithMagic pm =
 goodTxToTxAux :: GoodTx -> TxAux
 goodTxToTxAux (GoodTx l) = TxAux tx witness
   where
-    tx = UnsafeTx (map (view _2) l) (NE.toList $ map (toaOut . view _3) l) def
+    tx = UnsafeTx (map (view _2) l) (NE.toList $ map (toaOut . view _3) l) emptyTxCommand def
     witness = V.fromList $ NE.toList $ map (view _4) l
 
 instance Arbitrary GoodTx where
@@ -282,7 +287,8 @@ genTxOutDist pm =
         txInW <- V.fromList <$> listOf (genTxInWitness pm)
         txIns <- arbitrary
         txOuts <- arbitrary
-        let tx = UnsafeTx txIns txOuts (mkAttributes ())
+        txCmd <- arbitrary
+        let tx = UnsafeTx txIns txOuts txCmd (mkAttributes ())
         return $ TxAux tx txInW
 
 genTxPayload :: ProtocolMagic -> Gen TxPayload

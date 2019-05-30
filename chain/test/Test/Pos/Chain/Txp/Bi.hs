@@ -28,7 +28,7 @@ import           Test.Pos.Binary.Helpers.GoldenRoundTrip (goldenTestBi,
                      roundTripsBiBuildable, roundTripsBiShow)
 import           Test.Pos.Chain.Txp.Example (exampleHashTx,
                      exampleRedeemSignature, exampleTxId, exampleTxInList,
-                     exampleTxInUtxo, exampleTxOut,
+                     exampleTxInUtxo, exampleTxOut, exampleTxCommand,
                      exampleTxOutList, exampleTxProof, exampleTxSig,
                      exampleTxSigData, exampleTxWitness)
 import           Test.Pos.Chain.Txp.Gen (genTx, genTxAttributes, genTxAux,
@@ -47,7 +47,7 @@ import           Test.Pos.Util.Tripping (discoverRoundTrip)
 golden_Tx :: Property
 golden_Tx = goldenTestBi tx "test/golden/bi/txp/Tx"
     where
-        tx = UnsafeTx exampleTxInList exampleTxOutList (mkAttributes ())
+        tx = UnsafeTx exampleTxInList exampleTxOutList exampleTxCommand (mkAttributes ())
 
 roundTripTx :: Property
 roundTripTx = eachOf 50 genTx roundTripsBiBuildable

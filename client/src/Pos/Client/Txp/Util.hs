@@ -70,7 +70,7 @@ import           Pos.Chain.Genesis as Genesis (Config (..), configEpochSlots)
 import           Pos.Chain.Txp (Tx (..), TxAux (..), TxFee (..), TxIn (..),
                      TxInWitness (..), TxOut (..), TxOutAux (..),
                      TxSigData (..), Utxo, isOriginTxOut, originUtxo, 
-                     isGDTxOut, gdUtxo, isStateTxOut)
+                     isGDTxOut, gdUtxo, isStateTxOut, emptyTxCommand)
 import           Pos.Client.Txp.Addresses
 import           Pos.Client.Txp.Currency
 import           Pos.Client.Txp.Failure
@@ -159,7 +159,7 @@ makeUnsignedAbstractTx
     -> Tx
 makeUnsignedAbstractTx inputs outputs = tx
   where
-    tx = UnsafeTx txInputs txOutputs txAttributes
+    tx = UnsafeTx txInputs txOutputs emptyTxCommand txAttributes
     txInputs = map snd inputs
     txOutputs = map toaOut outputs
     txAttributes = mkAttributes ()

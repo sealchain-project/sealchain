@@ -6,6 +6,7 @@ module Test.Pos.Chain.Txp.Example
        , exampleTxProof
        , exampleTxOut
        , exampleTxOutList
+       , exampleTxCommand
        , exampleTxSig
        , exampleTxSigData
        , exampleTxpUndo
@@ -25,7 +26,7 @@ import qualified Cardano.Crypto.Wallet as CC
 import           Pos.Chain.Txp (Tx (..), TxAux (..), TxId, TxIn (..),
                      TxInWitness (..), TxOut (..), TxOutAux (..),
                      TxPayload (..), TxProof (..), TxSig, TxSigData (..),
-                     TxWitness, TxpUndo, mkTxPayload)
+                     TxWitness, TxpUndo, TxCommand, emptyTxCommand, mkTxPayload)
 import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Core.Common (Coin (..), IsBootstrapEraAddr (..),
                      makePubKeyAddress)
@@ -42,7 +43,7 @@ import           Test.Pos.Crypto.Bi (exampleProtocolMagic, getBytes)
 exampleTxAux :: TxAux
 exampleTxAux = TxAux tx exampleTxWitness
   where
-    tx = UnsafeTx exampleTxInList exampleTxOutList (mkAttributes ())
+    tx = UnsafeTx exampleTxInList exampleTxOutList exampleTxCommand (mkAttributes ())
 
 exampleTxId :: TxId
 exampleTxId = exampleHashTx
@@ -61,13 +62,16 @@ exampleTxOut = TxOut (makePubKeyAddress NetworkMainOrStage (IsBootstrapEraAddr T
 exampleTxOutList :: [TxOut]
 exampleTxOutList = [exampleTxOut]
 
+exampleTxCommand :: TxCommand
+exampleTxCommand = emptyTxCommand
+
 exampleTxPayload :: TxPayload
 exampleTxPayload = mkTxPayload [exampleTxAux]
 
 exampleTxProof :: TxProof
 exampleTxProof = TxProof 32 mroot hashWit
   where
-    mroot = mtRoot $ mkMerkleTree [(UnsafeTx exampleTxInList exampleTxOutList (mkAttributes ()))]
+    mroot = mtRoot $ mkMerkleTree [(UnsafeTx exampleTxInList exampleTxOutList exampleTxCommand (mkAttributes ()))]
     hashWit = hash $ [(V.fromList [(PkWitness examplePublicKey exampleTxSig)])]
 
 exampleTxSig :: TxSig

@@ -1,7 +1,8 @@
 {-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE DeriveFoldable    #-}
+{-# LANGUAGE DeriveFunctor     #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Pos.Chain.Txp.Command
   ( Command (..)
@@ -24,7 +25,9 @@ import           Universum
 
 import           Control.Lens hiding ((.=))
 import           Data.ByteString (ByteString)
-import           Data.Aeson
+import           Data.Aeson (ToJSON (..), FromJSON (..),
+                     object, withObject, (.:), (.=), eitherDecodeStrict')
+import           Data.SafeCopy (base, deriveSafeCopySimple)
 
 import           Pact.Types.Gas
 import           Pact.Types.Runtime
@@ -35,7 +38,7 @@ import           Pos.Core.Common (Coin)
 
 data Command a = Command
   { _cmdPayload  :: !a
-  } deriving (Eq, Show, Ord, Generic, Functor, Foldable, Traversable)
+  } deriving (Eq, Show, NFData, Ord, Generic, Functor, Foldable, Traversable)
 
 -- | Strict Either thing for attempting to deserialize a Command.
 data ProcessedCommand a =
@@ -54,7 +57,6 @@ verifyCommand orig@Command{..} = case ppcmdPayload' of
     toErrStr :: Either String a -> String
     toErrStr (Right _) = ""
     toErrStr (Left s) = s ++ "; "
-{-# INLINE verifyCommand #-}
 
 -- | Pair parsed Pact expressions with the original text.
 data ParsedCode = ParsedCode
@@ -91,3 +93,5 @@ makeLenses ''ParsedCode
 makeLenses ''Payload
 makeLenses ''CommandResult
 makePrisms ''ProcessedCommand
+
+deriveSafeCopySimple 0 'base ''Command

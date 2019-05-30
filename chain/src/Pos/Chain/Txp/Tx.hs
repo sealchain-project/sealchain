@@ -1,10 +1,12 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Pos.Chain.Txp.Tx
        ( Tx (..)
        , checkTx
        , txInputs
        , txOutputs
+       , txCommand
        , txAttributes
        , txF
 
@@ -18,6 +20,9 @@ module Pos.Chain.Txp.Tx
        , isGDTxOut
        , isStateTxOut
 
+       , TxCommand
+       , emptyTxCommand
+
        , TxValidationRules (..)
        , TxValidationRulesConfig (..)
        , mkLiveTxValidationRules
@@ -29,9 +34,11 @@ import           Control.Lens (makeLenses)
 import           Control.Monad.Except (MonadError (throwError))
 import           Data.Aeson (FromJSON (..), FromJSONKey (..), 
                      FromJSONKeyFunction (..), ToJSON (toJSON), ToJSONKey (..),
-                     Value (..), object, withObject, (.:), (.=))
+                     Value (..), object, withObject, withText,
+                     (.:), (.=))
 import           Data.Aeson.TH (defaultOptions, deriveJSON)
 import           Data.Aeson.Types (toJSONKeyText, typeMismatch)
+import qualified Data.ByteString as BS
 import qualified Data.HashMap.Strict as HM
 import           Data.SafeCopy (base, deriveSafeCopySimple)
 import qualified Data.Text as T
@@ -56,6 +63,7 @@ import           Pos.Core.Slotting (EpochIndex)
 import           Pos.Core.Util.LogSafe (SecureLog (..))
 import           Pos.Crypto (Hash, decodeAbstractHash, hash, hashHexF,
                      shortHashF)
+import           Pos.Chain.Txp.Command (Command (..))
 import           Pos.Util.Util (toAesonError, aesonError)
 
 ----------------------------------------------------------------------------
@@ -66,34 +74,40 @@ import           Pos.Util.Util (toAesonError, aesonError)
 --
 -- NB: transaction witnesses are stored separately.
 data Tx = UnsafeTx
-    { _txInputs     :: !(NonEmpty TxIn)     -- ^ Inputs of transaction.
-    , _txOutputs    :: ![TxOut]          -- ^ Outputs of transaction.
-    , _txAttributes :: !TxAttributes    -- ^ Attributes of transaction
+    { _txInputs     :: !(NonEmpty TxIn)      -- ^ Inputs of transaction.
+    , _txOutputs    :: ![TxOut]              -- ^ Outputs of transaction.
+    , _txCommand    :: !TxCommand            -- ^ Command of transaction.
+    , _txAttributes :: !TxAttributes         -- ^ Attributes of transaction.
     } deriving (Eq, Ord, Generic, Show, Typeable)
 
 instance Buildable Tx where
     build tx@(UnsafeTx{..}) =
         bprint
             ("Tx "%build%
-             " with inputs "%listJson%", outputs: "%listJson % builder)
-            (hash tx) _txInputs _txOutputs attrsBuilder
+             " with inputs "%listJson%
+             ", outputs: "%listJson%
+             ", command: "%build%
+             " "% builder)
+            (hash tx) _txInputs _txOutputs _txCommand attrsBuilder
       where
         attrs = _txAttributes
         attrsBuilder | areAttributesKnown attrs = mempty
                      | otherwise = bprint (", attributes: "%build) attrs
 
 instance Bi Tx where
-    encode tx = encodeListLen 3
+    encode tx = encodeListLen 4
                 <> encode (_txInputs tx)
                 <> encode (_txOutputs tx)
+                <> encode (_txCommand tx)
                 <> encode (_txAttributes tx)
     decode = do
         enforceSize "Tx" 3
-        UnsafeTx <$> decode <*> decode <*> decode
+        UnsafeTx <$> decode <*> decode <*> decode <*> decode
 
     encodedSizeExpr size pxy = 1
         + size (_txInputs     <$> pxy)
         + size (_txOutputs    <$> pxy)
+        + size (_txCommand    <$> pxy)
         + size (_txAttributes <$> pxy)
 
 instance NFData Tx
@@ -366,6 +380,36 @@ instance Buildable TxOut where
 
 instance NFData TxOut
 
+--------------------------------------------------------------------------------
+-- TxCommand
+--------------------------------------------------------------------------------
+
+-- | Transaction command
+type TxCommand = Command ByteString
+
+instance Buildable TxCommand where
+    build = bprint B16.base16F . _cmdPayload
+
+instance Bi TxCommand where
+    encode cmd = encodeListLen 1
+              <> encode (_cmdPayload cmd)
+
+    decode = do
+        enforceSize "Command" 1
+        Command <$> decode
+
+instance ToJSON TxCommand where
+    toJSON (Command payload) =
+        object [ "cmd" .= String (B16.encode payload) ]
+
+instance FromJSON TxCommand where
+    parseJSON = withObject "Command" $ \o ->
+                  (o .: "cmd") >>= (withText "cmd" $ \t -> Command <$> (toAesonError $ B16.decode t))
+
+--------------------------------------------------------------------------------
+-- derivation and lens
+--------------------------------------------------------------------------------
+
 makeLenses ''Tx
 
 deriveIndexedBi ''TxOut [
@@ -389,6 +433,10 @@ deriveSafeCopySimple 0 'base ''Tx
 
 deriveJSON defaultOptions ''Tx
 
+--------------------------------------------------------------------------------
+-- Helpers
+--------------------------------------------------------------------------------
+
 isOriginTxOut :: TxOut -> Bool
 isOriginTxOut TxOut{..} = True
 isOriginTxOut _ = False
@@ -400,3 +448,6 @@ isGDTxOut _ = False
 isStateTxOut :: TxOut -> Bool
 isStateTxOut TxOutState{..} = True
 isStateTxOut _ = False
+
+emptyTxCommand :: TxCommand
+emptyTxCommand = Command BS.empty
