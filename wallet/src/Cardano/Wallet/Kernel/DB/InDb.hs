@@ -246,7 +246,7 @@ instance SC.SafeCopy (InDb Txp.TxOutAux) where
     putCopy (InDb (Txp.TxOutAux x)) = SC.contain $ do
         SC.safePut (InDb x)
 
-instance SC.SafeCopy (InDb Txp.TxWitness) where
+instance SC.SafeCopy (InDb (Vector Txp.TxInWitness)) where
     getCopy = SC.contain $ do
         xsi :: [InDb Txp.TxInWitness] <- SC.safeGet
         let v :: V.Vector Txp.TxInWitness = V.fromList (map _fromDb xsi)
@@ -291,6 +291,25 @@ instance SC.SafeCopy (InDb Txp.TxInWitness) where
             SC.safePut (3 :: Word8)
             SC.safePut (a :: Word8)
             SC.safePut (b :: B.ByteString)
+
+instance SC.SafeCopy (InDb (Vector Txp.CommandWitness)) where
+    getCopy = SC.contain $ do
+        xsi :: [InDb Txp.CommandWitness] <- SC.safeGet
+        let v :: V.Vector Txp.CommandWitness = V.fromList (map _fromDb xsi)
+        pure (InDb v)
+    putCopy (InDb v) = SC.contain $ do
+        let xsi :: [InDb Txp.CommandWitness] = map InDb (V.toList v)
+        SC.safePut xsi
+
+instance SC.SafeCopy (InDb Txp.CommandWitness) where
+    getCopy = SC.contain $ fmap InDb $ do
+        Txp.CommandWitness
+        <$> fmap _fromDb SC.safeGet
+        <*> fmap _fromDb SC.safeGet
+
+    putCopy (InDb (Txp.CommandWitness a b)) = SC.contain $ do
+        SC.safePut (InDb (a :: Core.PublicKey))
+        SC.safePut (InDb (b :: Txp.TxSig))
 
 instance SC.SafeCopy (InDb Core.AddrType) where
     getCopy = SC.contain $ fmap InDb $ do

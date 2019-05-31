@@ -18,16 +18,16 @@ module Pos.Chain.Txp.Toil.Logic
 import           Universum hiding (id)
 
 import           Control.Monad.Except (ExceptT, mapExceptT, throwError)
-import qualified Data.ByteString as BS
 import qualified Data.Set as Set
 import           Serokell.Data.Memory.Units (Byte)
 
 import qualified Pact.Types.Gas as Pact (Gas (..), GasLimit (..))
+import qualified Pact.Types.Term as Pact (PublicKey (..))
 import qualified Pact.Types.Util as Pact (Hash (..))
 
 import           Pos.Binary.Class (biSize, serialize')
 import           Pos.Chain.Genesis (GenesisWStakeholders)
-import           Pos.Chain.Txp.Command (Command (..), CommandResult (..))
+import           Pos.Chain.Txp.Command (CommandResult (..))
 import           Pos.Chain.Txp.Configuration (TxpConfiguration (..),
                      memPoolLimitTx)
 import           Pos.Chain.Txp.Toil.Failure (ToilVerFailure (..))
@@ -47,6 +47,7 @@ import           Pos.Chain.Txp.Tx (Tx (..), TxId, TxOut (..), TxValidationRules,
                      txOutAddress)
 import           Pos.Chain.Txp.TxAux (TxAux (..), checkTxAux)
 import           Pos.Chain.Txp.TxOutAux (toaOut)
+import           Pos.Chain.Txp.TxWitness (CommandWitness (..))
 import           Pos.Chain.Txp.Undo (TxUndo, TxpUndo)
 import           Pos.Chain.Update.BlockVersionData (BlockVersionData (..),
                      isBootstrapEraBVD)
@@ -283,12 +284,12 @@ applyTxToPact
     => (TxId, TxAux) 
     -> Coin 
     -> ExceptT ToilVerFailure (PactExecM p m) Coin
-applyTxToPact (txId, TxAux _ _) (Coin gasLimit) = do
-    CommandResult{..} <- Pact.applyCmd Command{..} pactGasLimit pactHash pactSigners 
+applyTxToPact (txId, TxAux tx wits) (Coin gasLimit) = do
+    CommandResult{..} <- Pact.applyCmd (_txCommand tx) pactGasLimit pactHash pactSigners 
     let (Pact.Gas int64Gas) = _crGas
     return . unsafeIntegerToCoin . toInteger $ int64Gas
   where
-    _cmdPayload = BS.empty -- TODO xl fix this later
-    pactSigners = Set.empty -- TODO xl fix this later
+    toPactPublicKey (CommandWitness pubKey _) = Pact.PublicKey . serialize' $ pubKey
+    pactSigners = Set.fromList . map toPactPublicKey . toList . snd $ wits
     pactHash = Pact.Hash $ serialize' txId
     pactGasLimit = Pact.GasLimit gasLimit

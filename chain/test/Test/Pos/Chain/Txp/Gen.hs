@@ -13,6 +13,7 @@ module Test.Pos.Chain.Txp.Gen
        , genTxIn
        , genTxInList
        , genTxInWitness
+       , genCommandWitness
        , genTxOut
        , genTxOutAux
        , genTxOutList
@@ -41,7 +42,8 @@ import           Pos.Chain.Txp (Tx (..), TxAttributes, TxAux (..), TxId,
                      TxIn (..), TxInWitness (..), TxOut (..), TxOutAux (..),
                      TxPayload, TxProof (..), TxSig, TxSigData (..), TxUndo,
                      TxValidationRulesConfig (..), TxWitness, TxCommand,
-                     TxpConfiguration (..), TxpUndo, mkTxPayload, emptyTxCommand)
+                     TxpConfiguration (..), TxpUndo, CommandWitness (..),
+                     mkTxPayload, emptyTxCommand)
 import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Crypto (Hash, ProtocolMagic, decodeHash, sign)
 
@@ -146,11 +148,17 @@ genTxInWitness pm = Gen.choice gens
            , genUnknownWitnessType
            ]
 
+genCommandWitness :: ProtocolMagic -> Gen CommandWitness
+genCommandWitness pm = CommandWitness <$> genPublicKey <*> genTxSig pm
+
 genTxUndo :: Gen TxUndo
 genTxUndo = Gen.nonEmpty (Range.linear 1 10)  genTxOutAux
 
 genTxWitness :: ProtocolMagic -> Gen TxWitness
-genTxWitness pm = V.fromList <$> Gen.list (Range.linear 1 10) (genTxInWitness pm)
+genTxWitness pm = 
+    (,) <$>
+    (V.fromList <$> Gen.list (Range.linear 1 10) (genTxInWitness pm)) <*>
+    (V.fromList <$> Gen.list (Range.linear 1 10) (genCommandWitness pm))
 
 genUnknownWitnessType :: Gen TxInWitness
 genUnknownWitnessType =

@@ -17,7 +17,6 @@ import           Control.Monad.Except (throwError)
 import qualified Data.List.NonEmpty as NE
 import           Data.Set (Set)
 import qualified Data.Set as Set
-import           Formatting (int, sformat, (%))
 import           Serokell.Util (allDistinct, enumerate)
 
 import           Pos.Chain.Script (Script (..))
@@ -29,8 +28,7 @@ import           Pos.Chain.Txp.Tx (Tx (..), TxAttributes, TxIn (..), TxOut (..),
                      isOriginTxOut, isGDTxOut, isStateTxOut)
 import           Pos.Chain.Txp.TxAux (TxAux (..))
 import           Pos.Chain.Txp.TxOutAux (TxOutAux (..))
-import           Pos.Chain.Txp.TxWitness (TxInWitness (..), TxSigData (..),
-                     TxWitness)
+import           Pos.Chain.Txp.TxWitness (TxInWitness (..), CommandWitness (..), TxSigData (..))
 import           Pos.Chain.Txp.Undo (TxUndo)
 import           Pos.Core (AddrType (..), Address (..), integerToCoin,
                      isRedeemAddress, isUnknownAddressType, sumCoins,
@@ -94,9 +92,8 @@ verifyTxUtxo
     -> Set Address
     -> TxAux
     -> ExceptT ToilVerFailure UtxoM VerifyTxUtxoRes
-verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {..} witnesses) = do
+verifyTxUtxo protocolMagic ctx@VTxContext {..} lockedAssets ta@(TxAux UnsafeTx {..} _) = do
     liftEither $ do
-        verifyConsistency _txInputs witnesses
         verifyOutputs ctx ta
 
     resolvedInputs <- filterAssetLocked =<< mapM resolveInput _txInputs
@@ -177,14 +174,6 @@ verifySums resolvedInputs outputs
         Just txFee ->
             return txFee
 
-verifyConsistency :: NonEmpty TxIn -> TxWitness -> Either ToilVerFailure ()
-verifyConsistency inputs witnesses
-    | length inputs == length witnesses = pass
-    | otherwise = throwError $ ToilInconsistentTxAux errMsg
-  where
-    errFmt = ("length of inputs != length of witnesses "%"("%int%" != "%int%")")
-    errMsg = sformat errFmt (length inputs) (length witnesses)
-
 verifyOutputs :: VTxContext -> TxAux -> Either ToilVerFailure ()
 verifyOutputs VTxContext {..} (TxAux UnsafeTx {..} _) =
     mapM_ verifyOutput . enumerate $ toList _txOutputs
@@ -215,10 +204,12 @@ verifyKnownInputs ::
 verifyKnownInputs protocolMagic VTxContext {..} resolvedInputs TxAux {..} = do
     unless allInputsDifferent $ throwError ToilRepeatedInput
     mapM_ (uncurry3 checkInput) $
-        zip3 [0 ..] (toList resolvedInputs) (toList witnesses)
+        zip3 [0 ..] (toList resolvedInputs) (toList txInWits)
+    mapM_ checkCmdSign (toList cmdWits)
   where
     uncurry3 f (a, b, c) = f a b c
-    witnesses = taWitness
+    txInWits = fst taWitness
+    cmdWits = snd taWitness
     txHash = hash taTx
     txSigData = TxSigData txHash
 
@@ -234,8 +225,15 @@ verifyKnownInputs protocolMagic VTxContext {..} resolvedInputs TxAux {..} = do
         let addr = txOutAddress txOut
         unless (checkSpendingData addr witness) $
             throwError $ ToilWitnessDoesntMatch i txIn txOut witness
-        whenLeft (checkWitness toa witness) $ \err ->
-            throwError $ ToilInvalidWitness i witness err
+        whenLeft (checkTxInWitness toa witness) $ \err ->
+            throwError $ ToilInvalidTxInWitness i witness err
+
+    checkCmdSign
+        :: CommandWitness
+        -> Either ToilVerFailure ()
+    checkCmdSign witness = do
+        whenLeft (checkCmdWitness witness) $ \err ->
+            throwError $ ToilInvalidCmdWitness witness err
 
     checkSpendingData addr wit = case wit of
         PkWitness twKey _            -> checkPubKeyAddress twKey addr
@@ -248,8 +246,8 @@ verifyKnownInputs protocolMagic VTxContext {..} resolvedInputs TxAux {..} = do
             _                 -> False
 
     -- the first argument here includes local context, can be used for scripts
-    checkWitness :: TxOutAux -> TxInWitness -> Either WitnessVerFailure ()
-    checkWitness _txOutAux witness = case witness of
+    checkTxInWitness :: TxOutAux -> TxInWitness -> Either WitnessVerFailure ()
+    checkTxInWitness _txOutAux witness = case witness of
         PkWitness twKey twSig ->
             unless (checkSig protocolMagic SignTx twKey txSigData twSig) $
                 throwError WitnessWrongSignature
@@ -263,6 +261,11 @@ verifyKnownInputs protocolMagic VTxContext {..} resolvedInputs TxAux {..} = do
         UnknownWitnessType t _ ->
             when vtcVerifyAllIsKnown $
                 throwError $ WitnessUnknownType t
+
+    checkCmdWitness :: CommandWitness -> Either WitnessVerFailure ()
+    checkCmdWitness (CommandWitness twKey twSig) = 
+        unless (checkSig protocolMagic SignTx twKey txSigData twSig) $
+            throwError WitnessWrongSignature
 
 verifyAttributesAreKnown
     :: TxAttributes -> Either ToilVerFailure ()

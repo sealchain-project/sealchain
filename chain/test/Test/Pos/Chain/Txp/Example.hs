@@ -26,7 +26,8 @@ import qualified Cardano.Crypto.Wallet as CC
 import           Pos.Chain.Txp (Tx (..), TxAux (..), TxId, TxIn (..),
                      TxInWitness (..), TxOut (..), TxOutAux (..),
                      TxPayload (..), TxProof (..), TxSig, TxSigData (..),
-                     TxWitness, TxpUndo, TxCommand, emptyTxCommand, mkTxPayload)
+                     TxWitness, TxpUndo, TxCommand, CommandWitness (..), 
+                     emptyTxCommand, mkTxPayload)
 import           Pos.Core.Attributes (mkAttributes)
 import           Pos.Core.Common (Coin (..), IsBootstrapEraAddr (..),
                      makePubKeyAddress)
@@ -72,7 +73,7 @@ exampleTxProof :: TxProof
 exampleTxProof = TxProof 32 mroot hashWit
   where
     mroot = mtRoot $ mkMerkleTree [(UnsafeTx exampleTxInList exampleTxOutList exampleTxCommand (mkAttributes ()))]
-    hashWit = hash $ [(V.fromList [(PkWitness examplePublicKey exampleTxSig)])]
+    hashWit = hash $ [(V.fromList [(PkWitness examplePublicKey exampleTxSig)], empty)]
 
 exampleTxSig :: TxSig
 exampleTxSig = sign exampleProtocolMagic SignForTestingOnly exampleSecretKey exampleTxSigData
@@ -84,7 +85,9 @@ exampleTxpUndo :: TxpUndo
 exampleTxpUndo = [NE.fromList $ (TxOutAux <$> exampleTxOutList)]
 
 exampleTxWitness :: TxWitness
-exampleTxWitness = V.fromList [(PkWitness examplePublicKey exampleTxSig)]
+exampleTxWitness = 
+  ( V.fromList [(PkWitness examplePublicKey exampleTxSig)]
+  , V.fromList [(CommandWitness examplePublicKey exampleTxSig)])
 
 exampleRedeemSignature :: RedeemSignature TxSigData
 exampleRedeemSignature = redeemSign exampleProtocolMagic SignForTestingOnly rsk exampleTxSigData

@@ -22,7 +22,7 @@ import           Pos.Chain.Block.Header (HeaderHash)
 import           Pos.Chain.Script (PlutusError)
 import           Pos.Chain.Txp.Toil.Types (TxFee)
 import           Pos.Chain.Txp.Tx (TxIn, TxOut (..))
-import           Pos.Chain.Txp.TxWitness (TxInWitness)
+import           Pos.Chain.Txp.TxWitness (TxInWitness, CommandWitness)
 import           Pos.Core (Address, ScriptVersion, TxFeePolicy,
                      addressDetailedF, addressF)
 import           Pos.Core.Attributes (UnparsedFields)
@@ -56,7 +56,8 @@ data ToilVerFailure -- TODO xl rename to ToilFailure, because it's not only abou
     -- | The witness could in theory justify spending an output, but it
     -- simply isn't valid (the signature doesn't pass validation, the
     -- validator–redeemer pair produces 'False' when executed, etc).
-    | ToilInvalidWitness !Word32 !TxInWitness !WitnessVerFailure
+    | ToilInvalidTxInWitness !Word32 !TxInWitness !WitnessVerFailure
+    | ToilInvalidCmdWitness !CommandWitness !WitnessVerFailure
     -- | ToilTooLargeTx acutalSize limit
     | ToilTooLargeTx !Byte !Byte
     | ToilInvalidMinFee !TxFeePolicy !Text !Byte
@@ -108,11 +109,16 @@ instance Buildable ToilVerFailure where
                 "  address details: "%addressDetailedF%"\n"%
                 "  witness: "%build)
             i txIn txOut (txOutAddress txOut) witness
-    build (ToilInvalidWitness i witness reason) =
+    build (ToilInvalidTxInWitness i witness reason) =
         bprint ("input #"%int%"'s witness doesn't pass verification:\n"%
                 "  witness: "%build%"\n"%
                 "  reason: "%build)
             i witness reason
+    build (ToilInvalidCmdWitness witness reason) =
+        bprint ("command witness doesn't pass verification:\n"%
+                "  witness: "%build%"\n"%
+                "  reason: "%build)
+            witness reason
     build (ToilTooLargeTx ttltSize ttltLimit) =
         bprint ("transaction's size exceeds limit "%
                 "("%memory%" > "%memory%")") ttltSize ttltLimit

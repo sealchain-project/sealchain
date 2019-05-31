@@ -44,8 +44,8 @@ import           Test.QuickCheck.Arbitrary.Generic (genericArbitrary,
 
 import           Pos.Binary.Class (Raw)
 import           Pos.Chain.Txp (Tx (..), TxAttributes, TxAux (..), TxIn (..),
-                     TxInWitness (..), TxOut (..), TxOutAux (..),
-                     TxPayload (..), TxProof (..), TxSigData (..),
+                     TxInWitness (..), TxOut (..), TxOutAux (..), TxWitness,
+                     TxPayload (..), TxProof (..), TxSigData (..), CommandWitness (..),
                      TxValidationRules (..), TxCommand, mkTxPayload, emptyTxCommand)
 import           Pos.Core.Attributes (Attributes, mkAttributes,
                      mkAttributesWithUnparsedFields)
@@ -135,6 +135,19 @@ instance Arbitrary TxInWitness where
         ScriptWitness a b -> uncurry ScriptWitness <$> shrink (a, b)
         _ -> []
 
+genCommandWitness :: ProtocolMagic -> Gen CommandWitness
+genCommandWitness pm = CommandWitness <$> arbitrary <*> genSignature pm arbitrary
+
+instance Arbitrary CommandWitness where
+    arbitrary = genCommandWitness dummyProtocolMagic
+    shrink = genericShrink
+
+genTxWitness :: ProtocolMagic -> Gen TxWitness
+genTxWitness pm = 
+    (,) <$> 
+    (V.fromList <$> listOf (genTxInWitness pm)) <*>
+    (V.fromList <$> listOf (genCommandWitness pm))
+
 genTxIn :: Gen TxIn
 genTxIn = oneof
     [ TxInUtxo <$> arbitrary <*> arbitrary ]
@@ -220,7 +233,7 @@ genGoodTxWithMagic pm =
                         <*> pure (identity, identity))
 
 goodTxToTxAux :: GoodTx -> TxAux
-goodTxToTxAux (GoodTx l) = TxAux tx witness
+goodTxToTxAux (GoodTx l) = TxAux tx (witness, empty)
   where
     tx = UnsafeTx (map (view _2) l) (NE.toList $ map (toaOut . view _3) l) emptyTxCommand def
     witness = V.fromList $ NE.toList $ map (view _4) l
@@ -271,7 +284,7 @@ instance Arbitrary TxProof where
     shrink = genericShrink
 
 genTxAux :: ProtocolMagic -> Gen TxAux
-genTxAux pm = TxAux <$> genTx <*> (V.fromList <$> listOf (genTxInWitness pm))
+genTxAux pm = TxAux <$> genTx <*> genTxWitness pm
 
 instance Arbitrary TxAux where
     arbitrary = genTxAux dummyProtocolMagic
@@ -284,7 +297,9 @@ instance Arbitrary TxAux where
 genTxOutDist :: ProtocolMagic -> Gen [TxAux]
 genTxOutDist pm =
     listOf $ do
-        txInW <- V.fromList <$> listOf (genTxInWitness pm)
+        txInW <- (,) <$> 
+                 (V.fromList <$> listOf (genTxInWitness pm)) <*>
+                 (V.fromList <$> listOf (genCommandWitness pm))
         txIns <- arbitrary
         txOuts <- arbitrary
         txCmd <- arbitrary

@@ -12,7 +12,6 @@ import           Control.Monad.Except (MonadError)
 import           Data.Aeson.TH (defaultOptions, deriveJSON)
 import           Formatting (Format, bprint, build, later, (%))
 import qualified Formatting.Buildable as Buildable
-import           Serokell.Util.Text (listJsonIndent)
 
 import           Pos.Binary.Class (Cons (..), Field (..), deriveSimpleBi)
 import           Pos.Chain.Txp.Tx
@@ -29,7 +28,7 @@ instance NFData TxAux
 -- | Specialized formatter for 'TxAux'.
 txaF :: Format r (TxAux -> r)
 txaF = later $ \(TxAux tx w) ->
-    bprint (build%"\n"%"witnesses: "%listJsonIndent 4) tx w
+    bprint (build%"\n"%"witnesses: "%build) tx w
 
 instance Buildable TxAux where
     build = bprint txaF

@@ -177,7 +177,7 @@ makeAbstractTx mkWit txInputs outputs = do
             }
     txWitness <- V.fromList . toList <$>
         for txInputs (\(addr, _) -> mkWit addr txSigData)
-    pure $ TxAux tx txWitness
+    pure $ TxAux tx (txWitness, empty)
 
 -- | Datatype which contains all data from DB which is necessary
 -- to create transactions

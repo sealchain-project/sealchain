@@ -339,7 +339,7 @@ submitSignedTx aw@ActiveWallet{..} tx srcAddrsWithProofs =
                     \(_srcAddr, txSig, derivedPK) -> PkWitness derivedPK txSig
 
             -- STEP 2: make 'TxAux'.
-            let txAux = TxAux tx witnesses
+            let txAux = TxAux tx (witnesses, empty)
 
             -- STEP 3: Compute metadata
             let txId = hash tx

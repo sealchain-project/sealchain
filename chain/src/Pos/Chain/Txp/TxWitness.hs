@@ -3,6 +3,7 @@
 module Pos.Chain.Txp.TxWitness
        ( TxWitness
        , TxInWitness (..)
+       , CommandWitness (..)
        , TxSigData (..)
        , TxSig
        )where
@@ -18,12 +19,13 @@ import           Formatting (bprint, build, (%))
 import qualified Formatting.Buildable as Buildable
 import           Serokell.Util.Base16 (base16F)
 import           Serokell.Util.Base64 (JsonByteString (..))
+import           Serokell.Util.Text (listJsonIndent)
 
 import           Pos.Binary.Class (Bi (..), Case (..), decodeKnownCborDataItem,
                      decodeListLenCanonical, decodeUnknownCborDataItem,
                      encodeKnownCborDataItem, encodeListLen,
                      encodeUnknownCborDataItem, knownCborDataItemSizeExpr,
-                     matchSize, szCases)
+                     matchSize, szCases, cborError)
 import           Pos.Core.Common (Script, addressHash)
 import           Pos.Crypto (Hash, PublicKey, RedeemPublicKey, RedeemSignature,
                      Signature, hash, shortHashF)
@@ -34,7 +36,15 @@ import           Pos.Chain.Txp.Tx (Tx)
 -- | A witness is a proof that a transaction is allowed to spend the funds it
 -- spends (by providing signatures, redeeming scripts, etc). A separate proof
 -- is provided for each input.
-type TxWitness = Vector TxInWitness
+type TxWitness = (Vector TxInWitness, Vector CommandWitness)
+
+instance Buildable TxWitness where
+    build (txInWits, cmdWits) =
+        bprint ("witnesses:"%
+                "\n  txInWitnesses: "%listJsonIndent 4%
+                "\n  cmdWitnesses: "%listJsonIndent 4) 
+                txInWits
+                cmdWits
 
 -- | A witness for a single input.
 data TxInWitness
@@ -148,6 +158,52 @@ instance Bi TxInWitness where
 
 instance NFData TxInWitness
 
+-- | A witness for command.
+data CommandWitness = CommandWitness !PublicKey !TxSig
+    deriving (Eq, Show, Generic, Typeable)
+
+instance ToJSON CommandWitness where
+    toJSON (CommandWitness twKey twSig) = 
+        object
+            [ "key" .= twKey
+            , "sig" .= twSig
+            ]
+
+instance FromJSON CommandWitness where
+    parseJSON = withObject "CommandWitness" $ \o ->
+                    CommandWitness <$> (o .: "key") <*> (o .: "sig")
+
+instance Hashable CommandWitness
+
+instance Buildable CommandWitness where
+    build (CommandWitness key sig) =
+        bprint ("CommandWitness: key = "%build%", key hash = "%shortHashF%
+                ", sig = "%build) key (addressHash key) sig
+
+instance Bi CommandWitness where
+    encode (CommandWitness key sig) =
+        encodeListLen 2 <>
+        encode (0 :: Word8) <>
+        encodeKnownCborDataItem (key, sig)
+
+    decode = do
+        len <- decodeListLenCanonical
+        tag <- decode @Word8
+        case tag of
+            0 -> do
+                matchSize len "CommandWitness" 2
+                uncurry CommandWitness <$> decodeKnownCborDataItem
+            i -> do
+                cborError $ "Decode CommandWitness: Unknown tag " <> (show i)
+
+    encodedSizeExpr size _ = 2 +
+        (szCases $ map (fmap knownCborDataItemSizeExpr) $
+            [ let CommandWitness key sig     = error "unused"
+              in  Case "CommandWitness" $ size ((,) <$> pure key <*> pure sig)
+            ])
+
+instance NFData CommandWitness
+
 -- | Data that is being signed when creating a TxSig.
 data TxSigData = TxSigData
     { -- | Transaction that we're signing
@@ -164,5 +220,6 @@ instance Bi TxSigData where
 type TxSig = Signature TxSigData
 
 deriveSafeCopySimple 0 'base ''TxInWitness
+deriveSafeCopySimple 0 'base ''CommandWitness
 
 deriveJSON defaultOptions ''TxSigData

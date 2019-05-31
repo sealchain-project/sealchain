@@ -275,7 +275,7 @@ sizeEstimates =
                   [ (typeRep (Proxy @(LengthOf [TxIn])),
                      SizeConstant (fromIntegral $ length $ _txInputs tx))
                   , (typeRep (Proxy @(LengthOf (Vector TxInWitness))),
-                     SizeConstant (fromIntegral $ length witness))
+                     SizeConstant (fromIntegral $ length . fst $ witness))
                   , (typeRep (Proxy @(LengthOf [TxOut])),
                      SizeConstant (fromIntegral $ length $ _txOutputs tx))
                   ]
