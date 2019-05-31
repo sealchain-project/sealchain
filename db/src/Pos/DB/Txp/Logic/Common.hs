@@ -3,7 +3,6 @@
 module Pos.DB.Txp.Logic.Common
        ( buildUtxo
        , buildUtxoForRollback
-       , defaultGasModel
        , unsafeGetStateRoot
        ) where
 
@@ -12,8 +11,6 @@ import qualified Universum.Unsafe as Unsafe
 
 import qualified Data.Map as M (fromList)
 
-import           Pact.Gas (constGasModel)
-import           Pact.Types.Gas (GasModel)
 import qualified Sealchain.Mpt.MerklePatriciaMixMem as Mpt
 
 import           Pos.Chain.Block (HeaderHash, StateRoot (..), HasStateRoot (..))
@@ -82,9 +79,6 @@ buildUtxoGeneric toInputs utxoModifier txs = concatMapM buildForOne txs
                 fmap (txIn, ) <$> MM.lookupM getTxOut txIn utxoModifier
         resolvedPairs <- mapM utxoLookupM (toInputs tx)
         return $ M.fromList $ catMaybes $ toList resolvedPairs
-
-defaultGasModel :: Monad m => m GasModel
-defaultGasModel = return $ constGasModel 1
 
 unsafeGetStateRoot :: (MonadRealDB ctx m, MonadDBRead m) => HeaderHash -> m Mpt.StateRoot
 unsafeGetStateRoot tip = do

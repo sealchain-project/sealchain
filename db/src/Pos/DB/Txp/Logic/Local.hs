@@ -46,7 +46,7 @@ import           Pos.DB.Class (MonadGState (..))
 import           Pos.DB.GState.Common (getTip)
 import           Pos.DB.GState.Lock (Priority (..), StateLock, StateLockMetrics,
                      withStateLock)
-import           Pos.DB.Txp.Logic.Common (buildUtxo, defaultGasModel, unsafeGetStateRoot)
+import           Pos.DB.Txp.Logic.Common (buildUtxo, unsafeGetStateRoot)
 import           Pos.DB.Txp.MemState (GenericTxpLocalData (..), MempoolExt,
                      MonadTxpMem, TxpLocalWorkMode, getLocalTxsMap, getTxpTip,
                      getLocalUndos, getMemPool, getTxpExtra, getUtxoModifier, 
@@ -178,10 +178,8 @@ txProcessTransactionAbstract epochSlots genesisConfig buildEnv txAction itw@(txI
     processTransactionPure bvd txValRules curEpoch utxo extraEnv tipDB tx (um, mp, undo, pactSt, tip, extraState)
         | tipDB /= tip = pure . Left $ ToilTipsMismatch tipDB tip
         | otherwise = do
-            gasModel <- defaultGasModel
             persister <- lift $ newGStateDb
             let initialEnv = LocalToilEnv { _lteUtxoLookup = (utxoToLookup utxo) 
-                                          , _lteGasModel = gasModel
                                           , _ltePersister = persister
                                           }
                 initialState = LocalToilState { _ltsMemPool = mp
@@ -254,11 +252,9 @@ txNormalizeAbstract epochSlots buildEnv normalizeAction =
             extraEnv <- buildEnv utxo txAuxes
             bvd <- gsAdoptedBVData
 
-            gasModel <- defaultGasModel
             persister <- newGStateDb
             stateRoot <- unsafeGetStateRoot globalTip
             let initialEnv = LocalToilEnv { _lteUtxoLookup = (utxoToLookup utxo) 
-                                          , _lteGasModel = gasModel
                                           , _ltePersister = persister
                                           }
             let initialState =

@@ -47,7 +47,7 @@ import           Pos.DB.Class (gsAdoptedBVData)
 import           Pos.DB.GState.Common (getTip)
 import           Pos.DB.GState.Stakes (getRealStake, getRealTotalStake)
 import           Pos.DB.Txp.Logic.Common (buildUtxo, buildUtxoForRollback, 
-                     defaultGasModel, unsafeGetStateRoot)
+                     unsafeGetStateRoot)
 import           Pos.DB.Txp.Settings (TxpBlock, TxpBlund, TxpCommonMode,
                      TxpGlobalApplyMode, TxpGlobalRollbackMode,
                      TxpGlobalSettings (..), TxpGlobalVerifyMode)
@@ -91,13 +91,11 @@ verifyBlocks ::
     -> OldestFirst NE TxpBlock
     -> m $ Either ToilVerFailure $ OldestFirst NE TxpUndo
 verifyBlocks pm genesisConfig txpConfig verifyAllIsKnown newChain = runExceptT $ do
-    gasModel <- defaultGasModel
     persister <- newGStateDb
     stateRoot <- getTip >>= unsafeGetStateRoot
     let baseEnv = GlobalToilEnv { _gteUtxoLookup = utxoToLookup M.empty
                                 , _gteTotalStake = (mkCoin 0) -- | because we do not need stakes while verifying
                                 , _gteStakeGetter = getRealStake
-                                , _gteGasModel = gasModel
                                 , _gtePersister = persister
                                 }
     bvd <- gsAdoptedBVData
@@ -163,7 +161,6 @@ processBlunds ProcessBlundsSettings {..} blunds = do
             globalToilStateToBatch gts <> pbsExtraOperations extra
     totalStake <- getRealTotalStake -- doesn't change
 
-    gasModel <- defaultGasModel
     persister <- newGStateDb
     stateRoot <- getTip >>= unsafeGetStateRoot
     -- Note: base utxo also doesn't change, but we build it on each
@@ -193,7 +190,6 @@ processBlunds ProcessBlundsSettings {..} blunds = do
                         { _gteUtxoLookup = utxoToLookup baseUtxo
                         , _gteTotalStake = totalStake
                         , _gteStakeGetter = getRealStake
-                        , _gteGasModel = gasModel
                         , _gtePersister = persister
                         }
             let env = (gte, extraEnv)

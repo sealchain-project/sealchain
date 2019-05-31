@@ -12,7 +12,7 @@ import qualified Data.Text as T
 
 import           Pact.Persist.MPTree (MPTreeDB (..), persister)
 import           Pact.PersistPactDb (DbEnv (..), pactdb, initDbEnv, createSchema)
-import           Pact.Types.Gas (GasEnv (..), GasLimit, GasPrice (..))
+import           Pact.Types.Gas (GasEnv (..), GasModel, GasLimit, GasPrice (..))
 import           Pact.Types.Persistence (TxId (..))
 import           Pact.Types.RPC (ExecMsg (..), PactRPC (..))
 import           Pact.Types.Term (PublicKey)
@@ -29,8 +29,9 @@ import           Sealchain.Mpt.MerklePatriciaMixMem (MPDB (..), KVPersister, emp
 applyCmd 
   :: (MonadIO m, KVPersister p)
   => Command ByteString 
-  -> GasLimit
   -> Hash
+  -> GasLimit
+  -> GasModel
   -> Set PublicKey
   -> ExceptT ToilVerFailure (PactExecM p m) CommandResult
 applyCmd cmd = applyCmd' (verifyCommand cmd)
@@ -38,22 +39,24 @@ applyCmd cmd = applyCmd' (verifyCommand cmd)
 applyCmd' 
   :: (MonadIO m, KVPersister p)
   => ProcessedCommand ParsedCode 
-  -> GasLimit
   -> Hash
+  -> GasLimit
+  -> GasModel
   -> Set PublicKey
   -> ExceptT ToilVerFailure (PactExecM p m) CommandResult
-applyCmd' (ProcFail s) _ _ _ = throwError $ ToilPactError (T.pack s)
-applyCmd' (ProcSucc cmd) gasLimit txHash signers = runPayload cmd gasLimit txHash signers
+applyCmd' (ProcFail s) _ _ _ _ = throwError $ ToilPactError (T.pack s)
+applyCmd' (ProcSucc cmd) txHash gasLimit gasModel signers = runPayload cmd txHash gasLimit gasModel signers
 
 runPayload 
   :: (MonadIO m, KVPersister p)
   => Command (Payload ParsedCode) 
-  -> GasLimit
   -> Hash
+  -> GasLimit
+  -> GasModel
   -> Set PublicKey
   -> ExceptT ToilVerFailure (PactExecM p m) CommandResult
-runPayload Command{..} gasLimit txHash signers = case (_pPayload _cmdPayload) of
-    Exec pm         -> applyExec pm gasLimit txHash signers gasPrice
+runPayload Command{..} txHash gasLimit gasModel signers = case (_pPayload _cmdPayload) of
+    Exec pm         -> applyExec pm txHash gasLimit gasModel signers gasPrice
     Continuation _  -> throwError $ ToilPactError "Pact continuation is not supportted for now"
   where
     gasPrice = GasPrice . fromInteger . toInteger . coinToInteger $ _pGasPrice _cmdPayload
@@ -61,16 +64,16 @@ runPayload Command{..} gasLimit txHash signers = case (_pPayload _cmdPayload) of
 applyExec 
   :: (MonadIO m, KVPersister p)
   => ExecMsg ParsedCode 
-  -> GasLimit
   -> Hash
+  -> GasLimit
+  -> GasModel
   -> Set PublicKey
   -> GasPrice
   -> ExceptT ToilVerFailure (PactExecM p m) CommandResult
-applyExec (ExecMsg parsedCode edata) gasLimit txHash signers gasPrice = do
+applyExec (ExecMsg parsedCode edata) txHash gasLimit gasModel signers gasPrice = do
   when (null (_pcExps parsedCode)) $ throwError $ ToilPactError "No expressions found"
 
   refStore <- use pesRefStore
-  gasModel <- view peeGasModel
   let gasEnv = GasEnv gasLimit gasPrice gasModel 
   pactDbEnv <- lift $ newPactDbEnv
 

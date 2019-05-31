@@ -21,7 +21,8 @@ import           Control.Monad.Except (ExceptT, mapExceptT, throwError)
 import qualified Data.Set as Set
 import           Serokell.Data.Memory.Units (Byte)
 
-import qualified Pact.Types.Gas as Pact (Gas (..), GasLimit (..))
+import qualified Pact.Gas as Pact (constGasModel)
+import qualified Pact.Types.Gas as Pact (Gas (..), GasModel, GasLimit (..))
 import qualified Pact.Types.Term as Pact (PublicKey (..))
 import qualified Pact.Types.Util as Pact (Hash (..))
 
@@ -109,7 +110,7 @@ applyToil bootStakeholders txun = do
     applyTx (txAux@TxAux{..}, _) = do
         let txId = hash taTx
         _ <- utxoMToGlobalToilM $ Utxo.applyTxToUtxo $ WithHash taTx txId
-        pactExecMToGlobalToilM . runExceptT $ applyTxToPact (txId, txAux) (mkCoin 0)
+        pactExecMToGlobalToilM . runExceptT $ applyTxToPact (txId, txAux) (mkCoin 0) freeGasModel
 
 -- | Rollback transactions from one block.
 rollbackToil :: Monad m => GenesisWStakeholders -> [(TxAux, TxUndo)] -> GlobalToilM p m ()
@@ -189,7 +190,7 @@ verifyAndApplyTx pm txValRules adoptedBVD lockedAssets curEpoch verifyVersions t
     liftEither $ verifyGState adoptedBVD curEpoch txAux vtur
     lift $ utxoMToVerifyAndApplyM (applyTxToUtxo' tx)
     _ <- mapExceptT pactExecMToVerifyAndApplyM $ 
-         applyTxToPact tx (mkCoin 0)
+         applyTxToPact tx (mkCoin 0) bvdGasModel
     pure vturUndo
 
 isRedeemTx :: TxUndo -> Bool
@@ -273,6 +274,13 @@ verifyTxFeePolicy (TxFee txFee) policy txSize = case policy of
 -- Helpers
 ----------------------------------------------------------------------------
 
+-- | TODO xl add this to BlockVersionData
+bvdGasModel :: Pact.GasModel
+bvdGasModel = Pact.constGasModel 1
+
+freeGasModel :: Pact.GasModel
+freeGasModel = Pact.constGasModel 0
+
 withTxId :: TxAux -> (TxId, TxAux)
 withTxId aux = (hash (taTx aux), aux)
 
@@ -283,9 +291,10 @@ applyTxToPact
     :: (MonadIO m, KVPersister p)
     => (TxId, TxAux) 
     -> Coin 
+    -> Pact.GasModel
     -> ExceptT ToilVerFailure (PactExecM p m) Coin
-applyTxToPact (txId, TxAux tx wits) (Coin gasLimit) = do
-    CommandResult{..} <- Pact.applyCmd (_txCommand tx) pactGasLimit pactHash pactSigners 
+applyTxToPact (txId, TxAux tx wits) (Coin gasLimit) gasModel = do
+    CommandResult{..} <- Pact.applyCmd (_txCommand tx) pactHash pactGasLimit gasModel pactSigners 
     let (Pact.Gas int64Gas) = _crGas
     return . unsafeIntegerToCoin . toInteger $ int64Gas
   where

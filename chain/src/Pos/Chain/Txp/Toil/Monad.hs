@@ -18,7 +18,6 @@ module Pos.Chain.Txp.Toil.Monad
        , PactExecState (..)
        , PactExecM
        , peeLoggers
-       , peeGasModel
        , pesRefStore
        , pesMPTreeDB
 
@@ -26,7 +25,6 @@ module Pos.Chain.Txp.Toil.Monad
        , VerifyAndApplyEnv (..)
        , VerifyAndApplyState (..)
        , vaaeUtxoLookup
-       , vaaeGasModel
        , vaaePersister
        , vaasUtxoModifier
        , vaasPactState
@@ -34,7 +32,6 @@ module Pos.Chain.Txp.Toil.Monad
        , LocalToilEnv (..)
        , LocalToilState (..)
        , lteUtxoLookup
-       , lteGasModel
        , ltePersister
        , ltsMemPool
        , ltsUtxoModifier
@@ -58,7 +55,6 @@ module Pos.Chain.Txp.Toil.Monad
        , gteUtxoLookup
        , gteTotalStake
        , gteStakeGetter
-       , gteGasModel
        , gtePersister
        , runGlobalToilM
        , getStake
@@ -90,7 +86,6 @@ import           Fmt ((+|), (|+))
 
 import qualified Pact.Persist.MPTree as Pact (MPTreeDB (..), 
                      getStateRoot, getModifier, newMPTreeDB)
-import qualified Pact.Types.Gas as Pact (GasModel)
 import qualified Pact.Types.Logger as Pact (Loggers, neverLog)
 import qualified Pact.Types.Runtime as Pact (RefStore)
 
@@ -157,7 +152,6 @@ utxoDel tid = utxoGet tid >>= \case
 -- | Immutable environment used in Pact execution.
 data PactExecEnv = PactExecEnv
     { _peeLoggers  :: !Pact.Loggers
-    , _peeGasModel :: !Pact.GasModel
     }
 
 makeLenses ''PactExecEnv
@@ -187,7 +181,6 @@ makeLenses ''VerifyAndApplyState
 
 data VerifyAndApplyEnv p = VerifyAndApplyEnv
     { _vaaeUtxoLookup :: !UtxoLookup
-    , _vaaeGasModel   :: !Pact.GasModel
     , _vaaePersister  :: !p
     }
 
@@ -212,7 +205,6 @@ makeLenses ''LocalToilState
 
 data LocalToilEnv p = LocalToilEnv
     { _lteUtxoLookup :: !UtxoLookup
-    , _lteGasModel   :: !Pact.GasModel
     , _ltePersister  :: !p
     }
 
@@ -279,7 +271,6 @@ data GlobalToilEnv p m = GlobalToilEnv
     { _gteUtxoLookup  :: !UtxoLookup
     , _gteTotalStake  :: !Coin
     , _gteStakeGetter :: (StakeholderId -> m (Maybe Coin)) 
-    , _gteGasModel    :: !Pact.GasModel
     , _gtePersister   :: !p
     }
 
@@ -353,7 +344,6 @@ utxoMToGlobalToilM = mapReaderT f . magnify gteUtxoLookup
 pactExecMToLocalToilM :: forall p m.Monad m => PactExecM p m ~> LocalToilM p m
 pactExecMToLocalToilM action = do
     let _peeLoggers = Pact.neverLog -- | TODO xl fix this
-    _peeGasModel <- view lteGasModel
 
     PactState {..} <- use ltsPactState
     let _pesRefStore = _psRefStore
@@ -375,7 +365,6 @@ pactExecMToLocalToilM action = do
 pactExecMToGlobalToilM :: forall p m.Monad m => PactExecM p m ~> GlobalToilM p m
 pactExecMToGlobalToilM action = do
     let _peeLoggers = Pact.neverLog -- | TODO xl fix this
-    _peeGasModel <- view gteGasModel
 
     PactState {..} <- use gtsPactState
     let _pesRefStore = _psRefStore
@@ -404,7 +393,6 @@ utxoMToVerifyAndApplyM = mapReaderT f . magnify vaaeUtxoLookup
 pactExecMToVerifyAndApplyM :: forall p m.Monad m => PactExecM p m ~> VerifyAndApplyM p m
 pactExecMToVerifyAndApplyM action = do
     let _peeLoggers = Pact.neverLog -- | TODO xl fix this
-    _peeGasModel <- view vaaeGasModel
 
     PactState {..} <- use vaasPactState
     let _pesRefStore = _psRefStore
@@ -428,7 +416,6 @@ verifyAndApplyMToLocalToilM action = do
     _vaasUtxoModifier <- use ltsUtxoModifier
     _vaasPactState <- use ltsPactState
     _vaaeUtxoLookup <- view lteUtxoLookup
-    _vaaeGasModel <- view lteGasModel
     _vaaePersister <- view ltePersister
     (res, vaas) <- 
         lift . lift $
@@ -445,7 +432,6 @@ verifyAndApplyMToGlobalToilM action = do
     _vaasUtxoModifier <- use gtsUtxoModifier
     _vaasPactState <- use gtsPactState
     _vaaeUtxoLookup <- view gteUtxoLookup
-    _vaaeGasModel <- view gteGasModel
     _vaaePersister <- view gtePersister
     (res, vaas) <- 
         lift . lift . lift $
