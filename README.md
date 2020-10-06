@@ -4,11 +4,13 @@
 
 # Sealchain
 
+
+
 ## *Putting Wall Street on the Chain*
 
 #### Created by Wall Street Elites! 
 
-Sealchain focuses on financial asset transaction by using **Blockchain + AI technology**, aiming to build the next generation of financial ecosystem – **Machine Finance**. 
+Sealchain is a new technology which focuses on financial asset transaction by using **Blockchain + AI technology**, aiming to build the next generation of financial ecosystem – **Machine Finance**. 
 
 Seal chain is **Cardano 2.0**，a financial Cardano with **multi-coin support** and **smart contract** applications.
 
